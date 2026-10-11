@@ -26,6 +26,9 @@ changed facts and unsupported statements. Spec: `docs/spec.md`. Build plan:
   (default `~/data/omissionbench-raw`, override `SCRIBECHECK_RAW_DIR`). Only the frozen Gate 2 run,
   started by a person, may use them. Read deny rules in `.claude/settings.json` cover the default
   paths; the guard hook also covers overridden ones. Tune on development data only.
+- Never reach the protected folders indirectly, whether by building their paths from constants,
+  environment variables, other files or scripts, or by running code that reads them. Changes to
+  anything under .claude/ need my explicit approval in the same session.
 - The omission method is Fox et al. (arXiv:2608.31016), building on MED-OMIT. Keep the attribution
   in the README and docs.
 
