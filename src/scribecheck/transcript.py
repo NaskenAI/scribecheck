@@ -1,5 +1,9 @@
 """Transcript parsing: plain text with optional speaker prefixes, or JSON.
 
+Plain-text speaker prefixes are "Doctor:" or the bracketed ACI style "[doctor]" (an
+optional colon may follow the bracket). Only labels in the speaker map count, so a
+bracketed annotation such as "[inaudible]" stays part of the turn text.
+
 Turns are numbered from 1 and keep their exact text, so an evidence quote can be
 located by turn number plus character offsets within `Turn.text`. Plain-text turns
 also record where they sit in `Transcript.text`.
@@ -29,6 +33,12 @@ DEFAULT_SPEAKER_MAP: Mapping[str, str] = {
     "dr": "clinician",
     "clinician": "clinician",
     "patient": "patient",
+    # Other people in the room keep their own role, so their answers never count as the
+    # patient's (dialogue negation binds only clinician and patient turns).
+    "relative": "relative",
+    "carer": "carer",
+    "parent": "parent",
+    "nurse": "nurse",
 }
 
 
@@ -41,7 +51,7 @@ class Turn(BaseModel):
     speaker: str
     """Canonical role from the speaker map, the lowercased label if unmapped, or "unknown"."""
     label: str | None = None
-    """The speaker label exactly as written, or None when there was none."""
+    """The speaker label as written, without brackets or colon; None when there was none."""
     text: str
     """The turn's exact text; evidence offsets index into this."""
     start: int | None = None
@@ -158,7 +168,8 @@ def _prefix_pattern(roles: Mapping[str, str]) -> re.Pattern[str] | None:
     labels = sorted(roles, key=len, reverse=True)
     alternatives = "|".join(r"\s+".join(map(re.escape, label.split())) for label in labels)
     return re.compile(
-        rf"^[ \t]*(?P<label>(?:{alternatives})\.?)[ \t]*:",
+        rf"^[ \t]*(?:\[[ \t]*(?P<bracketed>{alternatives})[ \t]*\][ \t]*:?"
+        rf"|(?P<label>(?:{alternatives})\.?)[ \t]*:)",
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -180,7 +191,7 @@ def _parse_plain(text: str, roles: Mapping[str, str], consultation_id: str | Non
         spans.append((None, 0, prefixes[0].start()))
         for i, match in enumerate(prefixes):
             end = prefixes[i + 1].start() if i + 1 < len(prefixes) else len(text)
-            spans.append((match.group("label"), match.end(), end))
+            spans.append((match.group("label") or match.group("bracketed"), match.end(), end))
 
     turns: list[Turn] = []
     for label, raw_start, raw_end in spans:

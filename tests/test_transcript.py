@@ -133,6 +133,10 @@ def test_default_speaker_map() -> None:
         "dr": "clinician",
         "clinician": "clinician",
         "patient": "patient",
+        "relative": "relative",
+        "carer": "carer",
+        "parent": "parent",
+        "nurse": "nurse",
     }
 
 
@@ -392,3 +396,46 @@ def test_leading_bom_in_plain_text_is_dropped() -> None:
     transcript = parse_transcript("\ufeffDoctor: Hello.")
     assert transcript.text == "Doctor: Hello."
     assert transcript.turns[0].speaker == "clinician"
+
+
+# Bracketed speaker labels (ACI-style transcripts)
+
+BRACKETED = """[doctor] hi , what brings you in today ?
+[patient] my left knee has been swelling
+for about two weeks .
+[relative] she has been limping too .
+[doctor] any chest pain ?
+[patient] no .
+"""
+
+
+def test_bracketed_labels() -> None:
+    transcript = parse_transcript(BRACKETED)
+    assert [(t.label, t.speaker) for t in transcript.turns] == [
+        ("doctor", "clinician"),
+        ("patient", "patient"),
+        ("relative", "relative"),
+        ("doctor", "clinician"),
+        ("patient", "patient"),
+    ]
+    assert transcript.turns[1].text == "my left knee has been swelling\nfor about two weeks ."
+    assert transcript.has_speaker_labels
+    assert_round_trip(transcript)
+
+
+@pytest.mark.parametrize("line", ["[Doctor]: hello", "[DOCTOR] hello", "  [dr] hello"])
+def test_bracketed_label_variants(line: str) -> None:
+    (turn,) = parse_transcript(line + "\n").turns
+    assert (turn.speaker, turn.text) == ("clinician", "hello")
+
+
+def test_bracketed_words_outside_the_map_are_not_speakers() -> None:
+    transcript = parse_transcript("[doctor] hello\n[inaudible] and then\n[patient] yes\n")
+    assert [t.speaker for t in transcript.turns] == ["clinician", "patient"]
+    assert transcript.turns[0].text == "hello\n[inaudible] and then"
+
+
+def test_mixed_plain_and_bracketed_labels() -> None:
+    transcript = parse_transcript("Doctor: any fever?\n[patient] no.\n")
+    assert [t.speaker for t in transcript.turns] == ["clinician", "patient"]
+    assert_round_trip(transcript)

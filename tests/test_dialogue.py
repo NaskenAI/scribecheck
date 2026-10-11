@@ -166,3 +166,12 @@ def test_invalid_span_raises() -> None:
     transcript = parse_transcript("Doctor: Any chest pain?\nPatient: No.")
     with pytest.raises(ValueError):
         bind_negations(transcript, {1: [(4, 99)]})
+
+
+def test_bracketed_transcript_binds() -> None:
+    (result,) = _bind("[doctor] any chest pain ?\n[patient] no .")
+    assert result.target.text == "chest pain"
+
+
+def test_relative_answer_does_not_bind() -> None:
+    assert _bind("[doctor] any chest pain ?\n[relative] no .") == ()

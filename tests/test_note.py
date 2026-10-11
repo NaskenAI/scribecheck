@@ -376,3 +376,104 @@ def test_leading_bom_in_text_is_dropped() -> None:
     note = parse_note("\ufeffPlan:\nReview.\n")
     assert note.text == "Plan:\nReview.\n"
     assert note.sections[0].heading == "Plan"
+
+
+# ACI-style notes: ALL-CAPS headings without colons
+
+ACI_NOTE = """ENCOUNTER NOTE
+
+CHIEF COMPLAINT
+
+Left knee swelling.
+
+HISTORY OF PRESENT ILLNESS
+
+Two weeks of swelling, worse on stairs.
+
+MEDICAL HISTORY
+
+Asthma.
+
+SURGICAL HISTORY
+
+Appendicectomy.
+
+REVIEW OF SYSTEMS
+
+Denies fever.
+
+VITALS
+
+BP 120/80.
+
+PHYSICAL EXAM
+
+Swollen left knee.
+
+ASSESSMENT AND PLAN
+
+Likely osteoarthritis. Refer to physiotherapy.
+
+DISCUSSION
+Options discussed.
+
+INSTRUCTIONS
+
+Return if fever develops.
+"""
+
+
+def test_aci_headings() -> None:
+    note = parse_note(ACI_NOTE)
+    H, E, P = CanonicalSection.HISTORY, CanonicalSection.EXAMINATION, CanonicalSection.PLAN
+    # A title followed by a blank line is not a heading; it stays before the first section.
+    assert note.preamble == "ENCOUNTER NOTE"
+    assert headings(note) == [
+        ("CHIEF COMPLAINT", H),
+        ("HISTORY OF PRESENT ILLNESS", H),
+        ("MEDICAL HISTORY", H),
+        ("SURGICAL HISTORY", H),
+        ("REVIEW OF SYSTEMS", H),
+        ("VITALS", E),
+        ("PHYSICAL EXAM", E),
+        ("ASSESSMENT AND PLAN", P),
+        ("DISCUSSION", None),
+        ("INSTRUCTIONS", P),
+    ]
+    assert note.sections[7].body == "Likely osteoarthritis. Refer to physiotherapy."
+    assert_round_trip(note)
+
+
+@pytest.mark.parametrize(
+    ("heading", "section"),
+    [
+        ("CC", CanonicalSection.HISTORY),
+        ("HPI", CanonicalSection.HISTORY),
+        ("ROS", CanonicalSection.HISTORY),
+        ("Past surgical history", CanonicalSection.HISTORY),
+        ("PE", CanonicalSection.EXAMINATION),
+        ("Vital signs", CanonicalSection.EXAMINATION),
+        ("VITALS REVIEWED", CanonicalSection.EXAMINATION),
+        ("A&P", CanonicalSection.PLAN),
+        ("A/P", CanonicalSection.PLAN),
+        ("Assessment & Plan", CanonicalSection.PLAN),
+        ("Patient instructions", CanonicalSection.PLAN),
+    ],
+)
+def test_new_default_headings(heading: str, section: CanonicalSection) -> None:
+    note = parse_note(f"History:\nKnee pain.\n\n{heading}\nSome text.\n")
+    assert headings(note)[-1] == (heading, section)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Allergies:\nPenicillin.\n\nNKDA\nNo other history.\n",
+        "Allergies:\nPenicillin.\n\nNO KNOWN DRUG ALLERGIES\nNo other history.\n",
+        "Plan:\nRest.\n\nNAD\nReview.\n",
+        "Plan:\nRest.\n\nFOLLOW UP SOON\n\nReview.\n",  # followed by a blank line
+        "Plan:\nRest.\nSTRICT REST\nReview.\n",  # no blank line before
+    ],
+)
+def test_all_caps_body_lines_are_not_headings(text: str) -> None:
+    assert len(parse_note(text).sections) == 1
