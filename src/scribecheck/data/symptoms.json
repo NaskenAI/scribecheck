@@ -50,6 +50,24 @@
    "incontinence"
   ]
  },
+ "excluded_reasons": {
+  "abnormal menstruation": "broader than abnormal vaginal bleeding",
+  "bacterial gastroenteritis": "a diagnosis, not the symptom diarrhoea",
+  "blockage of leg arteries": "a cause, not the symptom",
+  "boil": "everyday verb ('boil the water'); furuncle still matches",
+  "congestion": "ambiguous without 'nasal' ('chest congestion'); the nasal synonyms still match",
+  "erythema": "a sign that is not always a rash",
+  "faint": "usually an adjective ('a faint murmur')",
+  "fecal incontinence": "a different symptom from diarrhoea",
+  "flushing": "procedure sense ('flushing the cannula'); hot flushes still match",
+  "gas": "everyday word ('gas and air')",
+  "heart rhythm symptom": "a category name, not a phrase used in speech",
+  "incontinence": "could be faecal or urinary",
+  "incontinence of feces": "a different symptom from diarrhoea",
+  "loss of consciousness due to insuffiecient blood flow to the brain": "a definition, not a phrase used in speech",
+  "rubor": "a sign that is not always a rash",
+  "shakes": "everyday verb ('he shakes his head'); trembling still matches"
+ },
  "merges": {
   "convulsion": "seizure",
   "hoarse voice": "hoarseness",
@@ -59,6 +77,15 @@
   "tiredness": "fatigue",
   "weariness": "fatigue"
  },
+ "withheld": [
+  {
+   "text": "white discharge",
+   "term": "vaginal discharge",
+   "id": "SYMP:0000398",
+   "note": "maps to vaginal discharge; unsafe without the patient's sex",
+   "reviewed": false
+  }
+ ],
  "terms": [
   {
    "id": "SYMP:0000001",
@@ -767,12 +794,7 @@
    "match_label": true,
    "synonyms": [],
    "merged": [],
-   "lay": [
-    {
-     "text": "white discharge",
-     "reviewed": false
-    }
-   ]
+   "lay": []
   },
   {
    "id": "SYMP:0000399",

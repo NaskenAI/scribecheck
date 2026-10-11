@@ -6,6 +6,8 @@ Data ships in `scribecheck/data/`:
   and brand names (BN) with their ingredients, built by scripts/build_drug_lexicon.py;
 - inn_usan.json: international (INN/BAN) names mapped to the US names RxNorm uses
   ("paracetamol" to acetaminophen); a draft, marked "reviewed": false;
+- ingredients_extra.json: generic names prescribed in India or the UK but absent from
+  RxNorm ("domperidone"); a draft, marked "reviewed": false;
 - symptoms.json: common symptoms from the Symptom Ontology (SYMP, CC0) with exact
   synonyms and lay phrasings, built by scripts/build_symptom_lexicon.py.
 
@@ -20,10 +22,10 @@ across spaces and hyphens only, and a multiple-ingredient name ("A / B") only ac
 slash. Every drug match resolves to US ingredient (generic) names.
 
 Spelling tolerance is conservative: one edit (insertion, deletion, substitution or swap
-of adjacent letters), only for single-word ingredient and international names of 7 or
-more letters (brand names must be spelt exactly), and never for a name within one edit
-of another lexicon name, nor for an English word or inflection one edit from a name
-("aspiring", "creating").
+of adjacent letters), only for single-word ingredient, extra ingredient and
+international names of 7 or more letters (brand names must be spelt exactly), and
+never for a name within one edit of another lexicon name, nor for an English word or
+inflection one edit from a name ("aspiring", "creating").
 
 Some names never match on their own: brand names that are everyday words or first
 names ("Align", "Julie") and ingredients that are everyday words or lab analytes
@@ -43,7 +45,7 @@ from typing import Any, Generic, Literal, TypeVar
 
 from scribecheck.rules._match import Match
 
-DrugVia = Literal["ingredient", "brand", "international", "user_brand"]
+DrugVia = Literal["ingredient", "extra_ingredient", "brand", "international", "user_brand"]
 SymptomVia = Literal["label", "synonym", "lay", "user"]
 
 FUZZY_MIN_LENGTH = 7
@@ -56,7 +58,7 @@ class DrugMatch(Match):
     """The lexicon name matched, as stored ("Parlodel", "paracetamol")."""
     generic: tuple[str, ...]
     rxcui: str | None = None
-    """RxNorm concept ID of the matched name; None for international and user names."""
+    """RxNorm concept ID of the matched name; None for other sources."""
     via: DrugVia
     fuzzy: bool = False
     """True when matched with one spelling edit."""
@@ -353,7 +355,8 @@ class _Drug:
 
 
 def _spelling_tolerant(entry: _Drug) -> bool:
-    return entry.via in ("ingredient", "international")
+    """Generic names may match with one edit; brand names must be exact."""
+    return entry.via in ("ingredient", "extra_ingredient", "international")
 
 
 class _DrugIndex(_Index[_Drug]):
@@ -373,7 +376,7 @@ class _DrugIndex(_Index[_Drug]):
             if not names:
                 raise ValueError(f"brand {brand!r}: no generic names given")
             existing = entries.get(_key(brand) or ())
-            if existing is not None and existing.via in ("ingredient", "international"):
+            if existing is not None and _spelling_tolerant(existing):
                 raise ValueError(f"brand {brand!r} is already a generic name")
             generic: list[str] = []
             for name in names:
@@ -423,6 +426,10 @@ def _drug_index() -> _DrugIndex:
         if key is not None:
             entries.setdefault(key, _Drug(international, generic, None, "international"))
 
+    _add_extra_ingredients(
+        entries, generics, [e["name"] for e in _read("ingredients_extra.json")["ingredients"]]
+    )
+
     for rxcui, name, ingredients in drugs["brands"]:
         key = _key(name)
         if key is None or name.casefold() in blocked_brands:
@@ -433,6 +440,18 @@ def _drug_index() -> _DrugIndex:
     # Blocked names never match, not even as a near spelling of another name.
     never = blocked_ingredients | blocked_brands
     return _DrugIndex(entries, generics, frozenset(drugs["fuzzy_blocked"]) | never)
+
+
+def _add_extra_ingredients(
+    entries: dict[Key, _Drug], generics: dict[str, tuple[str, ...]], names: Iterable[str]
+) -> None:
+    """Add generic names missing from RxNorm; each must be new and matchable."""
+    for name in names:
+        key = _key(name)
+        if key is None or key in entries or name.casefold() in generics:
+            raise ValueError(f"ingredients_extra.json: {name!r} is not a new matchable name")
+        generics[name.casefold()] = (name,)
+        entries[key] = _Drug(name, (name,), None, "extra_ingredient")
 
 
 # Symptom data

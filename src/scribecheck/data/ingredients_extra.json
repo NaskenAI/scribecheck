@@ -1,0 +1,244 @@
+{
+  "reviewed": false,
+  "note": "Generic ingredient names commonly prescribed in India or the UK but absent from RxNorm Current Prescribable Content (checked against drugs.json and inn_usan.json). Written in-house; not yet clinically reviewed. 'note' gives where each is commonly prescribed.",
+  "ingredients": [
+    {
+      "name": "acebrophylline",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "aceclofenac",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "alfacalcidol",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "benzydamine",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "betahistine",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "bilastine",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "carbocisteine",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "cilnidipine",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "cinnarizine",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "cloxacillin",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "cyclizine",
+      "note": "Commonly prescribed in UK; not in RxNorm"
+    },
+    {
+      "name": "cyproterone",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "dexketoprofen",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "domperidone",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "dosulepin",
+      "note": "Commonly prescribed in UK; not in RxNorm"
+    },
+    {
+      "name": "doxofylline",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "drotaverine",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "dydrogesterone",
+      "note": "Commonly prescribed in India; withdrawn in the UK (2008); not in RxNorm"
+    },
+    {
+      "name": "ebastine",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "eperisone",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "etizolam",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "etoricoxib",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "faropenem",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "ferrous ascorbate",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "flucloxacillin",
+      "note": "Commonly prescribed in UK; not in RxNorm"
+    },
+    {
+      "name": "flunarizine",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "flupentixol",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "fusidic acid",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "gliclazide",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "ilaprazole",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "itopride",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "levosulpiride",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "lofepramine",
+      "note": "Commonly prescribed in UK; not in RxNorm"
+    },
+    {
+      "name": "lornoxicam",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "lymecycline",
+      "note": "Commonly prescribed in UK; not in RxNorm"
+    },
+    {
+      "name": "mebeverine",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "naftidrofuryl",
+      "note": "Commonly prescribed in UK; not in RxNorm"
+    },
+    {
+      "name": "nicorandil",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "nimesulide",
+      "note": "Commonly prescribed in India; restricted there (not for children under 12); not in RxNorm"
+    },
+    {
+      "name": "nitrazepam",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "norfloxacin",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "ornidazole",
+      "note": "Commonly prescribed in India; not in RxNorm; no spelling tolerance, as it is one edit from ronidazole (a veterinary drug in RxNorm)"
+    },
+    {
+      "name": "piracetam",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "racecadotril",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "remogliflozin",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "roxithromycin",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "rupatadine",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "satranidazole",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "sultamicillin",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "teneligliptin",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "thiocolchicoside",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "tibolone",
+      "note": "Commonly prescribed in UK; not in RxNorm"
+    },
+    {
+      "name": "tolperisone",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "trimebutine",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "trimetazidine",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "vildagliptin",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    },
+    {
+      "name": "voglibose",
+      "note": "Commonly prescribed in India; not in RxNorm"
+    },
+    {
+      "name": "zopiclone",
+      "note": "Commonly prescribed in India, UK; not in RxNorm"
+    }
+  ],
+  "skipped": [
+    {
+      "name": "serratiopeptidase",
+      "reason": "already in drugs.json (RxNorm ingredient 36434)"
+    }
+  ]
+}

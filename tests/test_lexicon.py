@@ -315,3 +315,48 @@ def test_names_with_possessives_and_hyphens(text: str, matched: str) -> None:
 
 def test_hyphen_and_space_are_interchangeable_for_symptoms() -> None:
     assert _one_symptom("short-of-breath on exertion").term == "dyspnea"
+
+
+# Extra (non-US) ingredients and withheld phrases
+
+
+@pytest.mark.parametrize(
+    ("text", "matched", "fuzzy"),
+    [
+        ("domperidone 10 mg TDS", "domperidone", False),
+        ("Fusidic acid cream", "Fusidic acid", False),
+        ("domperidon 10 mg", "domperidon", True),
+    ],
+)
+def test_extra_ingredients(text: str, matched: str, fuzzy: bool) -> None:
+    found = _one_drug(text)
+    assert (found.text, found.via, found.rxcui, found.fuzzy) == (
+        matched,
+        "extra_ingredient",
+        None,
+        fuzzy,
+    )
+    assert found.generic == (found.name,)
+
+
+def test_user_brand_can_point_to_an_extra_ingredient() -> None:
+    found = _one_drug("Examplol", brands={"Examplol": ["domperidone"]})
+    assert found.generic == ("domperidone",)
+
+
+def test_withheld_phrase_does_not_match() -> None:
+    assert _symptoms("white discharge for a week") == ()
+    assert _one_symptom("vaginal discharge").term == "vaginal discharge"
+
+
+def test_extra_ingredient_loader_rejects_existing_names() -> None:
+    from scribecheck.rules.lexicon import _add_extra_ingredients, _drug_index
+
+    index = _drug_index()
+    entries, generics = dict(index.entries), dict(index.generics)
+    with pytest.raises(ValueError, match="metformin"):
+        _add_extra_ingredients(entries, generics, ["metformin"])
+    with pytest.raises(ValueError, match="domperidone"):
+        _add_extra_ingredients(entries, generics, ["domperidone"])
+    _add_extra_ingredients(entries, generics, ["examplazole"])
+    assert generics["examplazole"] == ("examplazole",)

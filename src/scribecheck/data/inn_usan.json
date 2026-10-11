@@ -207,13 +207,21 @@
       "international": "macrogol",
       "us": [
         "polyethylene glycol 3350"
-      ]
+      ],
+      "note": "Mapped to PEG 3350; other macrogols (e.g. 4000) exist"
     },
     {
       "international": "mesalazine",
       "us": [
         "mesalamine"
       ]
+    },
+    {
+      "international": "methylcobalamin",
+      "us": [
+        "mecobalamin"
+      ],
+      "note": "Common name variant, not an INN/USAN pair"
     },
     {
       "international": "methylthioninium chloride",
@@ -276,6 +284,12 @@
       ]
     },
     {
+      "international": "pivmecillinam",
+      "us": [
+        "amdinocillin pivoxil"
+      ]
+    },
+    {
       "international": "rifampicin",
       "us": [
         "rifampin"
@@ -294,6 +308,13 @@
       ]
     },
     {
+      "international": "sodium picosulfate",
+      "us": [
+        "picosulfate sodium"
+      ],
+      "note": "Word-order variant of the RxNorm name"
+    },
+    {
       "international": "sulphasalazine",
       "us": [
         "sulfasalazine"
@@ -309,12 +330,19 @@
       "international": "thyroxine",
       "us": [
         "levothyroxine"
-      ]
+      ],
+      "note": "Also a lab analyte (free thyroxine, T4)"
     },
     {
       "international": "torasemide",
       "us": [
         "torsemide"
+      ]
+    },
+    {
+      "international": "ursodeoxycholic acid",
+      "us": [
+        "ursodiol"
       ]
     },
     {

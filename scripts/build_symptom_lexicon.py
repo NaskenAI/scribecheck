@@ -7,9 +7,10 @@ Usage:
 The curation input lists the SYMP labels to include, SYMP surface forms to exclude
 (synonyms that would mislead matching, such as "fecal incontinence" under diarrhea),
 terms to merge into another that means the same for matching (convulsion into
-seizure), and lay phrasings to add. IDs, labels and exact synonyms come only from the
-OBO file; every lay phrasing and merge is written with "reviewed": false. Obsolete
-terms are never used.
+seizure), lay phrasings to add, and phrasings withheld from matching with the reason
+(recorded in symptoms.json so they still reach clinical review). IDs, labels and exact
+synonyms come only from the OBO file; every lay phrasing, merge and withheld phrasing
+is written with "reviewed": false. Obsolete terms are never used.
 
 The output is deterministic: the same inputs give the same bytes.
 """
@@ -43,6 +44,15 @@ def main(argv: list[str] | None = None) -> int:
     problems = [label for label in curation["terms"] if label not in by_label]
     problems += [f"exclude: {label}" for label in curation["exclude"] if label not in by_label]
     problems += [f"lay: {label}" for label in curation["lay"] if label not in curation["terms"]]
+    withheld = curation.get("withheld", {})
+    reasons = curation.get("exclude_reasons", {})
+    problems += [
+        f"exclude_reasons: {form}"
+        for forms in curation["exclude"].values()
+        for form in forms
+        if form not in reasons
+    ]
+    problems += [f"withheld: {label}" for label in withheld if label not in curation["terms"]]
     merge = curation.get("merge", {})
     problems += [
         f"merge: {source} -> {target}"
@@ -118,7 +128,19 @@ def main(argv: list[str] | None = None) -> int:
             'marked "reviewed": false are in-house additions awaiting clinical review.'
         ),
         "excluded_forms": {k: curation["exclude"][k] for k in sorted(curation["exclude"])},
+        "excluded_reasons": {k: reasons[k] for k in sorted(reasons)},
         "merges": {k: merge[k] for k in sorted(merge)},
+        "withheld": [
+            {
+                "text": item["text"],
+                "term": label,
+                "id": by_label[label]["id"],
+                "note": item["note"],
+                "reviewed": False,
+            }
+            for label in sorted(withheld)
+            for item in withheld[label]
+        ],
         "terms": entries,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

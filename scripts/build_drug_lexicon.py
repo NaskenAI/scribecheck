@@ -23,8 +23,10 @@ Three reviewable lists in the output keep matching precise:
   everyday words or lab analytes ("water", "sodium 135", "amylase level"), never
   matched on their own.
 - fuzzy_blocked: English words, including their inflected forms ("appeared",
-  "creating"), that are one edit from a name the matcher spells tolerantly (ingredient
-  and international names of 7+ letters), never matched by spelling tolerance.
+  "creating"), that are one edit from a name the matcher spells tolerantly (ingredient,
+  international and extra ingredient names of 7+ letters), never matched by spelling
+  tolerance. The international and extra names are read from inn_usan.json and
+  ingredients_extra.json.
 
 The output is deterministic: the same zip and wordlist give the same bytes. Run it with
 the package installed (`pip install -e .`); it reuses the matcher's edit check.
@@ -49,6 +51,7 @@ from scribecheck.rules.lexicon import FUZZY_MIN_LENGTH, within_one_edit
 DATA = Path(__file__).resolve().parents[1] / "src" / "scribecheck" / "data"
 DEFAULT_OUTPUT = DATA / "drugs.json"
 INN_USAN = DATA / "inn_usan.json"
+EXTRA_INGREDIENTS = DATA / "ingredients_extra.json"
 KEPT_TTYS = frozenset({"IN", "PIN", "MIN", "BN"})
 
 # Brand names that are everyday words, first names, or hyphenated phrases that read as
@@ -84,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         links = _links(archive, concepts)
     words, common = _english_words(args.english_words)
     international = [p["international"] for p in json.loads(INN_USAN.read_text())["pairs"]]
+    international += [e["name"] for e in json.loads(EXTRA_INGREDIENTS.read_text())["ingredients"]]
     lexicon = _lexicon(concepts, links, words, common, international)
     lexicon["source"] = {
         "name": "RxNorm Current Prescribable Content",

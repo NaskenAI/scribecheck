@@ -88,3 +88,35 @@ def test_no_surface_form_is_shared_between_terms() -> None:
         for form in forms:
             key = form.casefold()
             assert owner.setdefault(key, term["label"]) == term["label"], form
+
+
+EXTRA = _load("ingredients_extra.json")
+
+
+def test_extra_ingredients_are_new_unreviewed_and_noted() -> None:
+    assert EXTRA["reviewed"] is False
+    known = {row[1].casefold() for row in DRUGS["ingredients"]}
+    known |= {row[1].casefold() for row in DRUGS["brands"]}
+    known |= {pair["international"].casefold() for pair in INN["pairs"]}
+    names = [entry["name"] for entry in EXTRA["ingredients"]]
+    assert names == sorted(names)
+    assert len(set(names)) == len(names)
+    salts = [row[1].casefold() for row in DRUGS["ingredients"]]
+    for entry in EXTRA["ingredients"]:
+        name = entry["name"].casefold()
+        assert name not in known, entry["name"]
+        # Not a salt form of something RxNorm has ("pivmecillinam hydrochloride").
+        assert not any(salt.startswith(name + " ") for salt in salts), entry["name"]
+        assert entry["note"], entry["name"]
+    for skipped in EXTRA["skipped"]:
+        assert skipped["name"].casefold() in known
+
+
+def test_withheld_phrases_are_not_matched_forms() -> None:
+    matched = set()
+    for term in SYMPTOMS["terms"]:
+        matched |= {form.casefold() for form in term["synonyms"]}
+        matched |= {lay["text"].casefold() for lay in term["lay"]}
+    for entry in SYMPTOMS["withheld"]:
+        assert entry["text"].casefold() not in matched
+        assert entry["note"] and entry["reviewed"] is False

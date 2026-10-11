@@ -1,5 +1,5 @@
 {
-  "_comment": "Curation input for scripts/build_symptom_lexicon.py. 'terms' are SYMP labels to include; IDs, labels and exact synonyms come from the SYMP file. 'exclude' removes SYMP surface forms that would mislead matching, keyed by label. 'merge' folds a SYMP term into another that means the same for matching (its label and synonyms become forms of the target, marked \"reviewed\": false). 'lay' adds phrasings not in SYMP, keyed by label; every lay phrasing is written to symptoms.json with \"reviewed\": false until a clinician checks it.",
+  "_comment": "Curation input for scripts/build_symptom_lexicon.py. 'terms' are SYMP labels to include; IDs, labels and exact synonyms come from the SYMP file. 'exclude' removes SYMP surface forms that would mislead matching, keyed by label. 'merge' folds a SYMP term into another that means the same for matching (its label and synonyms become forms of the target, marked \"reviewed\": false). 'lay' adds phrasings not in SYMP, keyed by label; every lay phrasing is written to symptoms.json with \"reviewed\": false until a clinician checks it. 'withheld' records phrasings kept out of matching, with the reason, so they still reach clinical review. 'exclude_reasons' gives the reason for each excluded form, shown on the review sheet.",
   "terms": [
     "pain",
     "abdominal pain",
@@ -273,6 +273,24 @@
       "rubor"
     ]
   },
+  "exclude_reasons": {
+    "bacterial gastroenteritis": "a diagnosis, not the symptom diarrhoea",
+    "fecal incontinence": "a different symptom from diarrhoea",
+    "incontinence of feces": "a different symptom from diarrhoea",
+    "gas": "everyday word ('gas and air')",
+    "faint": "usually an adjective ('a faint murmur')",
+    "loss of consciousness due to insuffiecient blood flow to the brain": "a definition, not a phrase used in speech",
+    "congestion": "ambiguous without 'nasal' ('chest congestion'); the nasal synonyms still match",
+    "incontinence": "could be faecal or urinary",
+    "blockage of leg arteries": "a cause, not the symptom",
+    "abnormal menstruation": "broader than abnormal vaginal bleeding",
+    "heart rhythm symptom": "a category name, not a phrase used in speech",
+    "boil": "everyday verb ('boil the water'); furuncle still matches",
+    "shakes": "everyday verb ('he shakes his head'); trembling still matches",
+    "flushing": "procedure sense ('flushing the cannula'); hot flushes still match",
+    "erythema": "a sign that is not always a rash",
+    "rubor": "a sign that is not always a rash"
+  },
   "merge": {
     "low blood pressure": "hypotension",
     "convulsion": "seizure",
@@ -325,9 +343,6 @@
       "body pain",
       "body pains",
       "body aches"
-    ],
-    "vaginal discharge": [
-      "white discharge"
     ],
     "seizure": [],
     "dyspnea": [
@@ -497,6 +512,14 @@
     "flushing": [
       "hot flushes",
       "hot flashes"
+    ]
+  },
+  "withheld": {
+    "vaginal discharge": [
+      {
+        "text": "white discharge",
+        "note": "maps to vaginal discharge; unsafe without the patient's sex"
+      }
     ]
   }
 }
