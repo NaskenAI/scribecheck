@@ -1,4 +1,8 @@
-"""Sentence-level context shared by the finders: eye context and dosing context."""
+"""Sentence-level context shared by the finders: eye context and dosing context.
+
+The ConText rules (negated, possible, historical, family, hypothetical) are in
+rules/context.py.
+"""
 
 from __future__ import annotations
 
@@ -30,6 +34,12 @@ def sentence_span(text: str, start: int, end: int) -> tuple[int, int]:
         sentence_start = found.end()
     following = _SENTENCE_BREAK.search(text, end)
     return sentence_start, following.start() if following else len(text)
+
+
+def has_sentence_break(text: str, start: int, end: int) -> bool:
+    """Whether a sentence break starts inside text[start:end]."""
+    found = _SENTENCE_BREAK.search(text, start)
+    return found is not None and found.start() < end
 
 
 def eye_context(text: str, start: int, end: int) -> EyeContext:
