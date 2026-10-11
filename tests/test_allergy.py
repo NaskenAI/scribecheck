@@ -10,7 +10,11 @@ def _find(text: str) -> tuple[AllergyMatch, ...]:
     results = find_allergies(text)
     assert_round_trip(text, results)
     for result in results:
-        parts = [result.cue, *result.allergens]
+        cue = result.cue
+        assert text[cue.start : cue.end] == cue.text
+        # The cue is inside the statement, or before it for a list item ("Allergies: ...").
+        assert result.start <= cue.start < cue.end <= result.end or cue.end <= result.start
+        parts = list(result.allergens)
         if result.reaction is not None:
             parts.append(result.reaction)
         for part in parts:
