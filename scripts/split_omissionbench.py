@@ -23,7 +23,9 @@ Rules:
    development consultation with certainty; anything uncertain is left out and listed.
 5. Nothing from judgements/, validation/ or notes/ is copied, except a reduced copy of each
    scored-records file in --dev-out/judge_scores/: rows for development consultations only,
-   with the fields in SCORE_FIELDS. A kept value that could hold text aborts the run.
+   with the fields in SCORE_FIELDS (ids, scores and the run's settings, so replicates, arms
+   and models can be told apart). Fields in NEVER_KEPT, which can carry text, are never
+   kept. A kept value that could hold text aborts the run.
 6. Before anything is written, the counts must match EXPECTED_COUNTS, and both output
    folders must be empty or absent and outside --raw; otherwise the run stops and writes
    nothing.
@@ -57,15 +59,20 @@ EXPECTED_COUNTS = {
 BREAKDOWN_FIELDS = ("type", "residual_level")
 MAX_LABEL = 40
 SCORE_FIELDS = (
-    "pair_id",
-    "note_key",
-    "note_role",
-    "clean_key",
-    "stratum",
-    "consultation",
-    "aggregate",
+    # ids and scores
+    "pair_id", "note_key", "note_role", "clean_key", "stratum", "consultation", "aggregate",
     "flagged",
-)
+    # the run: replicate, model, arm and settings
+    "replicate", "run_seed", "run_id", "model", "model_key", "role", "arm", "arm_family",
+    "cell", "criterion", "format", "k", "k_impl", "tier", "reasoning_effort", "max_tokens",
+    "dataset_version", "parse_failure",
+    # the pair and the judgement, as short labels and counts
+    "pair_type", "pair_class", "residual_level", "severity", "verdict", "n_facts", "n_full",
+    "n_present", "n_partial", "n_absent",
+)  # fmt: skip
+# Score-file fields that can carry text; never copied, whatever SCORE_FIELDS says.
+NEVER_KEPT = frozenset({"matched_key", "fact_key", "detail", "samples", "receipts", "totals"})
+assert not NEVER_KEPT & set(SCORE_FIELDS), "a text-bearing field is listed in SCORE_FIELDS"
 LOG_FOLDERS = ("judgements", "validation", "notes")
 MAX_SCORE_STRING = 200
 PAIRS_FILE = Path("pairs") / "dataset_v2.json"

@@ -88,6 +88,37 @@ def _score_row(stratum: str, consultation: str, pair_id: str | None) -> dict[str
         "flagged": True,
         "rationale": f"judge text {SENTINEL}",
         "note_text": f"note {SENTINEL}",
+        "replicate": 1,
+        "run_seed": 7,
+        "run_id": "run-1",
+        "model": "openai/gpt-5.4",
+        "model_key": "gpt54",
+        "role": "errored" if pair_id else "clean",
+        "arm": "B2",
+        "arm_family": "baseline",
+        "cell": "B2-F-bin-k1",
+        "criterion": "F",
+        "format": "bin",
+        "k": 1,
+        "k_impl": "single",
+        "tier": "B2",
+        "reasoning_effort": "high",
+        "max_tokens": 4000,
+        "dataset_version": "factorial-v1",
+        "parse_failure": False,
+        "pair_type": "omit" if pair_id else None,
+        "pair_class": "complete" if pair_id else None,
+        "residual_level": "complete" if pair_id else None,
+        "severity": "critical" if pair_id else None,
+        "verdict": "absent",
+        "n_facts": 12,
+        "n_full": 10,
+        "n_present": 10,
+        "n_partial": 1,
+        "n_absent": 1,
+        "detail": f"long detail {SENTINEL}",
+        "receipts": [f"quote {SENTINEL}"],
+        "matched_key": f"{SENTINEL}",
     }
 
 
@@ -352,3 +383,39 @@ def test_development_clean_rows_reach_judge_scores(split: tuple[Path, Path, str]
     dev_keys = {f"{s}|{c}" for s, c in DEV_KEYS}
     assert len(clean) == 5
     assert {"|".join(row["clean_key"].split("|")[:2]) for row in clean} <= dev_keys
+
+
+NEW_SCORE_FIELDS = (
+    "replicate", "run_seed", "run_id", "model", "model_key", "role", "arm", "arm_family",
+    "cell", "criterion", "format", "k", "k_impl", "tier", "reasoning_effort", "max_tokens",
+    "dataset_version", "parse_failure", "pair_type", "pair_class", "residual_level",
+    "severity", "verdict", "n_facts", "n_full", "n_present", "n_partial", "n_absent",
+)  # fmt: skip
+ORIGINAL_SCORE_FIELDS = (
+    "pair_id", "note_key", "note_role", "clean_key", "stratum", "consultation", "aggregate",
+    "flagged",
+)  # fmt: skip
+
+
+def test_judge_scores_keep_run_fields_and_never_text_fields(
+    split: tuple[Path, Path, str],
+) -> None:
+    dev_out, _, _ = split
+    assert set(SPLIT.SCORE_FIELDS) == set(ORIGINAL_SCORE_FIELDS) | set(NEW_SCORE_FIELDS)
+    assert not set(SPLIT.SCORE_FIELDS) & SPLIT.NEVER_KEPT
+    for path in (dev_out / "judge_scores").iterdir():
+        for row in json.loads(path.read_text())["records"]:
+            assert set(row) == set(SPLIT.SCORE_FIELDS)
+            assert row["arm"] == "B2" and row["replicate"] == 1
+            assert not set(row) & SPLIT.NEVER_KEPT
+        assert SENTINEL not in path.read_text()
+
+
+def test_long_verdict_aborts(tmp_path: Path) -> None:
+    raw, records = build_fixture(tmp_path)
+    path = raw / "judgements" / "w1" / "scored_records.json"
+    data = json.loads(path.read_text())
+    data["records"][0]["verdict"] = "the fact is missing because " * 20
+    _write(path, data)
+    dev_out, heldout_out = tmp_path / "dev", tmp_path / "heldout"
+    _assert_aborted(_run(raw, records, dev_out, heldout_out), dev_out, heldout_out)
