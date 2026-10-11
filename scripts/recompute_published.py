@@ -5,21 +5,33 @@ Usage:
 
 Gate 1(a): validates the scoring code against the benchmark's released judgements, with no
 API calls. Every *.json under <records-dir> with a "records" array of rows carrying note_key
-is one table row, labelled with its parent folder (for the split's flattened copies,
-"a__b__c.json", the original parent "b"). Per file:
+is read; it is labelled with its parent folder (for the split's flattened copies,
+"a__b__c.json", the original parent "b").
+
+Rows with parse_failure true are left out and counted. The rest are grouped by file and
+GROUP_FIELDS (model, arm, cell, criterion, format, k, tier, reasoning effort, dataset
+version); a missing field is its own value, so groups never merge by accident. Within a
+group every metric is computed per replicate:
 
 - Paired discrimination, as the dataset card defines it: each errored note is compared with
-  its clean twin (the clean row with the same clean_key in the same file). A win is an
-  errored aggregate strictly lower than the clean one; a tie counts half. Omission pairs
-  and add-or-change pairs are reported separately, with each pair's type from --pairs.
+  its clean twin (the clean row with the same clean_key in the same group and replicate). A
+  win is an errored aggregate strictly lower than the clean one; a tie counts half. Omission
+  and add-or-change pairs are reported separately. A pair's type comes from --pairs, or from
+  the row's pair_type when its pair_id is not there.
 - Detection rate: the share of errored omission notes flagged.
 - Clean-twin flag rate: the share of distinct clean notes flagged.
 
-Identical duplicate rows count once; a note whose duplicates disagree on aggregate or
-flagged is left out and counted as a conflict. An errored note with no clean twin, a null
-aggregate on either side, or a pair_id missing from --pairs is counted, not scored. A null
-flagged leaves the note out of that rate's denominator. Only numbers and folder names are
-printed, never any other field, and no network call is made.
+Replicates are then combined as the dataset card does: discrimination is the mean over
+replicates (each replicate's value is listed too), and detection and clean flag rates get a
+strict-majority result, where a note counts as flagged if it is flagged in more than half of
+the replicates whose flag for it is known.
+
+Within one replicate, identical duplicate rows count once; a note whose duplicates disagree
+on aggregate or flagged is left out and counted as a conflict. An errored note with no clean
+twin, a null aggregate on either side, or an unknown type is counted, not scored. Groups
+from smoke runs or the frozen master list (NOT_COMPARABLE) are printed in a separate section.
+Only numbers, folder names and short group values are printed, never any other field, and
+no network call is made.
 """
 
 from __future__ import annotations
@@ -28,16 +40,31 @@ import argparse
 import json
 import sys
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 ADD_OR_CHANGE = frozenset({"add", "change"})
+PAIR_TYPES = frozenset({"omit", "add", "change"})
+GROUP_FIELDS = (
+    "model",
+    "arm",
+    "cell",
+    "criterion",
+    "format",
+    "k",
+    "tier",
+    "reasoning_effort",
+    "dataset_version",
+)
+NOT_COMPARABLE = ("armsmoke", "pairs_master_frozen")
+MISSING = "(missing)"
+MAX_VALUE = 60
 
 
 @dataclass
-class FileResult:
-    """Counts for one scored-records file; rates are None when there is nothing to rate."""
+class ReplicateResult:
+    """Counts for one replicate of one group; rates are None when there is nothing to rate."""
 
     omit_n: int = 0
     omit_wins: int = 0
@@ -53,6 +80,12 @@ class FileResult:
     missing_score: int = 0
     unknown_type: int = 0
     conflicts: int = 0
+    types_from_pairs: int = 0
+    types_from_rows: int = 0
+    omission_flags: dict[str, bool] = field(default_factory=dict)
+    """Known flags of errored omission notes, by note_key, for the strict majority."""
+    clean_flags: dict[str, bool] = field(default_factory=dict)
+    """Known flags of clean notes, by clean_key, for the strict majority."""
 
     @property
     def omit_discrimination(self) -> float | None:
@@ -64,15 +97,69 @@ class FileResult:
 
     @property
     def detection_rate(self) -> float | None:
-        return self.detection_flagged / self.detection_n if self.detection_n else None
+        return _ratio(self.detection_flagged, self.detection_n)
 
     @property
     def clean_flag_rate(self) -> float | None:
-        return self.clean_flagged / self.clean_n if self.clean_n else None
+        return _ratio(self.clean_flagged, self.clean_n)
+
+
+FileResult = ReplicateResult
+"""The earlier name, for one ungrouped set of rows."""
+
+
+@dataclass
+class GroupResult:
+    """One group (file and run settings), per replicate and combined."""
+
+    label: str
+    key_values: dict[str, str]
+    rows: int = 0
+    parse_failures: int = 0
+    replicates: dict[str, ReplicateResult] = field(default_factory=dict)
+    majority_detection_n: int = 0
+    majority_detection_flagged: int = 0
+    majority_clean_n: int = 0
+    majority_clean_flagged: int = 0
+
+    @property
+    def comparable(self) -> bool:
+        version = self.key_values["dataset_version"]
+        return not any(marker in version for marker in NOT_COMPARABLE)
+
+    @property
+    def omit_mean(self) -> float | None:
+        return _mean(r.omit_discrimination for r in self.replicates.values())
+
+    @property
+    def change_mean(self) -> float | None:
+        return _mean(r.change_discrimination for r in self.replicates.values())
+
+    @property
+    def majority_detection_rate(self) -> float | None:
+        return _ratio(self.majority_detection_flagged, self.majority_detection_n)
+
+    @property
+    def majority_clean_rate(self) -> float | None:
+        return _ratio(self.majority_clean_flagged, self.majority_clean_n)
 
 
 def _discrimination(wins: int, ties: int, n: int) -> float | None:
     return (wins + 0.5 * ties) / n if n else None
+
+
+def _ratio(part: int, whole: int) -> float | None:
+    return part / whole if whole else None
+
+
+def _mean(values: Iterable[float | None]) -> float | None:
+    known = [v for v in values if v is not None]
+    return sum(known) / len(known) if known else None
+
+
+def strict_majority(flags: Sequence[bool]) -> bool:
+    """Flagged in more than half of the replicates whose flag is known."""
+    return sum(flags) * 2 > len(flags)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -97,10 +184,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             skipped += 1
     names = labels([path for path, _ in files])
-    print_table(
-        [(name, compute(rows, types)) for name, (_, rows) in zip(names, files, strict=True)]
-    )
-    print(f"\n{len(files)} file(s) scored, skipped {skipped} file(s) with no scored records")
+    groups = [
+        group
+        for name, (_, rows) in zip(names, files, strict=True)
+        for group in analyse(name, rows, types)
+    ]
+    print_report(groups, scored=len(files), skipped=skipped)
     return 0
 
 
@@ -147,6 +236,61 @@ def labels(paths: Sequence[Path]) -> list[str]:
     ]
 
 
+def _value(row: Mapping[str, Any], name: str) -> str:
+    """A grouping value: missing and null fields stay distinct from every real value."""
+    if name not in row:
+        return MISSING
+    value = row[name]
+    return "(null)" if value is None else str(value)
+
+
+def _replicate_order(value: str) -> tuple[int, int | str]:
+    return (0, int(value)) if value.isdigit() else (1, value)
+
+
+def analyse(
+    label: str, rows: Sequence[dict[str, Any]], types: Mapping[str, str]
+) -> list[GroupResult]:
+    """Group a file's rows, then score each replicate and combine the replicates."""
+    grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    failures: dict[tuple[str, ...], int] = {}
+    for row in rows:
+        key = tuple(_value(row, name) for name in GROUP_FIELDS)
+        grouped.setdefault(key, [])
+        if row.get("parse_failure") is True:
+            failures[key] = failures.get(key, 0) + 1
+        else:
+            grouped[key].append(row)
+
+    results = []
+    for key, members in grouped.items():
+        group = GroupResult(label, dict(zip(GROUP_FIELDS, key, strict=True)))
+        group.rows, group.parse_failures = len(members), failures.get(key, 0)
+        by_replicate: dict[str, list[dict[str, Any]]] = {}
+        for row in members:
+            by_replicate.setdefault(_value(row, "replicate"), []).append(row)
+        for replicate in sorted(by_replicate, key=_replicate_order):
+            group.replicates[replicate] = compute(by_replicate[replicate], types)
+        _combine(group)
+        results.append(group)
+    return results
+
+
+def _combine(group: GroupResult) -> None:
+    """Strict-majority detection and clean flag rates across the group's replicates."""
+    omission: dict[str, list[bool]] = {}
+    clean: dict[str, list[bool]] = {}
+    for replicate in group.replicates.values():
+        for note, flag in replicate.omission_flags.items():
+            omission.setdefault(note, []).append(flag)
+        for note, flag in replicate.clean_flags.items():
+            clean.setdefault(note, []).append(flag)
+    group.majority_detection_n = len(omission)
+    group.majority_detection_flagged = sum(strict_majority(f) for f in omission.values())
+    group.majority_clean_n = len(clean)
+    group.majority_clean_flagged = sum(strict_majority(f) for f in clean.values())
+
+
 def _distinct(rows: Iterable[dict[str, Any]], key: str) -> tuple[dict[str, dict[str, Any]], int]:
     """One row per key; keys whose rows disagree on aggregate or flagged are dropped."""
     seen: dict[str, dict[str, Any]] = {}
@@ -175,8 +319,9 @@ def _score(value: object) -> float | None:
     return float(value)
 
 
-def compute(rows: Sequence[dict[str, Any]], types: Mapping[str, str]) -> FileResult:
-    result = FileResult()
+def compute(rows: Sequence[dict[str, Any]], types: Mapping[str, str]) -> ReplicateResult:
+    """Score one replicate of one group (or any single set of rows)."""
+    result = ReplicateResult()
     clean_rows = [r for r in rows if r.get("note_role") == "clean" or r.get("pair_id") is None]
     errored_rows = [
         r for r in rows if r.get("note_role") != "clean" and r.get("pair_id") is not None
@@ -185,19 +330,26 @@ def compute(rows: Sequence[dict[str, Any]], types: Mapping[str, str]) -> FileRes
     errored, errored_conflicts = _distinct(errored_rows, "note_key")
     result.conflicts = clean_conflicts + errored_conflicts
 
-    for note in clean.values():
+    for clean_key, note in clean.items():
         if isinstance(note.get("flagged"), bool):
             result.clean_n += 1
             result.clean_flagged += note["flagged"]
+            result.clean_flags[clean_key] = note["flagged"]
 
-    for note in errored.values():
+    for note_key, note in errored.items():
         kind = types.get(note["pair_id"])
-        if kind is None:
+        if kind is not None:
+            result.types_from_pairs += 1
+        elif note.get("pair_type") in PAIR_TYPES:
+            kind = note["pair_type"]
+            result.types_from_rows += 1
+        else:
             result.unknown_type += 1
             continue
         if kind == "omit" and isinstance(note.get("flagged"), bool):
             result.detection_n += 1
             result.detection_flagged += note["flagged"]
+            result.omission_flags[note_key] = note["flagged"]
         twin = clean.get(note.get("clean_key"))  # type: ignore[arg-type]
         if twin is None:
             result.no_twin += 1
@@ -215,44 +367,100 @@ def compute(rows: Sequence[dict[str, Any]], types: Mapping[str, str]) -> FileRes
             result.change_n += 1
             result.change_wins += win
             result.change_ties += tie
-        else:
-            result.unknown_type += 1
     return result
 
 
-COLUMNS = (
-    "file",
-    "omit_n", "omit_win", "omit_tie", "omit_disc",
-    "addchg_n", "addchg_win", "addchg_tie", "addchg_disc",
-    "det_n", "det_flag", "det_rate",
-    "clean_n", "clean_flag", "clean_rate",
-    "no_twin", "no_score", "no_type", "conflicts",
-)  # fmt: skip
+# Output
 
 
 def _rate(value: float | None) -> str:
     return "–" if value is None else f"{value:.3f}"
 
 
-def print_table(rows: Sequence[tuple[str, FileResult]]) -> None:
-    cells = [list(COLUMNS)]
-    for name, r in rows:
-        cells.append(
-            [
-                name,
-                str(r.omit_n), str(r.omit_wins), str(r.omit_ties), _rate(r.omit_discrimination),
-                str(r.change_n), str(r.change_wins), str(r.change_ties),
-                _rate(r.change_discrimination),
-                str(r.detection_n), str(r.detection_flagged), _rate(r.detection_rate),
-                str(r.clean_n), str(r.clean_flagged), _rate(r.clean_flag_rate),
-                str(r.no_twin), str(r.missing_score), str(r.unknown_type), str(r.conflicts),
-            ]
-        )  # fmt: skip
-    widths = [max(len(row[i]) for row in cells) for i in range(len(COLUMNS))]
-    for row in cells:
-        print(
-            "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip()
+def _short(value: str) -> str:
+    return value if len(value) <= MAX_VALUE else value[: MAX_VALUE - 3] + "..."
+
+
+def _discrimination_line(
+    name: str, mean: float | None, replicates: Mapping[str, ReplicateResult], omit: bool
+) -> str:
+    parts = [f"{name}: mean {_rate(mean)}"]
+    for replicate, r in replicates.items():
+        n, wins, ties = (
+            (r.omit_n, r.omit_wins, r.omit_ties)
+            if omit
+            else (
+                r.change_n,
+                r.change_wins,
+                r.change_ties,
+            )
         )
+        value = r.omit_discrimination if omit else r.change_discrimination
+        parts.append(f"r{replicate} {_rate(value)} (n {n}, wins {wins}, ties {ties})")
+    return " | ".join(parts)
+
+
+def _rate_line(name: str, pairs: Sequence[tuple[str, int, int]], majority: tuple[int, int]) -> str:
+    parts = [f"r{rep} {flagged}/{n} {_rate(_ratio(flagged, n))}" for rep, flagged, n in pairs]
+    flagged, n = majority
+    parts.append(f"majority {flagged}/{n} {_rate(_ratio(flagged, n))}")
+    return f"{name}: " + " | ".join(parts)
+
+
+def format_group(group: GroupResult) -> str:
+    settings = " ".join(
+        f"{'effort' if k == 'reasoning_effort' else 'dataset' if k == 'dataset_version' else k}="
+        f"{_short(v)}"
+        for k, v in group.key_values.items()
+    )
+    reps = group.replicates
+    total = ReplicateResult()
+    for r in reps.values():
+        total.no_twin += r.no_twin
+        total.missing_score += r.missing_score
+        total.unknown_type += r.unknown_type
+        total.conflicts += r.conflicts
+        total.types_from_pairs += r.types_from_pairs
+        total.types_from_rows += r.types_from_rows
+    lines = [
+        f"[{group.label}] {settings}",
+        f"  rows {group.rows}, parse failures excluded {group.parse_failures}, "
+        f"replicates {' '.join(reps)}, types from --pairs {total.types_from_pairs} "
+        f"/ from rows {total.types_from_rows}",
+        "  " + _discrimination_line("omission discrimination", group.omit_mean, reps, True),
+        "  " + _discrimination_line("add/change discrimination", group.change_mean, reps, False),
+        "  "
+        + _rate_line(
+            "detection",
+            [(k, r.detection_flagged, r.detection_n) for k, r in reps.items()],
+            (group.majority_detection_flagged, group.majority_detection_n),
+        ),
+        "  "
+        + _rate_line(
+            "clean flag rate",
+            [(k, r.clean_flagged, r.clean_n) for k, r in reps.items()],
+            (group.majority_clean_flagged, group.majority_clean_n),
+        ),
+        f"  not scored: no twin {total.no_twin}, missing score {total.missing_score}, "
+        f"unknown type {total.unknown_type}, conflicts {total.conflicts}",
+    ]
+    return "\n".join(lines)
+
+
+def print_report(groups: Sequence[GroupResult], *, scored: int, skipped: int) -> None:
+    comparable = [g for g in groups if g.comparable]
+    other = [g for g in groups if not g.comparable]
+    for group in comparable:
+        print(format_group(group) + "\n")
+    if other:
+        print("== Not comparable to published figures (smoke runs or the frozen master list) ==\n")
+        for group in other:
+            print(format_group(group) + "\n")
+    print(
+        f"{scored} file(s) scored, skipped {skipped} file(s) with no scored records; "
+        f"{len(comparable)} comparable group(s), {len(other)} not comparable"
+    )
+    print(f"parse failures excluded in total: {sum(g.parse_failures for g in groups)}")
 
 
 if __name__ == "__main__":
