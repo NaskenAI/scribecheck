@@ -11,7 +11,7 @@ Users are AI scribe vendors testing model and prompt changes, hospital AI teams 
 Goals for v1:
 
 - A first report within 5 minutes of `pip install`, with no model, API key or account.
-- Omission detection on OmissionBench's held-out subset, compared with both published methods re-run on the same subset, using one local open-weight model and one API model.
+- Omission detection on OmissionBench's held-out subset, compared with both published methods re-run on the same subset, using one local open-weight model and one API model (Claude Sonnet 5.5).
 - Ships as a Python package, a CLI, a GitHub Action, and plugins for promptfoo, DeepEval and Inspect.
 - Patient data never leaves the user's environment except to a model endpoint the user configures.
 
@@ -61,9 +61,9 @@ Published results, each measured on its own set. Rates from different sets are n
 | Per-fact pipeline (route one), three-stage rule | Held-out subset, 151 pairs (dataset card) | 20.6% on the first run (22.9% and 21.4% on runs two and three) | 2.1% |
 | Evolved single prompt (route two), prompt-optimised with a reasoning budget | Held-out subset, 151 pairs (dataset card; strict majority of three replicates) | 32.1% | 2.1% |
 
-The dataset card's held-out baselines used gpt-5.4 as the judge.
+The dataset card's held-out baselines used gpt-5.4 as the judge. These gpt-5.4 results are taken from the benchmark's released scored records, not re-run, and are reported as the reference alongside this project's results.
 
-The baseline for this project's headline result is both methods re-run by us on the held-out subset, not the published figures above.
+The baseline for this project's headline result is both methods re-run by us on Claude Sonnet 5.5, once, on the official 151-pair held-out subset (a single run, stated as such), so scribecheck is compared on the same model. The published gpt-5.4 figures above are reported alongside as the reference.
 
 Licences: the OmissionBench data is CC BY 4.0 and the harness is MIT, so both can be reused with attribution. The benchmark is built partly on PriMock57 and ACI-Bench.
 
@@ -369,7 +369,9 @@ The checker talks only to a model endpoint the user configures, sends nothing an
 
 Headline results come from one run on OmissionBench's held-out subset, compared with both of Fox et al.'s methods re-run by us on the same subset. All tuning happens on other data.
 
-The benchmark is split by consultation, so no development pair shares a transcript or a clean note with a held-out one. Development is 65 consultations and 265 evaluation pairs: 148 omissions (82 complete, 44 partial-weak, 22 partial-strong), 54 additions and 63 changes. Held-out is 47 consultations and 230 evaluation pairs. The headline result uses the official 151-pair held-out subset, whose ID list is stored with the encrypted held-out data, so it stays comparable with the published numbers. The other 79 held-out pairs are a supplementary check, run once with the same frozen settings.
+The benchmark is split by consultation, so no development pair shares a transcript or a clean note with a held-out one. Development is 65 consultations and 265 evaluation pairs: 148 omissions (82 complete, 44 partial-weak, 22 partial-strong), 54 additions and 63 changes. Held-out is 47 consultations and 230 evaluation pairs. The headline result uses the official 151-pair held-out subset, whose ID list is stored with the encrypted held-out data, so it stays comparable with the published numbers. The other 79 held-out pairs are a supplementary check, run only if the headline result is borderline, once, with the same frozen settings.
+
+**Models.** The headline API model is Claude Sonnet 5.5, run through the Batch API with prompt caching (transcript first in every prompt) and one fixed effort level used everywhere. The local open-weight model is used for tuning.
 
 | Dataset | Contents | Used for |
 | --- | --- | --- |
@@ -377,27 +379,27 @@ The benchmark is split by consultation, so no development pair shares a transcri
 | Mutation suite (generated) | Synthetic notes with one injected change each (negation flip, side swap, dose doubled or halved, unit swap, frequency change, allergy deleted, drug substituted), with phrasings written by a second person, not the rules author | Rules-layer development |
 | OmissionBench development added and changed pairs | The 117 development pairs that add or change a fact (54 additions, 63 changes); authored outside this project | Pass B and Pass C accuracy, and checking that Pass A does not reduce detection of these |
 | OmissionBench development portion | 65 consultations and their 265 evaluation pairs (148 omissions, 54 additions, 63 changes), with 65 clean twins | Development and ablations |
-| OmissionBench held-out consultations | 47 consultations and their 230 evaluation pairs, with 47 clean twins. The official subset is 151 of these pairs (131 omissions, 20 added or altered); the other 79 are supplementary | Headline result on the official subset, supplementary check on the other 79, run once |
+| OmissionBench held-out consultations | 47 consultations and their 230 evaluation pairs, with 47 clean twins. The official subset is 151 of these pairs (131 omissions, 20 added or altered); the other 79 are supplementary | Headline result on the official subset, run once; supplementary check on the other 79 only if the headline result is borderline |
 
 Targets for the rules layer are at least 95% precision and 90% recall per change type, measured on the second author's phrasings and on the 117 development pairs that add or change a fact, not only on mutations the rules author generated. These are goals, not measured figures.
 
 Protocol:
 
-1. **Reproduce** both of Fox et al.'s methods with their released harness on the full evaluation set. Gate 1 passes when each lands inside its published 95% interval: 31.5–42.5% for route two, and the interval the paper reports for route one. Use their pinned model if it is still available; otherwise record the substitute and treat the gate as approximate.
-2. **Re-run both methods on the held-out subset.** These are the baselines.
+1. **Validate the setup (Gate 1).** Gate 1 has two parts. (a) Free: recompute the published numbers from the benchmark's released scored records, to validate the scoring code. (b) Per-note check: run Fox et al.'s harness on gpt-5.4 for about 10 development consultations (about 55 notes) and compare each note's flag with the released record for that note. Gate 1 passes if, for each method, at least 90% of notes agree.
+2. **Re-run both methods on Claude Sonnet 5.5** once on the official 151-pair held-out subset (a single run, stated as such). These are the baselines; the released gpt-5.4 results are reported alongside as the reference, not re-run.
 3. **State the minimum detectable gain** before any held-out run. With 131 omission pairs over 47 consultations, a rough estimate is about 10 percentage points; smaller gains are unlikely to be distinguishable.
-4. **Develop** on the 65 development consultations: run scribecheck in full mode on the reproduction model and on one local open-weight model that runs on a single consumer GPU, then add the rules layer and measure its effect separately. Develop Pass B and Pass C on the 117 development pairs that add or change a fact.
-5. **Confirm once** on the 47 held-out consultations with settings fixed beforehand: the official 151-pair subset gives the headline result, and the other 79 pairs are a supplementary check in the same run. Fox et al. found that gains chosen on a small validation set did not survive a held-out test.
+4. **Develop** on the 65 development consultations: tune on one local open-weight model that runs on a single consumer GPU, using a fixed 20-consultation development subset, and run Claude Sonnet 5.5 twice on development data, once mid-way and once on the frozen settings; then add the rules layer and measure its effect separately. Develop Pass B and Pass C on the 117 development pairs that add or change a fact.
+5. **Confirm once** with settings fixed beforehand: Claude Sonnet 5.5 and the local model on the official 151-pair subset give the headline result. The other 79 held-out pairs run only if the headline result is borderline. Fox et al. found that gains chosen on a small validation set did not survive a held-out test.
 6. **Score and report.** Benchmark runs use the strict standard. Detection and false alarms count only Pass A omission flags: a note counts as flagged when it has at least *k* omission flags at confidence *c* or higher. Sweeping *k* from 1 to 5 and *c* across possible and confirmed gives the detection curve. Report the points nearest 1, 2 and 3 false alarms on the 47 clean notes (steps of about 2.1 points), broken down by severity and by trace (complete, fragment, restatement). In the data these traces are the `residual_level` values: complete = `complete`, fragment = `partial-weak`, restatement = `partial-strong`. Pass B and Pass C are scored separately on the pairs that add or change a fact. Also report the correct-fact rate: the share of detected notes where a flag names the removed fact. The outcome is one of three: a clear gain, no detectable difference, or worse.
 7. **Measure severity agreement.** Compare each model's severity grades with OmissionBench's per-fact grades and report Cohen's kappa. For reference, two frontier models agreed at 0.177 without a rubric and 0.662 with one.
-8. **Measure stability.** Run each supported model 3 times on the development portion and publish the share of notes whose decision does not change.
+8. **Measure stability.** Run each supported model 3 times on a fixed 100-note development subset and publish the share of notes whose decision does not change.
 9. **Publish** every judgement, config and model version.
 
 Statistics follow the benchmark paper: confidence intervals by bootstrap over consultations, and an exact McNemar test for paired comparisons.
 
-**Data handling.** The held-out data and the raw OmissionBench download are encrypted at rest. Every run that touches them (the reproduction, the local-model baselines and Gate 2) is run by a person in a normal terminal, never by Claude Code.
+**Data handling.** The held-out data and the raw OmissionBench download are encrypted at rest. Every run that touches them (recomputing the published numbers from the released records, the Claude and local-model baselines, and Gate 2) is run by a person in a normal terminal, never by Claude Code.
 
-**Compute budget.** A published summary of Fox et al.'s results puts the single call at about $0.046 per note, and the paper puts it at roughly a tenth of the pipeline's cost, so the pipeline costs about $0.46 per note on an API model. One pass over the evaluation set's 607 notes then costs about $280, and the full plan (both reproductions, development runs, three stability runs and the held-out run) an estimated $1,000–2,000 in API costs, plus local GPU time. These are estimates. Each run has a cost cap in the config, and work stops for review if a run exceeds it; development runs use the local model first, so the API model is needed mainly for reproduction and the held-out run.
+**Compute budget.** A published summary of Fox et al.'s results puts the single call at about $0.046 per note, and the paper puts it at roughly a tenth of the pipeline's cost, so the pipeline costs about $0.46 per note on an API model. The project's API budget: OpenAI about $10–20 one-off for Gate 1(b), under a $150 hard limit on the project; Claude about $75–100, from monthly API credits. These are estimates, to be replaced by measured costs after M3. The published gpt-5.4 baselines come from the released scored records, so they cost nothing to report. Each run has a cost cap in the config, and work stops for review if a run exceeds it; tuning uses the local model, so the API model is needed only for the Gate 1 per-note check, the Claude baselines, two development runs, the stability runs and the held-out run.
 
 ## Distribution and adoption
 
@@ -417,7 +419,7 @@ Tracked monthly: PyPI downloads (pypistats), Hugging Face downloads, GitHub star
 
 ## Milestones and stop rule
 
-Launch is planned for week 4, with two gates before it: the setup must reproduce the published numbers, and the held-out result decides what the launch claims. To fit four weeks, the section-aware check moves to v1.1 and dialogue negation covers single-symptom questions only. Before week 1, every item gets an owner and an estimate, and the choice between 4 and 6 weeks is made from those numbers.
+Launch is planned for week 4, with two gates before it: the setup must reproduce the published per-note flags, and the held-out result decides what the launch claims. To fit four weeks, the section-aware check moves to v1.1 and dialogue negation covers single-symptom questions only. Before week 1, every item gets an owner and an estimate, and the choice between 4 and 6 weeks is made from those numbers.
 
 _Diagram not included in this export (milestones · 4 phases, 2 gates); see the Claude Doc._
 
@@ -439,14 +441,14 @@ The largest risk is that the additions show no detectable gain over the re-run b
 | Hospital security reviews | Slow hospital adoption | Target scribe vendors first; no telemetry, short dependency list, software bill of materials |
 | Used as a live sign-off check on patients' notes | May count as regulated medical software in some markets | Positioned and documented as an evaluation tool; a regulatory adviser should be asked before anyone uses it per patient |
 | Schedule overrun | Late launch | Section-aware check and broader dialogue negation moved to v1.1; a named owner for each item |
-| API costs exceed the budget | Fewer runs and weaker evidence | Cost cap per run; develop on the local model first; API model mainly for reproduction and the held-out run |
+| API costs exceed the budget | Fewer runs and weaker evidence | Cost cap per run; tune on the local model; Batch API with prompt caching; API model only for the Gate 1 check, baselines, two development runs, stability and the held-out run |
 
 Open questions:
 
 - [ ] **Blocker, decide before week 1:** drug lexicon source and whether its licence allows redistribution. Launch plan is generic names plus a user-supplied brand map.
 - [ ] **Blocker, decide before week 1:** source for the common-symptom lexicon and its licence.
 - [ ] Owner and estimate for each milestone item, which decide between 4 and 6 weeks
-- [ ] Fill in route one's published 95% interval for Gate 1 from the paper
+- [x] Route one's published 95% interval: no longer needed, because Gate 1 compares per-note flags with the released scored records
 - [ ] Which local open-weight model to standardise on for published results
 - [x] The benchmark's pinned model: gpt-5.4, the dataset card's baseline judge (API access still to check)
 - [ ] Whether Fox et al.'s severity rubric ships in their MIT-licensed harness or only in the paper

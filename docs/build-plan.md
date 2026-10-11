@@ -2,7 +2,7 @@
 
 Oct 11, 2026 · @Sandesh Gubbi Virupaksha
 
-Six weeks from the start date to a public v0.1 release of the checker specified in `docs/spec.md`, built by two people and gated twice: on reproducing the published methods at the end of week 1, and on the held-out result in week 5.
+Six weeks from the start date to a public v0.1 release of the checker specified in `docs/spec.md`, built by two people and gated twice: on reproducing the published methods' per-note flags at the end of week 1, and on the held-out result in week 5.
 
 ## Assumptions
 
@@ -11,7 +11,7 @@ All durations in this plan are my estimates, not commitments. Replace them with 
 - **Team:** two people, both full time. Person A owns evaluation and the full-mode pipeline. Person B owns the rules layer, integrations and the release. These are proposed roles; owners are named in the week 0 checklist. If either person is part time, durations scale: two half-time people would take about 12 weeks.
 - **Part-time help:** a second person, not the rules author, writes the synthetic demo set from week 1 and the mutation-suite phrasings in week 2. A clinician reviews the demo set and rules-mode severity table in week 2, the severity rubric in week 3 if it is our own, and the calibration guidance in week 5.
 - **Effort:** about 12 person-weeks over weeks 1–6, plus a short week 0 for decisions and setup, plus the part-time help above.
-- **Compute:** the spec's estimated $1,000–2,000 in API costs, probably lower once fact extraction runs once per transcript. The budget is split by milestone after M1 measures cost per note, and spend is checked at each gate. One GPU runs the local model; if none is available, rent one for benchmark runs, which use benchmark data only. Week 4's GPU hours are worked out in M3, and a second GPU is rented if they don't fit.
+- **Compute:** The headline API model is Claude Sonnet 5.5, run through the Batch API with prompt caching (transcript first in every prompt) and one fixed effort level used everywhere. The local open-weight model is used for tuning. API budget: OpenAI about $10–20 one-off for Gate 1(b), under a $150 hard limit on the project; Claude about $75–100, from monthly API credits. These are estimates, to be replaced by measured costs after M3. The budget is split by milestone after M1 measures cost per note, and spend is checked at each gate. One GPU runs the local model; if none is available, rent one for benchmark runs, which use benchmark data only. Week 4's GPU hours are worked out in M3, and a second GPU is rented if they don't fit.
 
 **Critical path:** two chains end with no slack. Person A's runs from the week 0 decisions through reproduction (Gate 1), the full-mode pipeline, development evaluation and the held-out run (Gate 2) to launch. Person B's runs through the rules layer, which the pipeline needs by the end of week 2, and the integrations, which launch needs by the end of week 5. A one-week slip on either chain moves launch by a week. Person A's week 5 has room after the held-out run, so A also takes the Inspect task, the `bench` command and the preprint draft then.
 
@@ -22,12 +22,14 @@ Week 0 ends when every item below is done; the three blockers come first, becaus
 - [ ] **Blocker:** choose the drug lexicon and confirm its licence allows redistribution (launch uses generic names plus a user-supplied brand map)
 - [ ] **Blocker:** choose the common-symptom lexicon and confirm its licence
 - [ ] **Blocker:** name an owner for every milestone, collect their estimates, and decide between 4 and 6 weeks
-- [ ] Approve the API budget and set the per-run cost cap
+- [x] Choose the API model: Claude Sonnet 5.5, through the Batch API with prompt caching and one fixed effort level
+- [x] Approve the API budget and set the per-run cost cap (estimates: OpenAI about $10–20 under a $150 hard limit; Claude about $75–100 from monthly API credits)
 - [ ] Choose the local open-weight model and confirm a GPU is available that runs it with enough context for a long transcript; if none is, arrange a rented one
 - [x] Identify the paper's pinned model: gpt-5.4, the dataset card's baseline judge (availability still to check)
-- [ ] Check API access to gpt-5.4; if it is unavailable, choose and record a substitute
+- [ ] Check API access to gpt-5.4, needed only for Gate 1(b); if it is unavailable, choose and record a substitute
+- [ ] Check that Fox et al.'s harness can call Claude
 - [ ] Check whether Fox et al.'s harness accepts an OpenAI-compatible endpoint, and whether the local model supports a reasoning budget; estimate any adaptation work for M4
-- [ ] Fill in route one's published 95% interval for Gate 1 from the paper
+- [x] Route one's published 95% interval: no longer needed, because Gate 1 compares per-note flags with the released scored records
 - [ ] Check whether Fox et al.'s severity rubric ships in their MIT-licensed harness
 - [ ] Check arXiv's endorsement rules for the chosen category, and find an endorser if one is needed
 - [ ] Decide the GitHub organisation (Nasken AI or personal) and create the repository under Apache-2.0
@@ -50,7 +52,7 @@ Six milestones; each is done only when its exit criterion is met, not when its t
 
 | Milestone | Weeks (estimate) | Lead (proposed) | Exit criterion | Status |
 | --- | --- | --- | --- | --- |
-| M1 Reproduction and scoring harness | 1 | Person A | Both published methods reproduced inside their intervals, and baselines on the held-out subset recorded (Gate 1) | Not started |
+| M1 Reproduction and scoring harness | 1 | Person A | Gate 1 passed (published numbers recomputed; at least 90% per-note agreement for each method), and the Claude baselines on the official 151-pair subset recorded | Not started |
 | M2 Rules layer and rules-only mode | 1–2 | Person B | `scribecheck demo` runs offline in under a minute; rules precision and recall measured against the 95% and 90% targets | Not started |
 | M3 Full-mode pipeline | 2–3 | Person A | All three passes run end to end on both models; every flag carries a verified quote; calls and cost per note measured | Not started |
 | M4 Development evaluation | 4 | Person A | Results on the 65 development consultations (265 pairs) written up; local-model baselines recorded; settings frozen and tagged | Not started |
@@ -63,11 +65,11 @@ The goal is to prove the evaluation setup matches the published results before b
 
 For Gate 1:
 
-The first three tasks below touch encrypted data (the raw download and the held-out subset), so they are run by a person in a normal terminal, never by Claude Code.
+Gate 1(a) and the Claude baselines touch encrypted data (the raw download and the held-out subset), so they are run by a person in a normal terminal, never by Claude Code.
 
-- [ ] Recompute the paper's published numbers from its released judgements, with no API calls, to validate the scoring code
-- [ ] Run Fox et al.'s harness for both methods on the full evaluation set with the API model, recording cost per note, model calls per note and run time
-- [ ] Re-run both methods on the held-out subset with the API model to fix those baselines; local-model baselines follow in M4
+- [ ] Gate 1(a), free: recompute the published numbers from the benchmark's released scored records, with no API calls, to validate the scoring code
+- [ ] Gate 1(b), per-note check: run Fox et al.'s harness for both methods on gpt-5.4 for about 10 development consultations (about 55 notes), compare each note's flag with the released record for that note, and record cost per note, model calls per note and run time
+- [ ] Re-run both methods once on Claude Sonnet 5.5 on the official 151-pair held-out subset (a single run, stated as such), so scribecheck is compared on the same model; the released gpt-5.4 results are the reference, not re-run; local-model baselines follow in M4
 - [ ] Record flags per note from the per-fact pipeline, which sizes the calibration workload
 - [ ] Split the API budget by milestone from the measured cost per note
 - [ ] Write down the minimum detectable gain for the API-model comparison
@@ -77,7 +79,7 @@ Ready by the start of week 4:
 - [ ] Scoring harness for scribecheck's output: the *k* and *c* sweep, counts on the 47 clean notes, breakdown by severity and trace, bootstrap over consultations, and the exact McNemar test
 - [ ] Correct-fact matching: how a flagged fact is matched to the benchmark's named removed fact, using model-assisted matching with a manual check of a sample
 
-**Exit (Gate 1):** both reproductions land inside their published 95% intervals, and the held-out baselines and minimum detectable gain are recorded.
+**Exit (Gate 1):** the published numbers are recomputed, at least 90% of notes agree with their released records for each method, and the Claude baselines and minimum detectable gain are recorded.
 
 ## M2 Rules layer and rules-only mode (weeks 1–2)
 
@@ -116,7 +118,7 @@ The goal is all three passes working with a language model, on both the API mode
 
 Week 2:
 
-- [ ] Model client for OpenAI-compatible endpoints over `httpx`, plus the Anthropic adapter
+- [ ] Model client for OpenAI-compatible endpoints over `httpx`, plus the Anthropic adapter, which is required because Claude Sonnet 5.5 is the headline API model: Batch API, prompt caching (transcript first in every prompt) and one fixed effort level
 - [ ] JSON schema validation with one retry, temperature 0 and a fixed seed, and the model name and version written to every report
 - [ ] Cost tracking and the per-run cost cap
 - [ ] Transcript chunking with overlap, and merging of facts across chunks
@@ -133,7 +135,7 @@ Week 3:
 - [ ] Severity rubric: Fox et al.'s if the harness licence covers it, otherwise our own, reviewed by the clinician
 - [ ] Run with the chosen local model through Ollama, and record calls, cost and time per note for both models, including seconds per note on the GPU
 
-**Exit:** all three passes run end to end on the demo set with both models, every flag carries a verified quote, and the spec's estimates of about 10 calls and $0.46 per note are replaced with measured figures, which feed a revised budget and an estimate of week 4's GPU hours.
+**Exit:** all three passes run end to end on the demo set with both models, every flag carries a verified quote, and the spec's estimates of about 10 calls and $0.46 per note are replaced with measured figures, which feed a revised budget, replacing the estimates, and an estimate of week 4's GPU hours.
 
 ## M4 Development evaluation (week 4)
 
@@ -142,12 +144,13 @@ The goal is to tune on development data only and freeze the settings before the 
 - [ ] Before starting, check the week's GPU hours against M3's seconds per note, and rent a second GPU if they don't fit (benchmark data only)
 - [ ] Re-run both published methods on the held-out subset with the local model, adapting the harness if week 0 showed it is needed. This run touches the encrypted held-out data, so it is run by a person in a normal terminal, never by Claude Code. If the local model cannot run route two, record that baseline as not applicable rather than reporting a misleading number.
 - [ ] State the minimum detectable gain for the local-model comparison before any held-out run of scribecheck
-- [ ] Run scribecheck on the 65 development consultations with the local model and the API model
-- [ ] Choose a fixed development subset, then tune prompts and settings on it with the local model first, using the API model to confirm
+- [ ] Tune prompts and settings on the local model, using a fixed 20-consultation development subset
+- [ ] Run scribecheck on the 65 development consultations with the local model
+- [ ] Run Claude Sonnet 5.5 twice on development data: once mid-way through tuning and once on the frozen settings
 - [ ] Measure the rules layer's effect by running with and without it
 - [ ] Score Pass B and Pass C on the 117 development pairs that add or change a fact
 - [ ] Measure severity agreement with OmissionBench's per-fact grades (Cohen's kappa) for each model
-- [ ] Stability: run each model 3 times on the fixed development subset
+- [ ] Stability: run each model 3 times on a fixed 100-note development subset
 - [ ] Publish minimum model guidance, including the minimum context length
 - [ ] Freeze the settings and tag the commit before any held-out run
 
@@ -175,7 +178,7 @@ Person B, weeks 4–5:
 
 Person A, week 5:
 
-- [ ] Held-out run, once, with the frozen settings, on both models
+- [ ] Held-out run, once, with the frozen settings: Claude Sonnet 5.5 and the local model on the official 151-pair subset; the 79 supplementary pairs only if the headline result is borderline
 - [ ] Record the Gate 2 outcome
 - [ ] Inspect task that runs OmissionBench
 - [ ] `bench` command, printing the CC BY attribution
@@ -213,9 +216,9 @@ Five checkpoints release the next stage of work only when their evidence is in. 
 | Gate | When (estimate) | Evidence needed | Response |
 | --- | --- | --- | --- |
 | Gate 0 | End of week 0 | Both lexicons chosen, owners and estimates in, budget approved, GPU and clinician availability confirmed | Met: start week 1. Not met: delay the start; M2's lexicon work cannot begin. |
-| Gate 1 | End of week 1 | Both reproductions inside their published intervals; held-out baselines recorded | Met: proceed. Not met: fix the setup first; rules work continues, but no full-mode number is trusted until the gate passes. |
+| Gate 1 | End of week 1 | Published numbers recomputed from the released scored records; at least 90% of notes agree for each method in the per-note check; Claude baselines recorded | Met: proceed. Not met: fix the setup first; rules work continues, but no full-mode number is trusted until the gate passes. |
 | Mid-point check | End of week 3 | Full mode runs end to end on both models | Met: proceed. Not met: move the four-week version's cuts to v1.1, or move launch by a week. |
-| Gate 2 | End of week 5 | One held-out run with frozen settings: the official 151-pair subset for the headline result, the other 79 held-out pairs as a supplementary check | Clear gain: launch claiming it. No detectable difference: launch as an open, local implementation of the published method with open-model results. Worse: make the route-one configuration the default and report this variant as a negative result. Outcomes are judged per model, and the launch claim names the model each one holds for. |
+| Gate 2 | End of week 5 | One held-out run with frozen settings: Claude Sonnet 5.5 and the local model on the official 151-pair subset; the other 79 held-out pairs only if the headline result is borderline | Clear gain: launch claiming it. No detectable difference: launch as an open, local implementation of the published method with open-model results. Worse: make the route-one configuration the default and report this variant as a negative result. Outcomes are judged per model, and the launch claim names the model each one holds for. |
 | Release gate | End of week 6 | Release checklist passed | Met: publish v0.1.0. Not met: fix and re-check; nothing is published until it passes. |
 
 At any point, a run that exceeds its cost cap stops for review before anything else is spent.
@@ -224,8 +227,8 @@ At any point, a run that exceeds its cost cap stops for review before anything e
 
 A four-week launch means shortening Person A's chain, because cutting Person B's work alone does not move the launch date. It works only with Pass A as the only model-based pass at launch. This schedule is an estimate:
 
-1. **Week 1.** Person A: M1 reproduction (Gate 1). Person B: parsers, normalisers, lexicons and ConText rules.
-2. **Week 2.** Person A: model client and Pass A, with extraction once per transcript. Person B: alignment, Pass B rules, rules-mode Pass A, report and CLI.
+1. **Week 1.** Person A: M1 Gate 1 checks and Claude baselines. Person B: parsers, normalisers, lexicons and ConText rules.
+2. **Week 2.** Person A: model client, including the Anthropic adapter, and Pass A, with extraction once per transcript. Person B: alignment, Pass B rules, rules-mode Pass A, report and CLI.
 3. **Week 3.** Person A: development evaluation on both models, local-model baselines, settings frozen. Person B: promptfoo plugin, GitHub Action, `calibrate export` and `apply`, Colab notebook.
 4. **Week 4.** Person A: held-out run (Gate 2), then the release. Person B: README, release checklist, launch posts.
 
@@ -233,12 +236,11 @@ Moved to v1.1 in this version, with what each costs:
 
 - **Pass B's model path and certainty changes:** changed facts are checked by the rules only.
 - **Pass C beyond the examination rule:** no general check for unsupported statements.
-- **Anthropic adapter:** users of Anthropic models wait.
 - **DeepEval and Inspect plugins, the HTML report and the Hugging Face Space:** fewer launch channels.
 - **`--inject` and the stability command:** users can't estimate detection on their own notes, or measure stability before letting model flags fail builds.
 - **Preprint:** posted after the release, so the launch rests on the README's results table.
 
-The Gate 1 reproduction, the single held-out run with frozen settings and the release checklist stay, because they protect the launch claim. This version has no slack: any slip on either chain moves launch to week 5.
+The Gate 1 checks, the Anthropic adapter (Claude Sonnet 5.5 is the headline API model), the single held-out run with frozen settings and the release checklist stay, because they protect the launch claim. This version has no slack: any slip on either chain moves launch to week 5.
 
 ## After launch: v1.1
 
