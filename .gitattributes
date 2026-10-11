@@ -1,0 +1,3 @@
+# Generated review sheets are compared byte for byte with fresh output in tests,
+# so keep LF line endings on every platform (Windows checkouts would add CR).
+docs/review/*.csv text eol=lf
