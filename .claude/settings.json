@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(~/scribecheck-heldout/**)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ],
+    "ask": [
+      "Edit(./tests/conftest.py)",
+      "Edit(./.claude/**)",
+      "Edit(./.github/workflows/**)",
+      "Edit(./CLAUDE.md)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_heldout.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop_checks.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

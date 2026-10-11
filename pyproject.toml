@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scribecheck"
+dynamic = ["version"]
+description = "Check AI-written clinical notes against the consultation transcript for omissions, changed facts and unsupported statements."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "The scribecheck authors" }]
+keywords = ["ai scribe", "clinical note", "omission", "hallucination", "evaluation", "llm"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Healthcare Industry",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+  "Typing :: Typed",
+]
+# Core dependencies are limited to httpx and pydantic (see docs/spec.md).
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10", "build>=1.2"]
+medspacy = ["medspacy"]
+
+[project.scripts]
+scribecheck = "scribecheck.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/NaskenAI/scribecheck"
+Repository = "https://github.com/NaskenAI/scribecheck"
+Issues = "https://github.com/NaskenAI/scribecheck/issues"
+
+[tool.hatch.version]
+path = "src/scribecheck/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scribecheck"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/README.md", "/LICENSE", "/pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["network: test may open non-loopback network connections"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src"]

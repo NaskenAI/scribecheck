@@ -1,0 +1,65 @@
+name: Release
+
+# Publishing a GitHub release builds the package, publishes it to PyPI through
+# Trusted Publishing (with build attestations), and attaches a CycloneDX SBOM.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  sbom:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Build an SBOM of a clean environment holding only the package
+        run: |
+          python -m venv /tmp/sbom-env
+          /tmp/sbom-env/bin/python -m pip install dist/*.whl
+          python -m pip install cyclonedx-bom
+          cyclonedx-py environment --pyproject pyproject.toml --mc-type library \
+            -o sbom.cdx.json /tmp/sbom-env/bin/python
+      - name: Attach the SBOM to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" sbom.cdx.json --repo "${{ github.repository }}"
