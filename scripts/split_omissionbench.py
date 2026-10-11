@@ -412,7 +412,8 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
                     isinstance(value, str) and len(value) > MAX_SCORE_STRING
                 ):
                     raise SplitError(f"{name}: field '{f}' holds a value that could be text")
-            key = _key_of(row.get("pair_id")) or row.get("clean_key")
+            # Clean rows have no pair_id; their clean_key is "stratum|consultation|clean|<id>".
+            key = _key_of(row.get("pair_id")) or _key_of(row.get("clean_key"))
             if key is None and isinstance(row.get("stratum"), str):
                 key = f"{row['stratum']}|{row.get('consultation')}"
             if key in known.dev:

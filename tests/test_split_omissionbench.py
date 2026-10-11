@@ -79,7 +79,7 @@ def _pairs_for(keys: list[tuple[str, str]], total: int, eval_set: bool) -> list[
 def _score_row(stratum: str, consultation: str, pair_id: str | None) -> dict[str, Any]:
     return {
         "pair_id": pair_id,
-        "clean_key": None if pair_id else f"{stratum}|{consultation}",
+        "clean_key": f"{stratum}|{consultation}|clean|x1",  # the released format
         "note_key": f"note-{stratum}-{consultation}-{pair_id or 'clean'}",
         "note_role": "errored" if pair_id else "clean",
         "stratum": stratum,
@@ -249,7 +249,7 @@ def test_judge_scores_are_reduced_and_development_only(split: tuple[Path, Path, 
     assert len(w1) == 20 + 5
     for row in w1:
         assert set(row) == set(SPLIT.SCORE_FIELDS)
-        key = row["clean_key"] or "|".join(row["pair_id"].split("|")[:2])
+        key = "|".join((row["pair_id"] or row["clean_key"]).split("|")[:2])
         assert key in {f"{s}|{c}" for s, c in DEV_KEYS}
     assert json.loads(files[1].read_text())["records"] == []
     assert "dropped" in log
@@ -343,3 +343,12 @@ def test_transcripts_named_like_attribution_files_stay_on_their_side(tmp_path: P
     assert "d000_attribution.txt" in dev_files and "h000_attribution.txt" in heldout_files
     # Real attribution files still reach both sides.
     assert "attribution.txt" in dev_files and "attribution.txt" in heldout_files
+
+
+def test_development_clean_rows_reach_judge_scores(split: tuple[Path, Path, str]) -> None:
+    dev_out, _, _ = split
+    w1 = json.loads((dev_out / "judge_scores" / "judgements__w1__scored_records.json").read_text())
+    clean = [row for row in w1["records"] if row["pair_id"] is None]
+    dev_keys = {f"{s}|{c}" for s, c in DEV_KEYS}
+    assert len(clean) == 5
+    assert {"|".join(row["clean_key"].split("|")[:2]) for row in clean} <= dev_keys
