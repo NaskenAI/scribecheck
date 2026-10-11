@@ -41,12 +41,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# The benchmark partitions held-out data by consultation, not by pair: every eval-set pair
+# of a held-out consultation is held out, so no development pair shares a transcript or a
+# clean note with the held-out subset. The 47 held-out consultations hold 230 eval-set
+# pairs, of which the published held-out subset (the pairs in --heldout-records) is 151;
+# all 230 go to --heldout-out. The remaining 265 eval-set pairs, over 65 consultations
+# (one clean twin each), are the development data.
 EXPECTED_COUNTS = {
-    "development pairs": 344,
-    "held-out pairs": 151,
+    "development pairs": 265,
+    "held-out pairs": 230,
     "held-out consultations": 47,
     "development clean twins": 65,
 }
+BREAKDOWN_FIELDS = ("type", "residual_level")
+MAX_LABEL = 40
 SCORE_FIELDS = (
     "pair_id",
     "note_key",
@@ -79,6 +87,7 @@ class Plan:
     left_out: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     counts: dict[str, int] = field(default_factory=dict)
+    breakdown: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -127,6 +136,7 @@ def build_plan(raw: Path, records_file: Path, dev_out: Path, heldout_out: Path) 
             for name, expected in EXPECTED_COUNTS.items()
         )
         raise SplitError(f"counts differ: {lines}")
+    plan.breakdown = {name: _tally(p.get(name) for p in dev) for name in BREAKDOWN_FIELDS}
     missing = heldout_keys - {p["key"] for p in heldout}
     if missing:
         raise SplitError(f"{len(missing)} held-out consultation(s) have no eval-set pairs")
@@ -151,6 +161,20 @@ def build_plan(raw: Path, records_file: Path, dev_out: Path, heldout_out: Path) 
     _plan_fact_file(raw, SEVERITY_FILE, known, plan, nested="facts")
     _plan_scores(raw, records_file, known, plan)
     return plan
+
+
+def _tally(values: Iterable[object]) -> dict[str, int]:
+    """Counts per label; anything that is not a short label is counted, never shown."""
+    counts: dict[str, int] = {}
+    for value in values:
+        if value is None:
+            label = "(missing)"
+        elif _is_scalar(value) and len(str(value)) <= MAX_LABEL:
+            label = str(value)
+        else:
+            label = "(other)"
+        counts[label] = counts.get(label, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _check_outputs(raw: Path, dev_out: Path, heldout_out: Path) -> None:
@@ -407,6 +431,9 @@ def write_plan(plan: Plan, dev_out: Path, heldout_out: Path) -> None:
 def report(plan: Plan, dev_out: Path, heldout_out: Path) -> None:
     for name, value in plan.counts.items():
         print(f"{name}: {value}")
+    for name, counts in plan.breakdown.items():
+        parts = ", ".join(f"{label} {count}" for label, count in counts.items())
+        print(f"development pairs by {name}: {parts}")
     print(f"--dev-out: {len(plan.dev_json) + len(plan.dev_copies)} files in {dev_out}")
     print(
         f"--heldout-out: {len(plan.heldout_json) + len(plan.heldout_copies)} files in {heldout_out}"

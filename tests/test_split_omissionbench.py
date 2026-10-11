@@ -49,6 +49,10 @@ HELDOUT_KEYS = _keys("h", 47)
 OTHER_KEYS = _keys("x", 5)  # outside the eval set
 
 
+TYPES = ("omit", "add", "change")
+LEVELS = ("complete", "fragment", "restatement")
+
+
 def _pairs_for(keys: list[tuple[str, str]], total: int, eval_set: bool) -> list[dict[str, Any]]:
     per_key, extra = divmod(total, len(keys))
     pairs = []
@@ -65,6 +69,8 @@ def _pairs_for(keys: list[tuple[str, str]], total: int, eval_set: bool) -> list[
                     "clean": f"clean note {SENTINEL}",
                     "errored": f"errored note {SENTINEL}",
                     "trace": "complete",
+                    "type": TYPES[len(pairs) % len(TYPES)],
+                    "residual_level": LEVELS[len(pairs) % len(LEVELS)],
                 }
             )
     return pairs
@@ -85,11 +91,11 @@ def _score_row(stratum: str, consultation: str, pair_id: str | None) -> dict[str
     }
 
 
-def build_fixture(root: Path, *, dev_pairs: int = 344) -> tuple[Path, Path]:
+def build_fixture(root: Path, *, dev_pairs: int = 265) -> tuple[Path, Path]:
     """A raw folder with the published layout; returns (raw dir, held-out records file)."""
     raw = root / "raw"
     dev = _pairs_for(DEV_KEYS, dev_pairs, True)
-    heldout = _pairs_for(HELDOUT_KEYS, 151, True)
+    heldout = _pairs_for(HELDOUT_KEYS, 230, True)
     other = _pairs_for(OTHER_KEYS, 10, False)
     _write(
         raw / "pairs" / "dataset_v2.json",
@@ -143,7 +149,11 @@ def build_fixture(root: Path, *, dev_pairs: int = 344) -> tuple[Path, Path]:
     rows = [_score_row(p["stratum"], p["id"], p["pair_id"]) for p in dev[:20] + heldout[:20]]
     rows += [_score_row(s, c, None) for s, c in DEV_KEYS[:5] + HELDOUT_KEYS[:5] + OTHER_KEYS[:1]]
     _write(raw / "judgements" / "w1" / "scored_records.json", {"model": "x", "records": rows})
-    heldout_rows = [_score_row(p["stratum"], p["id"], p["pair_id"]) for p in heldout]
+    # The published held-out subset: 151 of the 230 held-out pairs, covering all 47
+    # consultations (the first pair of each, then the next ones in order).
+    firsts = {p["key"]: p for p in reversed(heldout)}
+    subset = list(firsts.values()) + [p for p in heldout if p not in firsts.values()]
+    heldout_rows = [_score_row(p["stratum"], p["id"], p["pair_id"]) for p in subset[:151]]
     heldout_rows += [_score_row(s, c, None) for s, c in HELDOUT_KEYS]
     records = raw / "judgements" / "w2" / "pipeline_scored_records.json"
     _write(records, {"records": heldout_rows})
@@ -184,7 +194,7 @@ def _pairs(folder: Path) -> dict[str, Any]:
 def test_pairs_are_split_by_consultation(split: tuple[Path, Path, str]) -> None:
     dev_out, heldout_out, _ = split
     dev, heldout = _pairs(dev_out), _pairs(heldout_out)
-    assert len(dev["pairs"]) == 344 and len(heldout["pairs"]) == 151
+    assert len(dev["pairs"]) == 265 and len(heldout["pairs"]) == 230
     assert {p["key"] for p in dev["pairs"]} == {f"{s}|{c}" for s, c in DEV_KEYS}
     assert {p["key"] for p in heldout["pairs"]} == {f"{s}|{c}" for s, c in HELDOUT_KEYS}
     for data in (dev, heldout):
@@ -262,11 +272,11 @@ def _assert_aborted(code: int, *folders: Path) -> None:
 def test_wrong_counts_abort_without_writing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    raw, records = build_fixture(tmp_path, dev_pairs=345)
+    raw, records = build_fixture(tmp_path, dev_pairs=266)
     dev_out, heldout_out = tmp_path / "dev", tmp_path / "heldout"
     _assert_aborted(_run(raw, records, dev_out, heldout_out), dev_out, heldout_out)
     err = capsys.readouterr().err
-    assert "345" in err and "344" in err and SENTINEL not in err
+    assert "266" in err and "265" in err and SENTINEL not in err
 
 
 def test_missing_transcript_aborts(tmp_path: Path) -> None:
@@ -300,3 +310,15 @@ def test_text_in_a_kept_score_field_aborts(tmp_path: Path) -> None:
     _write(path, data)
     dev_out, heldout_out = tmp_path / "dev", tmp_path / "heldout"
     _assert_aborted(_run(raw, records, dev_out, heldout_out), dev_out, heldout_out)
+
+
+def test_success_prints_development_breakdown(split: tuple[Path, Path, str]) -> None:
+    dev_out, _, log = split
+    dev = _pairs(dev_out)["pairs"]
+    for name in ("type", "residual_level"):
+        counts: dict[str, int] = {}
+        for pair in dev:
+            counts[pair[name]] = counts.get(pair[name], 0) + 1
+        expected = ", ".join(f"{label} {count}" for label, count in sorted(counts.items()))
+        assert f"development pairs by {name}: {expected}" in log
+    assert sum(int(part.split()[-1]) for part in expected.split(", ")) == 265
