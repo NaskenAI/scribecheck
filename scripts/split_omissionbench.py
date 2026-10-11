@@ -17,7 +17,8 @@ Rules:
    --dev-out. Pairs outside the eval set go nowhere. Each side keeps _attribution, its pairs
    and scalar top-level values; other top-level keys are left out and listed.
 3. Each side gets its pairs' transcripts (transcripts/<stratum>/<id>.txt) and every licence
-   or attribution file (a name containing "licen" or "attribution").
+   or attribution file (a name containing "licen" or "attribution" that is not the
+   transcript of any pair, so a transcript named "..._attribution.txt" stays on its side).
 4. Fact sheets, fact sites and severity entries go to --dev-out only when they can be tied to a
    development consultation with certainty; anything uncertain is left out and listed.
 5. Nothing from judgements/, validation/ or notes/ is copied, except a reduced copy of each
@@ -147,7 +148,14 @@ def build_plan(raw: Path, records_file: Path, dev_out: Path, heldout_out: Path) 
     plan.left_out += [f"{PAIRS_FILE.as_posix()}: top-level key '{k}'" for k in dropped]
 
     _plan_transcripts(raw, dev, heldout, plan)
-    for path in _licence_files(raw):
+    transcripts = {
+        Path("transcripts") / p["stratum"] / f"{p['id']}.txt"
+        for p in data["pairs"]
+        if isinstance(p, dict)
+        and isinstance(p.get("stratum"), str)
+        and isinstance(p.get("id"), str)
+    }
+    for path in _licence_files(raw, transcripts):
         relative = path.relative_to(raw)
         plan.dev_copies[relative] = path
         plan.heldout_copies[relative] = path
@@ -250,11 +258,16 @@ def _is_licence(path: Path) -> bool:
     return "licen" in name or "attribution" in name
 
 
-def _licence_files(raw: Path) -> list[Path]:
+def _licence_files(raw: Path, transcripts: set[Path]) -> list[Path]:
+    """Licence and attribution files; a pair's transcript never counts, whatever its name."""
     found = [p for p in raw.iterdir() if p.is_file() and _is_licence(p)]
-    transcripts = raw / "transcripts"
-    if transcripts.is_dir():
-        found += [p for p in transcripts.rglob("*") if p.is_file() and _is_licence(p)]
+    folder = raw / "transcripts"
+    if folder.is_dir():
+        found += [
+            p
+            for p in folder.rglob("*")
+            if p.is_file() and _is_licence(p) and p.relative_to(raw) not in transcripts
+        ]
     return sorted(found)
 
 

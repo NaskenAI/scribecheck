@@ -91,11 +91,17 @@ def _score_row(stratum: str, consultation: str, pair_id: str | None) -> dict[str
     }
 
 
-def build_fixture(root: Path, *, dev_pairs: int = 265) -> tuple[Path, Path]:
+def build_fixture(
+    root: Path,
+    *,
+    dev_pairs: int = 265,
+    dev_keys: list[tuple[str, str]] = DEV_KEYS,
+    heldout_keys: list[tuple[str, str]] = HELDOUT_KEYS,
+) -> tuple[Path, Path]:
     """A raw folder with the published layout; returns (raw dir, held-out records file)."""
     raw = root / "raw"
-    dev = _pairs_for(DEV_KEYS, dev_pairs, True)
-    heldout = _pairs_for(HELDOUT_KEYS, 230, True)
+    dev = _pairs_for(dev_keys, dev_pairs, True)
+    heldout = _pairs_for(heldout_keys, 230, True)
     other = _pairs_for(OTHER_KEYS, 10, False)
     _write(
         raw / "pairs" / "dataset_v2.json",
@@ -106,7 +112,7 @@ def build_fixture(root: Path, *, dev_pairs: int = 265) -> tuple[Path, Path]:
             "pairs": dev + heldout + other,
         },
     )
-    for stratum, consultation in DEV_KEYS + HELDOUT_KEYS + OTHER_KEYS:
+    for stratum, consultation in dev_keys + heldout_keys + OTHER_KEYS:
         _write(raw / "transcripts" / stratum / f"{consultation}.txt", f"Doctor: hi {SENTINEL}\n")
     _write(raw / "LICENSE.txt", "CC BY 4.0 (synthetic)")
     _write(raw / "transcripts" / "ATTRIBUTION.md", "PriMock57 and ACI-Bench (synthetic)")
@@ -322,3 +328,18 @@ def test_success_prints_development_breakdown(split: tuple[Path, Path, str]) -> 
         expected = ", ".join(f"{label} {count}" for label, count in sorted(counts.items()))
         assert f"development pairs by {name}: {expected}" in log
     assert sum(int(part.split()[-1]) for part in expected.split(", ")) == 265
+
+
+def test_transcripts_named_like_attribution_files_stay_on_their_side(tmp_path: Path) -> None:
+    dev_keys = [(DEV_KEYS[0][0], "d000_attribution"), *DEV_KEYS[1:]]
+    heldout_keys = [(HELDOUT_KEYS[0][0], "h000_attribution"), *HELDOUT_KEYS[1:]]
+    raw, records = build_fixture(tmp_path, dev_keys=dev_keys, heldout_keys=heldout_keys)
+    dev_out, heldout_out = tmp_path / "dev", tmp_path / "heldout"
+    assert _run(raw, records, dev_out, heldout_out) == 0
+    dev_files = {p.name for p in dev_out.rglob("*.txt")}
+    heldout_files = {p.name for p in heldout_out.rglob("*.txt")}
+    assert "h000_attribution.txt" not in dev_files
+    assert "d000_attribution.txt" not in heldout_files
+    assert "d000_attribution.txt" in dev_files and "h000_attribution.txt" in heldout_files
+    # Real attribution files still reach both sides.
+    assert "attribution.txt" in dev_files and "attribution.txt" in heldout_files
