@@ -28,6 +28,12 @@ Recovers It*](https://arxiv.org/abs/2608.31016), arXiv:2608.31016 (2026), which 
 MED-OMIT (Schumacher et al., 2023). Evaluation uses OmissionBench by Composo (data CC BY 4.0,
 harness MIT), which is built partly on PriMock57 and ACI-Bench.
 
+Drug names come from RxNorm Current Prescribable Content (release of 5 October 2026). This
+product uses publicly available data from the U.S. National Library of Medicine (NLM),
+National Institutes of Health, Department of Health and Human Services; NLM is not responsible
+for the product and does not endorse or recommend this or any other product. Symptom terms come
+from the Symptom Ontology (SYMP, CC0 1.0).
+
 ## Development
 
 ```bash

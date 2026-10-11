@@ -1,0 +1,327 @@
+{
+  "reviewed": false,
+  "note": "Draft map of international (INN/BAN) names to the US (USAN) names RxNorm uses, written in-house from well-known pairs. Not yet clinically reviewed. Every US name must be an RxNorm ingredient name in drugs.json.",
+  "pairs": [
+    {
+      "international": "acetylsalicylic acid",
+      "us": [
+        "aspirin"
+      ]
+    },
+    {
+      "international": "aciclovir",
+      "us": [
+        "acyclovir"
+      ]
+    },
+    {
+      "international": "adrenaline",
+      "us": [
+        "epinephrine"
+      ]
+    },
+    {
+      "international": "amfetamine",
+      "us": [
+        "amphetamine"
+      ]
+    },
+    {
+      "international": "amoxycillin",
+      "us": [
+        "amoxicillin"
+      ]
+    },
+    {
+      "international": "beclometasone",
+      "us": [
+        "beclomethasone"
+      ]
+    },
+    {
+      "international": "benzylpenicillin",
+      "us": [
+        "penicillin G"
+      ]
+    },
+    {
+      "international": "cefalexin",
+      "us": [
+        "cephalexin"
+      ]
+    },
+    {
+      "international": "chlorphenamine",
+      "us": [
+        "chlorpheniramine"
+      ]
+    },
+    {
+      "international": "chlortalidone",
+      "us": [
+        "chlorthalidone"
+      ]
+    },
+    {
+      "international": "ciclosporin",
+      "us": [
+        "cyclosporine"
+      ]
+    },
+    {
+      "international": "clomifene",
+      "us": [
+        "clomiphene"
+      ]
+    },
+    {
+      "international": "co-amoxiclav",
+      "us": [
+        "amoxicillin",
+        "clavulanate"
+      ]
+    },
+    {
+      "international": "co-codamol",
+      "us": [
+        "acetaminophen",
+        "codeine"
+      ]
+    },
+    {
+      "international": "co-trimoxazole",
+      "us": [
+        "sulfamethoxazole",
+        "trimethoprim"
+      ]
+    },
+    {
+      "international": "colecalciferol",
+      "us": [
+        "cholecalciferol"
+      ]
+    },
+    {
+      "international": "colestyramine",
+      "us": [
+        "cholestyramine resin"
+      ]
+    },
+    {
+      "international": "dexamfetamine",
+      "us": [
+        "dextroamphetamine"
+      ]
+    },
+    {
+      "international": "dicycloverine",
+      "us": [
+        "dicyclomine"
+      ]
+    },
+    {
+      "international": "dimeticone",
+      "us": [
+        "dimethicone"
+      ]
+    },
+    {
+      "international": "ethinylestradiol",
+      "us": [
+        "ethinyl estradiol"
+      ]
+    },
+    {
+      "international": "frusemide",
+      "us": [
+        "furosemide"
+      ]
+    },
+    {
+      "international": "glibenclamide",
+      "us": [
+        "glyburide"
+      ]
+    },
+    {
+      "international": "glyceryl trinitrate",
+      "us": [
+        "nitroglycerin"
+      ]
+    },
+    {
+      "international": "guaiphenesin",
+      "us": [
+        "guaifenesin"
+      ]
+    },
+    {
+      "international": "hyoscine butylbromide",
+      "us": [
+        "butylscopolamine"
+      ]
+    },
+    {
+      "international": "hyoscine hydrobromide",
+      "us": [
+        "scopolamine hydrobromide"
+      ]
+    },
+    {
+      "international": "indometacin",
+      "us": [
+        "indomethacin"
+      ]
+    },
+    {
+      "international": "isoprenaline",
+      "us": [
+        "isoproterenol"
+      ]
+    },
+    {
+      "international": "ispaghula",
+      "us": [
+        "psyllium"
+      ]
+    },
+    {
+      "international": "levosalbutamol",
+      "us": [
+        "levalbuterol"
+      ]
+    },
+    {
+      "international": "lignocaine",
+      "us": [
+        "lidocaine"
+      ]
+    },
+    {
+      "international": "liquid paraffin",
+      "us": [
+        "mineral oil"
+      ]
+    },
+    {
+      "international": "macrogol",
+      "us": [
+        "polyethylene glycol 3350"
+      ]
+    },
+    {
+      "international": "mesalazine",
+      "us": [
+        "mesalamine"
+      ]
+    },
+    {
+      "international": "methylthioninium chloride",
+      "us": [
+        "methylene blue"
+      ]
+    },
+    {
+      "international": "mitozantrone",
+      "us": [
+        "mitoxantrone"
+      ]
+    },
+    {
+      "international": "noradrenaline",
+      "us": [
+        "norepinephrine"
+      ]
+    },
+    {
+      "international": "oestradiol",
+      "us": [
+        "estradiol"
+      ]
+    },
+    {
+      "international": "oxpentifylline",
+      "us": [
+        "pentoxifylline"
+      ]
+    },
+    {
+      "international": "paracetamol",
+      "us": [
+        "acetaminophen"
+      ]
+    },
+    {
+      "international": "pethidine",
+      "us": [
+        "meperidine"
+      ]
+    },
+    {
+      "international": "phenobarbitone",
+      "us": [
+        "phenobarbital"
+      ]
+    },
+    {
+      "international": "phenoxymethylpenicillin",
+      "us": [
+        "penicillin V"
+      ]
+    },
+    {
+      "international": "phytomenadione",
+      "us": [
+        "vitamin K1"
+      ]
+    },
+    {
+      "international": "rifampicin",
+      "us": [
+        "rifampin"
+      ]
+    },
+    {
+      "international": "salbutamol",
+      "us": [
+        "albuterol"
+      ]
+    },
+    {
+      "international": "sodium cromoglicate",
+      "us": [
+        "cromolyn"
+      ]
+    },
+    {
+      "international": "sulphasalazine",
+      "us": [
+        "sulfasalazine"
+      ]
+    },
+    {
+      "international": "tetracosactide",
+      "us": [
+        "cosyntropin"
+      ]
+    },
+    {
+      "international": "thyroxine",
+      "us": [
+        "levothyroxine"
+      ]
+    },
+    {
+      "international": "torasemide",
+      "us": [
+        "torsemide"
+      ]
+    },
+    {
+      "international": "valaciclovir",
+      "us": [
+        "valacyclovir"
+      ]
+    }
+  ]
+}

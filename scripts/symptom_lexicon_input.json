@@ -1,0 +1,502 @@
+{
+  "_comment": "Curation input for scripts/build_symptom_lexicon.py. 'terms' are SYMP labels to include; IDs, labels and exact synonyms come from the SYMP file. 'exclude' removes SYMP surface forms that would mislead matching, keyed by label. 'merge' folds a SYMP term into another that means the same for matching (its label and synonyms become forms of the target, marked \"reviewed\": false). 'lay' adds phrasings not in SYMP, keyed by label; every lay phrasing is written to symptoms.json with \"reviewed\": false until a clinician checks it.",
+  "terms": [
+    "pain",
+    "abdominal pain",
+    "abdominal cramp",
+    "abdominal discomfort",
+    "epigastric abdominal pain",
+    "right upper quadrant abdominal pain",
+    "right lower quadrant abdominal pain",
+    "left upper quadrant abdominal pain",
+    "left lower quadrant abdominal pain",
+    "generalized abdominal pain",
+    "periumbilic abdominal pain",
+    "abdominal tenderness",
+    "abdominal swelling",
+    "abdominal distention",
+    "bloating",
+    "backache",
+    "low backache",
+    "chest pain",
+    "pleuritic chest pain",
+    "chest tightness",
+    "chest discomfort",
+    "headache",
+    "frontal headache",
+    "severe headache",
+    "joint pain",
+    "knee pain",
+    "hip pain",
+    "shoulder pain",
+    "elbow pain",
+    "neck pain",
+    "stiff neck",
+    "muscle pain",
+    "muscle ache",
+    "muscle cramp",
+    "leg cramp",
+    "cramp",
+    "muscle weakness",
+    "muscle twitching",
+    "muscle tightness",
+    "bone pain",
+    "body ache",
+    "earache",
+    "toothache",
+    "throat pain",
+    "testicular pain",
+    "colic",
+    "renal colic",
+    "gas pain",
+    "sore eyes",
+    "painful respiration",
+    "dyspareunia",
+    "chronic pain",
+    "nausea",
+    "vomiting",
+    "hematemesis",
+    "diarrhea",
+    "bloody diarrhea",
+    "constipation",
+    "flatulence",
+    "belching",
+    "dyspepsia",
+    "pyrosis",
+    "dysphagia",
+    "early satiety",
+    "loss of appetite",
+    "decreased appetite",
+    "increased appetite",
+    "melena",
+    "hematochezia",
+    "bloody stool",
+    "rectorrhagia",
+    "tenesmus",
+    "acholic stool",
+    "jaundice",
+    "hiccough",
+    "dry mouth",
+    "mouth sore",
+    "apthous ulcer",
+    "gum bleeding",
+    "thirst",
+    "polydipsia",
+    "cough",
+    "dry cough",
+    "wet cough",
+    "chronic cough",
+    "barking croup cough",
+    "paroxysmal cough",
+    "hemoptysis",
+    "bloody sputum",
+    "sputum",
+    "phlegm",
+    "dyspnea",
+    "orthopnea",
+    "wheezing",
+    "stridor",
+    "tachypnea",
+    "apnea",
+    "sleep apnea",
+    "sneezing",
+    "rhinorrhea",
+    "congestion",
+    "nasal congestion",
+    "nasal discharge",
+    "postnasal drainage",
+    "epistaxis",
+    "hoarseness",
+    "hoarse voice",
+    "dysphonia",
+    "aphonia",
+    "breathing problems",
+    "inability to lie flat",
+    "palpitation",
+    "tachycardia",
+    "bradycardia",
+    "arrhythmia",
+    "syncope",
+    "lightheadedness",
+    "dizziness",
+    "vertigo",
+    "edema",
+    "leg swelling",
+    "limb edema",
+    "facial edema",
+    "palpebral edema",
+    "claudication",
+    "cyanosis",
+    "hypotension",
+    "low blood pressure",
+    "cold clammy skin",
+    "pallor",
+    "flushing",
+    "fever",
+    "low-grade fever",
+    "high fever",
+    "chills",
+    "night sweats",
+    "diaphoresis",
+    "sweaty",
+    "generalized hyperhidrosis",
+    "fatigue",
+    "tiredness",
+    "weariness",
+    "exhaustion",
+    "lethargy",
+    "malaise",
+    "weakness",
+    "asthenia",
+    "weight loss",
+    "weight gain",
+    "dehydration",
+    "anxiety",
+    "depression",
+    "agitation",
+    "irritability",
+    "confusion",
+    "disorientation",
+    "delirium",
+    "hallucination",
+    "memory loss",
+    "memory impairment",
+    "inability to concentrate",
+    "drowsiness",
+    "insomnia",
+    "sleep disturbance",
+    "hypersomnia",
+    "loss of consciousness",
+    "seizure",
+    "convulsion",
+    "febrile convulsion",
+    "tremor",
+    "shakes",
+    "hypoesthesia",
+    "paresthesia",
+    "ataxia",
+    "loss of balance",
+    "abnormality of gait",
+    "slurred speech",
+    "dysarthria",
+    "aphasia",
+    "facial weakness",
+    "facial paralysis",
+    "paralysis",
+    "hemiparesis",
+    "limb weakness",
+    "arm weakness",
+    "leg weakness",
+    "hand weakness",
+    "photophobia",
+    "blurred vision",
+    "double vision",
+    "loss of vision",
+    "disturbed vision",
+    "eye discharge",
+    "bloodshot eye",
+    "excessive tearing",
+    "tinnitus",
+    "deafness",
+    "itching",
+    "rash",
+    "urticaria",
+    "blister",
+    "bruise",
+    "petechiae",
+    "hair loss",
+    "skin peeling",
+    "localized superficial lump",
+    "enlargement of lymph nodes",
+    "boil",
+    "dysuria",
+    "urinary frequency",
+    "urinary urgency",
+    "nocturia",
+    "polyuria",
+    "oliguria",
+    "hematuria",
+    "urinary incontinence",
+    "stress incontinence",
+    "urge incontinence",
+    "urinary retention",
+    "incomplete bladder emptying",
+    "post-void dribbling",
+    "nocturnal enuresis",
+    "urethral discharge",
+    "dark urine",
+    "vaginal discharge",
+    "abnormal vaginal bleeding",
+    "menorrhagia",
+    "ageusia",
+    "allergic reaction"
+  ],
+  "exclude": {
+    "diarrhea": [
+      "bacterial gastroenteritis",
+      "fecal incontinence",
+      "incontinence of feces"
+    ],
+    "flatulence": [
+      "gas"
+    ],
+    "syncope": [
+      "faint",
+      "loss of consciousness due to insuffiecient blood flow to the brain"
+    ],
+    "congestion": [
+      "congestion"
+    ],
+    "urinary incontinence": [
+      "incontinence"
+    ],
+    "claudication": [
+      "blockage of leg arteries"
+    ],
+    "abnormal vaginal bleeding": [
+      "abnormal menstruation"
+    ],
+    "arrhythmia": [
+      "heart rhythm symptom"
+    ],
+    "boil": [
+      "boil"
+    ],
+    "shakes": [
+      "shakes"
+    ],
+    "flushing": [
+      "flushing"
+    ],
+    "rash": [
+      "erythema",
+      "rubor"
+    ]
+  },
+  "merge": {
+    "low blood pressure": "hypotension",
+    "convulsion": "seizure",
+    "tiredness": "fatigue",
+    "weariness": "fatigue",
+    "hoarse voice": "hoarseness",
+    "slurred speech": "dysarthria",
+    "nasal congestion": "congestion"
+  },
+  "lay": {
+    "diarrhea": [
+      "loose motions",
+      "loose motion",
+      "loose stools",
+      "watery stools"
+    ],
+    "dizziness": [
+      "giddiness",
+      "giddy"
+    ],
+    "dysuria": [
+      "burning micturition",
+      "burning urination",
+      "burning while passing urine",
+      "burning when passing urine",
+      "pain passing urine"
+    ],
+    "pyrosis": [
+      "acidity"
+    ],
+    "flatulence": [
+      "gas trouble",
+      "passing wind"
+    ],
+    "nausea": [
+      "vomiting sensation",
+      "feeling sick",
+      "feel sick",
+      "queasy",
+      "queasiness",
+      "nauseous",
+      "nauseated"
+    ],
+    "vomiting": [
+      "throwing up",
+      "threw up",
+      "vomited"
+    ],
+    "body ache": [
+      "body pain",
+      "body pains",
+      "body aches"
+    ],
+    "vaginal discharge": [
+      "white discharge"
+    ],
+    "seizure": [],
+    "dyspnea": [
+      "short of breath",
+      "breathless",
+      "out of breath",
+      "dyspnoea"
+    ],
+    "abdominal pain": [
+      "tummy ache",
+      "tummy pain",
+      "stomach ache",
+      "stomachache",
+      "stomach pain",
+      "belly pain"
+    ],
+    "rhinorrhea": [
+      "running nose",
+      "rhinorrhoea"
+    ],
+    "congestion": [
+      "nose block",
+      "stuffed nose"
+    ],
+    "paresthesia": [
+      "pins and needles",
+      "tingling",
+      "paraesthesia"
+    ],
+    "syncope": [
+      "passing out",
+      "passed out",
+      "blacked out",
+      "fainted"
+    ],
+    "hemoptysis": [
+      "coughing up blood"
+    ],
+    "fever": [
+      "feverish"
+    ],
+    "chills": [
+      "shivering",
+      "shivers"
+    ],
+    "palpitation": [
+      "palpitations",
+      "heart racing",
+      "racing heart",
+      "heart pounding"
+    ],
+    "itching": [
+      "itchy",
+      "itchiness"
+    ],
+    "headache": [
+      "headaches",
+      "head ache"
+    ],
+    "insomnia": [
+      "can't sleep",
+      "trouble sleeping",
+      "difficulty sleeping",
+      "sleeplessness"
+    ],
+    "fatigue": [
+      "tired all the time",
+      "TATT"
+    ],
+    "constipation": [
+      "constipated",
+      "hard stools"
+    ],
+    "hematuria": [
+      "blood in urine",
+      "blood in the urine",
+      "haematuria"
+    ],
+    "melena": [
+      "black stools",
+      "tarry stools"
+    ],
+    "bloody stool": [
+      "blood in the stool"
+    ],
+    "edema": [
+      "oedema"
+    ],
+    "leg swelling": [
+      "swollen legs",
+      "swollen ankles",
+      "swollen feet",
+      "swelling of feet",
+      "pedal oedema",
+      "pedal edema"
+    ],
+    "lightheadedness": [
+      "lightheaded",
+      "light headed",
+      "light-headed"
+    ],
+    "vertigo": [
+      "room spinning",
+      "spinning sensation"
+    ],
+    "tinnitus": [
+      "ringing in the ears",
+      "ringing in my ears"
+    ],
+    "hair loss": [
+      "hair fall",
+      "losing hair"
+    ],
+    "earache": [
+      "ear pain"
+    ],
+    "low backache": [
+      "lower back pain"
+    ],
+    "joint pain": [
+      "joint pains",
+      "aching joints"
+    ],
+    "abnormal vaginal bleeding": [
+      "PV bleeding"
+    ],
+    "chest pain": [
+      "chest pains"
+    ],
+    "cough": [
+      "coughing"
+    ],
+    "dysphagia": [
+      "trouble swallowing"
+    ],
+    "weight loss": [
+      "losing weight",
+      "lost weight"
+    ],
+    "muscle cramp": [
+      "muscle cramps"
+    ],
+    "cramp": [
+      "cramps"
+    ],
+    "orthopnea": [
+      "orthopnoea"
+    ],
+    "tachypnea": [
+      "tachypnoea"
+    ],
+    "apnea": [
+      "apnoea"
+    ],
+    "sleep apnea": [
+      "sleep apnoea"
+    ],
+    "hematochezia": [
+      "haematochezia"
+    ],
+    "hypoesthesia": [
+      "hypoaesthesia"
+    ],
+    "rash": [
+      "rashes"
+    ],
+    "flushing": [
+      "hot flushes",
+      "hot flashes"
+    ]
+  }
+}

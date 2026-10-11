@@ -1,0 +1,2604 @@
+{
+ "source": {
+  "name": "Symptom Ontology (SYMP)",
+  "file": "symp.obo",
+  "version": "releases/2026-07-30/symp.obo",
+  "licence": "CC0 1.0",
+  "url": "http://purl.obolibrary.org/obo/symp.obo",
+  "built_by": "scripts/build_symptom_lexicon.py"
+ },
+ "reviewed_note": "Labels, IDs and exact synonyms come from SYMP. The term selection, exclusions and merges are in scripts/symptom_lexicon_input.json. Lay phrasings and merges marked \"reviewed\": false are in-house additions awaiting clinical review.",
+ "excluded_forms": {
+  "abnormal vaginal bleeding": [
+   "abnormal menstruation"
+  ],
+  "arrhythmia": [
+   "heart rhythm symptom"
+  ],
+  "boil": [
+   "boil"
+  ],
+  "claudication": [
+   "blockage of leg arteries"
+  ],
+  "congestion": [
+   "congestion"
+  ],
+  "diarrhea": [
+   "bacterial gastroenteritis",
+   "fecal incontinence",
+   "incontinence of feces"
+  ],
+  "flatulence": [
+   "gas"
+  ],
+  "flushing": [
+   "flushing"
+  ],
+  "rash": [
+   "erythema",
+   "rubor"
+  ],
+  "shakes": [
+   "shakes"
+  ],
+  "syncope": [
+   "faint",
+   "loss of consciousness due to insuffiecient blood flow to the brain"
+  ],
+  "urinary incontinence": [
+   "incontinence"
+  ]
+ },
+ "merges": {
+  "convulsion": "seizure",
+  "hoarse voice": "hoarseness",
+  "low blood pressure": "hypotension",
+  "nasal congestion": "congestion",
+  "slurred speech": "dysarthria",
+  "tiredness": "fatigue",
+  "weariness": "fatigue"
+ },
+ "terms": [
+  {
+   "id": "SYMP:0000001",
+   "label": "abdominal cramp",
+   "match_label": true,
+   "synonyms": [
+    "stomach cramp"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000002",
+   "label": "abdominal distention",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000005",
+   "label": "ataxia",
+   "match_label": true,
+   "synonyms": [
+    "uncoordination"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000006",
+   "label": "backache",
+   "match_label": true,
+   "synonyms": [
+    "back pain"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000009",
+   "label": "blister",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000012",
+   "label": "blurred vision",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000016",
+   "label": "confusion",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000019",
+   "label": "deafness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000020",
+   "label": "dehydration",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000021",
+   "label": "delirium",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000022",
+   "label": "depression",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000023",
+   "label": "disorientation",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000024",
+   "label": "drowsiness",
+   "match_label": true,
+   "synonyms": [
+    "drowsy",
+    "somnolence"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000025",
+   "label": "dry cough",
+   "match_label": true,
+   "synonyms": [
+    "nonproductive cough"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000030",
+   "label": "paralysis",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000040",
+   "label": "hematuria",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "blood in urine",
+     "reviewed": false
+    },
+    {
+     "text": "blood in the urine",
+     "reviewed": false
+    },
+    {
+     "text": "haematuria",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000059",
+   "label": "hypotension",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [
+    {
+     "id": "SYMP:0000692",
+     "label": "low blood pressure",
+     "match_label": true,
+     "synonyms": [],
+     "reviewed": false
+    }
+   ],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000064",
+   "label": "joint pain",
+   "match_label": true,
+   "synonyms": [
+    "arthralgia",
+    "arthromyalgia"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "joint pains",
+     "reviewed": false
+    },
+    {
+     "text": "aching joints",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000075",
+   "label": "lethargy",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000093",
+   "label": "muscle cramp",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "muscle cramps",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000094",
+   "label": "muscle weakness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000099",
+   "label": "pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000124",
+   "label": "seizure",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [
+    {
+     "id": "SYMP:0000596",
+     "label": "convulsion",
+     "match_label": true,
+     "synonyms": [],
+     "reviewed": false
+    }
+   ],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000130",
+   "label": "severe headache",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000139",
+   "label": "sneezing",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000156",
+   "label": "thirst",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000162",
+   "label": "tremor",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000177",
+   "label": "weakness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000178",
+   "label": "weight loss",
+   "match_label": true,
+   "synonyms": [
+    "loss of weight"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "losing weight",
+     "reviewed": false
+    },
+    {
+     "text": "lost weight",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000186",
+   "label": "exhaustion",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000188",
+   "label": "abdominal discomfort",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000210",
+   "label": "photophobia",
+   "match_label": true,
+   "synonyms": [
+    "light intolerance"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000222",
+   "label": "limb weakness",
+   "match_label": true,
+   "synonyms": [
+    "extremities weakness"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000223",
+   "label": "arm weakness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000224",
+   "label": "leg weakness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000225",
+   "label": "asthenia",
+   "match_label": true,
+   "synonyms": [
+    "loss of strength"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000229",
+   "label": "bloody stool",
+   "match_label": true,
+   "synonyms": [
+    "blood in stool"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "blood in the stool",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000230",
+   "label": "body ache",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "body pain",
+     "reviewed": false
+    },
+    {
+     "text": "body pains",
+     "reviewed": false
+    },
+    {
+     "text": "body aches",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000231",
+   "label": "bradycardia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000235",
+   "label": "colic",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000237",
+   "label": "congestion",
+   "match_label": false,
+   "synonyms": [
+    "blocked nose",
+    "nasal blockage",
+    "nasal obstruction",
+    "stuffed up nose",
+    "stuffy nose"
+   ],
+   "merged": [
+    {
+     "id": "SYMP:0000869",
+     "label": "nasal congestion",
+     "match_label": true,
+     "synonyms": [],
+     "reviewed": false
+    }
+   ],
+   "lay": [
+    {
+     "text": "nose block",
+     "reviewed": false
+    },
+    {
+     "text": "stuffed nose",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000245",
+   "label": "decreased appetite",
+   "match_label": true,
+   "synonyms": [
+    "poor appetite"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000246",
+   "label": "increased appetite",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000258",
+   "label": "double vision",
+   "match_label": true,
+   "synonyms": [
+    "diplopia"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000260",
+   "label": "dry mouth",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000281",
+   "label": "eye discharge",
+   "match_label": true,
+   "synonyms": [
+    "ocular discharge"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000283",
+   "label": "facial paralysis",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000287",
+   "label": "arrhythmia",
+   "match_label": true,
+   "synonyms": [
+    "abnormal heart beat",
+    "abnormal heart rhythm",
+    "dysrhythmia",
+    "irregular heartbeat"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000290",
+   "label": "belching",
+   "match_label": true,
+   "synonyms": [
+    "eructation"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000291",
+   "label": "gas pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000293",
+   "label": "hemiparesis",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000309",
+   "label": "loss of appetite",
+   "match_label": true,
+   "synonyms": [
+    "inappetence",
+    "lack of appetite"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000316",
+   "label": "leg cramp",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000318",
+   "label": "loss of balance",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000321",
+   "label": "loss of vision",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000323",
+   "label": "melena",
+   "match_label": true,
+   "synonyms": [
+    "melaena"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "black stools",
+     "reviewed": false
+    },
+    {
+     "text": "tarry stools",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000330",
+   "label": "mouth sore",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000331",
+   "label": "muscle ache",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000337",
+   "label": "night sweats",
+   "match_label": true,
+   "synonyms": [
+    "sleep hyperhidrosis"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000340",
+   "label": "limb edema",
+   "match_label": true,
+   "synonyms": [
+    "limb oedema",
+    "oedema of the limbs"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000344",
+   "label": "palpebral edema",
+   "match_label": true,
+   "synonyms": [
+    "edema of the eyelid"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000353",
+   "label": "phlegm",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000372",
+   "label": "rhinorrhea",
+   "match_label": true,
+   "synonyms": [
+    "runny nose"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "running nose",
+     "reviewed": false
+    },
+    {
+     "text": "rhinorrhoea",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000383",
+   "label": "stiff neck",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000393",
+   "label": "tinnitus",
+   "match_label": true,
+   "synonyms": [
+    "sensation of noise"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "ringing in the ears",
+     "reviewed": false
+    },
+    {
+     "text": "ringing in my ears",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000394",
+   "label": "muscle twitching",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000398",
+   "label": "vaginal discharge",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "white discharge",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000399",
+   "label": "vertigo",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "room spinning",
+     "reviewed": false
+    },
+    {
+     "text": "spinning sensation",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000403",
+   "label": "weight gain",
+   "match_label": true,
+   "synonyms": [
+    "gain of weight"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000404",
+   "label": "dyspareunia",
+   "match_label": true,
+   "synonyms": [
+    "difficult sexual intercourse",
+    "painful sexual intercourse"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000406",
+   "label": "bruise",
+   "match_label": true,
+   "synonyms": [
+    "bruises",
+    "bruising",
+    "contusion",
+    "ecchymosis"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000407",
+   "label": "syncope",
+   "match_label": true,
+   "synonyms": [
+    "fainting"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "passing out",
+     "reviewed": false
+    },
+    {
+     "text": "passed out",
+     "reviewed": false
+    },
+    {
+     "text": "blacked out",
+     "reviewed": false
+    },
+    {
+     "text": "fainted",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000412",
+   "label": "anxiety",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000414",
+   "label": "dysarthria",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [
+    {
+     "id": "SYMP:0000342",
+     "label": "slurred speech",
+     "match_label": true,
+     "synonyms": [],
+     "reviewed": false
+    }
+   ],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000420",
+   "label": "bloating",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000421",
+   "label": "hematochezia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "haematochezia",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000422",
+   "label": "dyspepsia",
+   "match_label": true,
+   "synonyms": [
+    "indigestion"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000423",
+   "label": "pyrosis",
+   "match_label": true,
+   "synonyms": [
+    "acid indigestion",
+    "heartburn"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "acidity",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000424",
+   "label": "claudication",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000430",
+   "label": "pleuritic chest pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000431",
+   "label": "sputum",
+   "match_label": true,
+   "synonyms": [
+    "sputum production"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000432",
+   "label": "itching",
+   "match_label": true,
+   "synonyms": [
+    "pruritus"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "itchy",
+     "reviewed": false
+    },
+    {
+     "text": "itchiness",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000434",
+   "label": "urticaria",
+   "match_label": true,
+   "synonyms": [
+    "hives",
+    "nettle rash",
+    "uredo"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000435",
+   "label": "paresthesia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "pins and needles",
+     "reviewed": false
+    },
+    {
+     "text": "tingling",
+     "reviewed": false
+    },
+    {
+     "text": "paraesthesia",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000436",
+   "label": "abnormal vaginal bleeding",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "PV bleeding",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000437",
+   "label": "earache",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "ear pain",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000438",
+   "label": "toothache",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000440",
+   "label": "hair loss",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "hair fall",
+     "reviewed": false
+    },
+    {
+     "text": "losing hair",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000441",
+   "label": "elbow pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000442",
+   "label": "knee pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000443",
+   "label": "shoulder pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000446",
+   "label": "bloodshot eye",
+   "match_label": true,
+   "synonyms": [
+    "red eye",
+    "redness of eye"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000447",
+   "label": "bloody sputum",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000448",
+   "label": "epistaxis",
+   "match_label": true,
+   "synonyms": [
+    "nosebleed"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000456",
+   "label": "left upper quadrant abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000457",
+   "label": "abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "tummy ache",
+     "reviewed": false
+    },
+    {
+     "text": "tummy pain",
+     "reviewed": false
+    },
+    {
+     "text": "stomach ache",
+     "reviewed": false
+    },
+    {
+     "text": "stomachache",
+     "reviewed": false
+    },
+    {
+     "text": "stomach pain",
+     "reviewed": false
+    },
+    {
+     "text": "belly pain",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000458",
+   "label": "nausea",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "vomiting sensation",
+     "reviewed": false
+    },
+    {
+     "text": "feeling sick",
+     "reviewed": false
+    },
+    {
+     "text": "feel sick",
+     "reviewed": false
+    },
+    {
+     "text": "queasy",
+     "reviewed": false
+    },
+    {
+     "text": "queasiness",
+     "reviewed": false
+    },
+    {
+     "text": "nauseous",
+     "reviewed": false
+    },
+    {
+     "text": "nauseated",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000472",
+   "label": "early satiety",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000478",
+   "label": "abdominal swelling",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000479",
+   "label": "abnormality of gait",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000484",
+   "label": "abdominal tenderness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000485",
+   "label": "dysuria",
+   "match_label": true,
+   "synonyms": [
+    "difficult urine discharge",
+    "painful urine discharge"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "burning micturition",
+     "reviewed": false
+    },
+    {
+     "text": "burning urination",
+     "reviewed": false
+    },
+    {
+     "text": "burning while passing urine",
+     "reviewed": false
+    },
+    {
+     "text": "burning when passing urine",
+     "reviewed": false
+    },
+    {
+     "text": "pain passing urine",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000487",
+   "label": "rash",
+   "match_label": true,
+   "synonyms": [
+    "skin eruption",
+    "skin rash",
+    "skin redness"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "rashes",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000492",
+   "label": "urinary incontinence",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000493",
+   "label": "dysphagia",
+   "match_label": true,
+   "synonyms": [
+    "difficulty in swallowing",
+    "difficulty swallowing",
+    "impaired swallowing"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "trouble swallowing",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000494",
+   "label": "renal colic",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000495",
+   "label": "urethral discharge",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000504",
+   "label": "headache",
+   "match_label": true,
+   "synonyms": [
+    "cephalalgia"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "headaches",
+     "reviewed": false
+    },
+    {
+     "text": "head ache",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000505",
+   "label": "throat pain",
+   "match_label": true,
+   "synonyms": [
+    "sore throat"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000508",
+   "label": "aphasia",
+   "match_label": true,
+   "synonyms": [
+    "inability to comprehend language"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000509",
+   "label": "flatulence",
+   "match_label": true,
+   "synonyms": [
+    "gas production"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "gas trouble",
+     "reviewed": false
+    },
+    {
+     "text": "passing wind",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000510",
+   "label": "pallor",
+   "match_label": true,
+   "synonyms": [
+    "paleness"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000511",
+   "label": "flushing",
+   "match_label": false,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "hot flushes",
+     "reviewed": false
+    },
+    {
+     "text": "hot flashes",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000513",
+   "label": "stridor",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000515",
+   "label": "hiccough",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000517",
+   "label": "hemoptysis",
+   "match_label": true,
+   "synonyms": [
+    "coughing up of blood",
+    "expectoration of blood",
+    "expectoration of blood-stained sputum",
+    "haemoptysis"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "coughing up blood",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000518",
+   "label": "generalized abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000521",
+   "label": "enlargement of lymph nodes",
+   "match_label": true,
+   "synonyms": [
+    "swelling of lymph nodes",
+    "swollen lymph glands"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000529",
+   "label": "tachycardia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000530",
+   "label": "palpitation",
+   "match_label": true,
+   "synonyms": [
+    "abnormal heart beats"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "palpitations",
+     "reviewed": false
+    },
+    {
+     "text": "heart racing",
+     "reviewed": false
+    },
+    {
+     "text": "racing heart",
+     "reviewed": false
+    },
+    {
+     "text": "heart pounding",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000532",
+   "label": "urge incontinence",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000533",
+   "label": "post-void dribbling",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000537",
+   "label": "cyanosis",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000538",
+   "label": "edema",
+   "match_label": true,
+   "synonyms": [
+    "dropsy"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "oedema",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000539",
+   "label": "jaundice",
+   "match_label": true,
+   "synonyms": [
+    "icteric",
+    "icterus"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000540",
+   "label": "painful respiration",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000542",
+   "label": "epigastric abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000543",
+   "label": "memory loss",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000546",
+   "label": "right lower quadrant abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000547",
+   "label": "right upper quadrant abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000556",
+   "label": "localized superficial lump",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000557",
+   "label": "urinary retention",
+   "match_label": true,
+   "synonyms": [
+    "inability to urinate",
+    "ischuria",
+    "retention of urine"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000558",
+   "label": "incomplete bladder emptying",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000560",
+   "label": "polydipsia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000563",
+   "label": "urinary frequency",
+   "match_label": true,
+   "synonyms": [
+    "frequent urination"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000564",
+   "label": "nocturia",
+   "match_label": true,
+   "synonyms": [
+    "nycturia"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000565",
+   "label": "polyuria",
+   "match_label": true,
+   "synonyms": [
+    "excessive secretion of urine"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000566",
+   "label": "sleep disturbance",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000569",
+   "label": "oliguria",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000570",
+   "label": "diarrhea",
+   "match_label": true,
+   "synonyms": [
+    "diarrhoea",
+    "loose bowel",
+    "loose bowels",
+    "the runs"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "loose motions",
+     "reviewed": false
+    },
+    {
+     "text": "loose motion",
+     "reviewed": false
+    },
+    {
+     "text": "loose stools",
+     "reviewed": false
+    },
+    {
+     "text": "watery stools",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000571",
+   "label": "insomnia",
+   "match_label": true,
+   "synonyms": [
+    "agrypnia"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "can't sleep",
+     "reviewed": false
+    },
+    {
+     "text": "trouble sleeping",
+     "reviewed": false
+    },
+    {
+     "text": "difficulty sleeping",
+     "reviewed": false
+    },
+    {
+     "text": "sleeplessness",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000574",
+   "label": "aphonia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000576",
+   "label": "chest pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "chest pains",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000581",
+   "label": "sleep apnea",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "sleep apnoea",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000582",
+   "label": "hypersomnia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000590",
+   "label": "urinary urgency",
+   "match_label": true,
+   "synonyms": [
+    "urgency of urination"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000595",
+   "label": "febrile convulsion",
+   "match_label": true,
+   "synonyms": [
+    "febrile seizure"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000600",
+   "label": "apnea",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "apnoea",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000602",
+   "label": "orthopnea",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "orthopnoea",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000603",
+   "label": "tachypnea",
+   "match_label": true,
+   "synonyms": [
+    "rapid breathing"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "tachypnoea",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000604",
+   "label": "wheezing",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000606",
+   "label": "nocturnal enuresis",
+   "match_label": true,
+   "synonyms": [
+    "bed wetting",
+    "nighttime incontinence"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000607",
+   "label": "hallucination",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000609",
+   "label": "generalized hyperhidrosis",
+   "match_label": true,
+   "synonyms": [
+    "secondary hyperhidrosis"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000610",
+   "label": "dizziness",
+   "match_label": true,
+   "synonyms": [
+    "dizzy"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "giddiness",
+     "reviewed": false
+    },
+    {
+     "text": "giddy",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000611",
+   "label": "periumbilic abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000613",
+   "label": "fever",
+   "match_label": true,
+   "synonyms": [
+    "pyrexia"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "feverish",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000614",
+   "label": "cough",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "coughing",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000620",
+   "label": "left lower quadrant abdominal pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000627",
+   "label": "disturbed vision",
+   "match_label": true,
+   "synonyms": [
+    "disturbance of vision"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000630",
+   "label": "frontal headache",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000632",
+   "label": "hip pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000635",
+   "label": "low backache",
+   "match_label": true,
+   "synonyms": [
+    "low back pain"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "lower back pain",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000639",
+   "label": "rectorrhagia",
+   "match_label": true,
+   "synonyms": [
+    "rectal bleeding"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000648",
+   "label": "tenesmus",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000654",
+   "label": "irritability",
+   "match_label": true,
+   "synonyms": [
+    "Inconsolability"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000662",
+   "label": "shakes",
+   "match_label": false,
+   "synonyms": [
+    "trembling"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000686",
+   "label": "chronic cough",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000689",
+   "label": "cramp",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "cramps",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000701",
+   "label": "nasal discharge",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000704",
+   "label": "dysphonia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000706",
+   "label": "facial weakness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000713",
+   "label": "inability to lie flat",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000717",
+   "label": "leg swelling",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "swollen legs",
+     "reviewed": false
+    },
+    {
+     "text": "swollen ankles",
+     "reviewed": false
+    },
+    {
+     "text": "swollen feet",
+     "reviewed": false
+    },
+    {
+     "text": "swelling of feet",
+     "reviewed": false
+    },
+    {
+     "text": "pedal oedema",
+     "reviewed": false
+    },
+    {
+     "text": "pedal edema",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000718",
+   "label": "loss of consciousness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000719",
+   "label": "memory impairment",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000742",
+   "label": "gum bleeding",
+   "match_label": true,
+   "synonyms": [
+    "gingival hemorrhage"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000748",
+   "label": "facial edema",
+   "match_label": true,
+   "synonyms": [
+    "facial swelling"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000756",
+   "label": "menorrhagia",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000760",
+   "label": "petechiae",
+   "match_label": true,
+   "synonyms": [
+    "petechial rash"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000768",
+   "label": "testicular pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000817",
+   "label": "inability to concentrate",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000828",
+   "label": "sore eyes",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000829",
+   "label": "neck pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000834",
+   "label": "hypoesthesia",
+   "match_label": true,
+   "synonyms": [
+    "numbness"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "hypoaesthesia",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0000837",
+   "label": "chronic pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000853",
+   "label": "stress incontinence",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000868",
+   "label": "breathing problems",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000879",
+   "label": "low-grade fever",
+   "match_label": true,
+   "synonyms": [
+    "low grade fever"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000882",
+   "label": "high fever",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000894",
+   "label": "cold clammy skin",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0000900",
+   "label": "allergic reaction",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019145",
+   "label": "vomiting",
+   "match_label": true,
+   "synonyms": [
+    "emesis"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "throwing up",
+     "reviewed": false
+    },
+    {
+     "text": "threw up",
+     "reviewed": false
+    },
+    {
+     "text": "vomited",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0019147",
+   "label": "hematemesis",
+   "match_label": true,
+   "synonyms": [
+    "bloody vomit",
+    "haematemesis",
+    "vomiting blood"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019152",
+   "label": "diaphoresis",
+   "match_label": true,
+   "synonyms": [
+    "profuse perspiration"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019153",
+   "label": "dyspnea",
+   "match_label": true,
+   "synonyms": [
+    "breathing difficulty",
+    "breathlessness",
+    "difficulty breathing",
+    "labored respiration",
+    "shortness of breath"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "short of breath",
+     "reviewed": false
+    },
+    {
+     "text": "breathless",
+     "reviewed": false
+    },
+    {
+     "text": "out of breath",
+     "reviewed": false
+    },
+    {
+     "text": "dyspnoea",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0019160",
+   "label": "boil",
+   "match_label": false,
+   "synonyms": [
+    "furuncle"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019161",
+   "label": "muscle pain",
+   "match_label": true,
+   "synonyms": [
+    "myalgia"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019162",
+   "label": "muscle tightness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019164",
+   "label": "excessive tearing",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019174",
+   "label": "chills",
+   "match_label": true,
+   "synonyms": [
+    "rigors"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "shivering",
+     "reviewed": false
+    },
+    {
+     "text": "shivers",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0019175",
+   "label": "sweaty",
+   "match_label": true,
+   "synonyms": [
+    "perspire"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019176",
+   "label": "malaise",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0019177",
+   "label": "fatigue",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [
+    {
+     "id": "SYMP:0000187",
+     "label": "tiredness",
+     "match_label": true,
+     "synonyms": [],
+     "reviewed": false
+    },
+    {
+     "id": "SYMP:0000185",
+     "label": "weariness",
+     "match_label": true,
+     "synonyms": [],
+     "reviewed": false
+    }
+   ],
+   "lay": [
+    {
+     "text": "tired all the time",
+     "reviewed": false
+    },
+    {
+     "text": "TATT",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0019179",
+   "label": "lightheadedness",
+   "match_label": true,
+   "synonyms": [
+    "light-headedness"
+   ],
+   "merged": [],
+   "lay": [
+    {
+     "text": "lightheaded",
+     "reviewed": false
+    },
+    {
+     "text": "light headed",
+     "reviewed": false
+    },
+    {
+     "text": "light-headed",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0019180",
+   "label": "constipation",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": [
+    {
+     "text": "constipated",
+     "reviewed": false
+    },
+    {
+     "text": "hard stools",
+     "reviewed": false
+    }
+   ]
+  },
+  {
+   "id": "SYMP:0019181",
+   "label": "hoarseness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [
+    {
+     "id": "SYMP:0000298",
+     "label": "hoarse voice",
+     "match_label": true,
+     "synonyms": [],
+     "reviewed": false
+    }
+   ],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020001",
+   "label": "apthous ulcer",
+   "match_label": true,
+   "synonyms": [
+    "aphthous stomatitis",
+    "canker sore"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020003",
+   "label": "acholic stool",
+   "match_label": true,
+   "synonyms": [
+    "clay-colored bowel movement"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020004",
+   "label": "ageusia",
+   "match_label": true,
+   "synonyms": [
+    "loss of taste"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020006",
+   "label": "agitation",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020008",
+   "label": "barking croup cough",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020011",
+   "label": "bloody diarrhea",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020019",
+   "label": "postnasal drainage",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020023",
+   "label": "bone pain",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020027",
+   "label": "wet cough",
+   "match_label": true,
+   "synonyms": [
+    "productive cough"
+   ],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020031",
+   "label": "chest discomfort",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020032",
+   "label": "chest tightness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020033",
+   "label": "paroxysmal cough",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020043",
+   "label": "dark urine",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020048",
+   "label": "skin peeling",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  },
+  {
+   "id": "SYMP:0020052",
+   "label": "hand weakness",
+   "match_label": true,
+   "synonyms": [],
+   "merged": [],
+   "lay": []
+  }
+ ]
+}

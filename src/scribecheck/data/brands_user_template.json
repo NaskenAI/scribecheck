@@ -1,0 +1,15 @@
+{
+  "_comment": "Template for a user-supplied brand map: brand name -> generic (ingredient) names, as RxNorm or international names. The two entries below are invented EXAMPLES, not real brands; replace them with your own.",
+  "brands": {
+    "Examplol": [
+      "paracetamol"
+    ],
+    "Fictivir": [
+      "acyclovir"
+    ]
+  },
+  "_examples": [
+    "Examplol",
+    "Fictivir"
+  ]
+}
