@@ -63,6 +63,8 @@ The goal is to prove the evaluation setup matches the published results before b
 
 For Gate 1:
 
+The first three tasks below touch encrypted data (the raw download and the held-out subset), so they are run by a person in a normal terminal, never by Claude Code.
+
 - [ ] Recompute the paper's published numbers from its released judgements, with no API calls, to validate the scoring code
 - [ ] Run Fox et al.'s harness for both methods on the full evaluation set with the API model, recording cost per note, model calls per note and run time
 - [ ] Re-run both methods on the held-out subset with the API model to fix those baselines; local-model baselines follow in M4
@@ -138,7 +140,7 @@ Week 3:
 The goal is to tune on development data only and freeze the settings before the held-out run. Lead: Person A. Depends on M3.
 
 - [ ] Before starting, check the week's GPU hours against M3's seconds per note, and rent a second GPU if they don't fit (benchmark data only)
-- [ ] Re-run both published methods on the held-out subset with the local model, adapting the harness if week 0 showed it is needed. If the local model cannot run route two, record that baseline as not applicable rather than reporting a misleading number.
+- [ ] Re-run both published methods on the held-out subset with the local model, adapting the harness if week 0 showed it is needed. This run touches the encrypted held-out data, so it is run by a person in a normal terminal, never by Claude Code. If the local model cannot run route two, record that baseline as not applicable rather than reporting a misleading number.
 - [ ] State the minimum detectable gain for the local-model comparison before any held-out run of scribecheck
 - [ ] Run scribecheck on the 65 development consultations with the local model and the API model
 - [ ] Choose a fixed development subset, then tune prompts and settings on it with the local model first, using the API model to confirm
