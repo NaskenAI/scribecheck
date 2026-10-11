@@ -3,8 +3,9 @@
 A side counts only when it touches a body part from `BODY_PARTS` ("left knee",
 "knee on the right", "right side of the chest", "both knees", "L knee"), or is an
 unambiguous lateral word ("left-sided", "bilateral") or a quadrant (LLQ, LUQ, RLQ,
-RUQ). "right" alone ("that's right") and "left" as a verb ("she left the clinic")
-never count. The side word must be next to the part, so "left her knee brace" does
+RUQ). OD, OS and OU are the right, left and both eyes, but only in eye context
+(see rules/_context.py). "right" alone ("that's right") and "left" as a verb ("she
+left the clinic") never count. The side word must be next to the part, so "left her knee brace" does
 not match, at the cost of missing "left swollen knee". Matches never cross a line
 break, and "side" followed by "effects" is not a body site.
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
+from scribecheck.rules._context import EYE_ABBREVIATION, eye_context
 from scribecheck.rules._match import Match, non_overlapping
 
 Side = Literal["left", "right", "bilateral"]
@@ -123,6 +125,9 @@ _RULES: tuple[re.Pattern[str], ...] = (
 )
 
 
+_EYE_SIDES: dict[str, Side] = {"OD": "right", "OS": "left", "OU": "bilateral"}
+
+
 class SideMatch(Match):
     side: Side
     site: str | None = None
@@ -138,6 +143,10 @@ def find_sides(text: str) -> tuple[SideMatch, ...]:
             if found.site == "side" and _SIDE_EFFECTS.match(text, found.end):
                 continue
             candidates.append(found)
+    for match in EYE_ABBREVIATION.finditer(text):
+        if eye_context(text, *match.span()) == "eye":
+            side = _EYE_SIDES[match.group().upper()]
+            candidates.append(_side(match, side, "eye", None))
     return non_overlapping(candidates)
 
 

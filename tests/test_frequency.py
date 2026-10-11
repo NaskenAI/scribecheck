@@ -60,6 +60,12 @@ W = "weekly"
         ("1-0-0", "1-0-0", 1, D, None, False, ("morning",)),
         ("2-0-2", "2-0-2", 2, D, None, False, ("morning", "night")),
         ("take 1-0-1.", "1-0-1", 2, D, None, False, ("morning", "night")),
+        ("Metformin 500 mg OD", "OD", 1, D, None, False, ()),
+        ("Take one tablet at night", "at night", 1, D, None, False, ("night",)),
+        ("zopiclone 7.5 mg at bedtime", "at bedtime", 1, D, None, False, ("night",)),
+        ("use every night", "every night", 1, D, None, False, ("night",)),
+        ("take 2 tablets in the morning", "in the morning", 1, D, None, False, ("morning",)),
+        ("every morning take 1 tab", "every morning", 1, D, None, False, ("morning",)),
         ("(1-0-1)", "1-0-1", 2, D, None, False, ("morning", "night")),
     ],
 )
@@ -99,6 +105,13 @@ def test_frequencies(
         "every 4-6 hours",
         "every 4 to 6 hours",
         "pain at night",
+        "drops OD",
+        "Timolol eye drops 1 drop OD",
+        "1 drop OD, 1 drop OS",
+        "OS",
+        "OU",
+        "she sleeps badly every night",
+        "stiff every morning",
         "worse in the morning",
         "two tablets a day",
         "odd",
@@ -142,3 +155,21 @@ def freq(text: str):  # type: ignore[no-untyped-def]
 def test_compare_frequencies(a: str, b: str, result: str) -> None:
     assert compare_frequencies(freq(a), freq(b)) == result
     assert compare_frequencies(freq(b), freq(a)) == result
+
+
+def test_eye_context_does_not_cross_sentences() -> None:
+    text = "Eyes are fine. Metformin 500 mg OD."
+    (match,) = find_frequencies(text)
+    assert (match.text, match.times_per_period) == ("OD", 1)
+    assert_round_trip(text, [match])
+
+
+def test_timing_phrase_equals_its_abbreviation() -> None:
+    assert compare_frequencies(freq("Take one tablet at night"), freq("nocte")) == "equal"
+    assert compare_frequencies(freq("take 1 tab in the morning"), freq("mane")) == "equal"
+
+
+def test_two_ods_on_a_medication_line_stay_once_daily() -> None:
+    text = "Metformin 500 mg OD, amlodipine 5 mg OD"
+    matches = find_frequencies(text)
+    assert [(m.text, m.times_per_period) for m in matches] == [("OD", 1), ("OD", 1)]

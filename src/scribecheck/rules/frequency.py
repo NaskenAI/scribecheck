@@ -3,8 +3,11 @@
 Covers UK and US abbreviations (OD, BD/BID, TDS/TID, QDS/QID, mane, nocte, QHS,
 PRN, qNh), phrases ("twice a day", "every 8 hours", "once weekly"), and Indian
 prescribing forms: HS, SOS and the morning-afternoon-night pattern ("1-0-1").
-Ranges ("every 4-6 hours"), durations ("for five days") and bare timing phrases
-("at night", which often describes a symptom) give no match.
+Timing phrases ("at night", "in the morning") count only in a sentence with a dose
+or a dosing verb, since they often describe symptoms. OD is once daily only outside
+eye context; near eye words or OS/OU it is the right eye (see side.py), and near
+"drops" without an eye word it is unclear and gives no match. Ranges ("every 4-6
+hours") and durations ("for five days") give no match.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Literal
 
+from scribecheck.rules._context import eye_context, has_dosing_context
 from scribecheck.rules._match import Comparison, Match, non_overlapping
 
 Period = Literal["daily", "weekly"]
@@ -131,11 +135,31 @@ _PATTERNS: tuple[tuple[re.Pattern[str], _Handler], ...] = (
 )
 
 
+# Timing phrases: matched only with dosing context in the same sentence.
+_TIMING: tuple[tuple[re.Pattern[str], _Fields], ...] = (
+    (
+        re.compile(_B + r"(?:at\s+(?:night|bedtime)|every\s+night)" + _E, re.IGNORECASE),
+        {"times_per_period": 1, "period": "daily", "timing": ("night",)},
+    ),
+    (
+        re.compile(_B + r"(?:in\s+the\s+morning|every\s+morning)" + _E, re.IGNORECASE),
+        {"times_per_period": 1, "period": "daily", "timing": ("morning",)},
+    ),
+)
+
+
+def _timing_handler(fields: _Fields) -> _Handler:
+    return lambda match: dict(fields) if has_dosing_context(match.string, *match.span()) else None
+
+
 def find_frequencies(text: str) -> tuple[FrequencyMatch, ...]:
     """Find every dosing frequency in `text`, left to right, without overlaps."""
+    patterns = _PATTERNS + tuple((p, _timing_handler(f)) for p, f in _TIMING)
     candidates = []
-    for pattern, handler in _PATTERNS:
+    for pattern, handler in patterns:
         for match in pattern.finditer(text):
+            if match.group().lower() == "od" and eye_context(text, *match.span()) != "none":
+                continue
             fields = handler(match)
             if fields is not None:
                 candidates.append(

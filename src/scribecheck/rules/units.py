@@ -2,8 +2,10 @@
 
 Mass (g, mg, mcg) and volume (L, ml) convert within themselves. Every other unit
 (units, IU, puffs, drops, tablets, capsules) stands alone, so "1 tablet" and "500 mg"
-are not comparable. Ranges ("1-2 puffs", "one or two tablets") and rates or
-concentrations ("15 mg/kg", "120 g/L", "500 mg per day") give no match.
+are not comparable. "1/2" before a count unit ("1/2 tab") is 0.5 of it; other
+fractions and mixed numbers ("1 1/2 tablets") give no match, as do ranges ("1-2
+puffs", "one or two tablets") and rates or concentrations ("15 mg/kg", "120 g/L",
+"500 mg per day").
 """
 
 from __future__ import annotations
@@ -61,6 +63,8 @@ _FORMS: dict[str, Unit] = {
     "puffs": Unit.PUFF,
     "drop": Unit.DROP,
     "drops": Unit.DROP,
+    "tab": Unit.TABLET,
+    "tabs": Unit.TABLET,
     "tablet": Unit.TABLET,
     "tablets": Unit.TABLET,
     "capsule": Unit.CAPSULE,
@@ -84,6 +88,18 @@ _AFTER_NUMBER = re.compile(
 _AFTER_HALF = re.compile(
     rf"[ \t]+an?[ \t]+(?P<unit>{_UNIT_ALTERNATIVES}){_UNIT_END}", re.IGNORECASE
 )
+# "1/2 tab": half of a count unit, not inside a run of digits and slashes.
+_HALF_SLASH = re.compile(
+    r"(?<![\w.,/])1/2[ \t]*"
+    r"(?P<unit>tabs?|tablets?|capsules?|puffs?|drops?)" + _UNIT_END,
+    re.IGNORECASE,
+)
+# A whole number just before a fraction makes a mixed number ("1 1/2", "1-½", "one ½").
+_WHOLE_BEFORE = re.compile(
+    r"(?:\d|(?<![A-Za-z])(?:one|two|three|four|five|six|seven|eight|nine|ten))[ \t]*-?[ \t]*$",
+    re.IGNORECASE,
+)
+_FRACTIONS = frozenset("½¼¾")
 _RANGE_JOINER = re.compile(r"\s*(?:-|–|\bto\b|\bor\b)\s*", re.IGNORECASE)
 
 
@@ -106,6 +122,8 @@ def find_doses(text: str) -> tuple[DoseMatch, ...]:
     for index, number in enumerate(numbers):
         if _in_range(text, numbers, index):
             continue
+        if number.text in _FRACTIONS and _WHOLE_BEFORE.search(text, 0, number.start):
+            continue
         pattern = _AFTER_HALF if number.text.lower() == "half" else _AFTER_NUMBER
         found = pattern.match(text, number.end)
         if not found:
@@ -124,7 +142,24 @@ def find_doses(text: str) -> tuple[DoseMatch, ...]:
                 number_end=number.end,
             )
         )
-    return tuple(doses)
+    for found in _HALF_SLASH.finditer(text):
+        if _WHOLE_BEFORE.search(text, 0, found.start()):
+            continue
+        unit = parse_unit(found.group("unit"))
+        if unit is None:  # pragma: no cover - the pattern only matches known forms
+            continue
+        doses.append(
+            DoseMatch(
+                start=found.start(),
+                end=found.end(),
+                text=found.group(),
+                value=Decimal("0.5"),
+                unit=unit,
+                number_start=found.start(),
+                number_end=found.start() + 3,
+            )
+        )
+    return tuple(sorted(doses, key=lambda d: d.start))
 
 
 def convert(dose: DoseMatch, to: Unit) -> Decimal | None:

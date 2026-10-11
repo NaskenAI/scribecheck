@@ -36,6 +36,10 @@ from scribecheck.rules.side import BODY_PARTS, find_sides
         ("RLQ", "RLQ", "right", "abdomen", "lower quadrant"),
         ("RUQ pain", "RUQ", "right", "abdomen", "upper quadrant"),
         ("left upper quadrant", "left upper quadrant", "left", "abdomen", "upper quadrant"),
+        ("Timolol eye drops 1 drop OD", "OD", "right", "eye", None),
+        ("ophthalmic ointment OU", "OU", "bilateral", "eye", None),
+        ("one drop od to the eye", "od", "right", "eye", None),
+        ("eye drops: OS", "OS", "left", "eye", None),
     ],
 )
 def test_sides(text: str, matched: str, side: str, site: str | None, qualifier: str | None) -> None:
@@ -61,6 +65,13 @@ def test_sides(text: str, matched: str, side: str, site: str | None, qualifier: 
         "Left",
         "both of them",
         "LQ",
+        "drops OD",
+        "Metformin 500 mg OD",
+        "OS",
+        "OU",
+        "you should",
+        "Eyes are fine. Metformin 500 mg OD.",
+        "Metformin 500 mg OD, amlodipine 5 mg OD",
         "the right side effects",
         "left side-effects",
         "is that right\nknee",
@@ -86,3 +97,13 @@ def test_sentence_with_several_sides() -> None:
 def test_body_parts_list() -> None:
     assert {"knee", "hip", "chest", "abdomen", "eye", "foot"} <= set(BODY_PARTS)
     assert 30 <= len(BODY_PARTS) <= 60
+
+
+def test_eye_abbreviations_confirm_each_other() -> None:
+    text = "latanoprost 1 drop OS, timolol OU"
+    matches = find_sides(text)
+    assert [(m.text, m.side, m.site) for m in matches] == [
+        ("OS", "left", "eye"),
+        ("OU", "bilateral", "eye"),
+    ]
+    assert_round_trip(text, matches)
