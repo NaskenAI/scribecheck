@@ -2,6 +2,7 @@
   "permissions": {
     "deny": [
       "Read(~/scribecheck-heldout/**)",
+      "Read(~/data/omissionbench-raw/**)",
       "Read(./.env)",
       "Read(./.env.*)"
     ],
