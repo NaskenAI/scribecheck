@@ -24,7 +24,8 @@ Week 0 ends when every item below is done; the three blockers come first, becaus
 - [ ] **Blocker:** name an owner for every milestone, collect their estimates, and decide between 4 and 6 weeks
 - [ ] Approve the API budget and set the per-run cost cap
 - [ ] Choose the local open-weight model and confirm a GPU is available that runs it with enough context for a long transcript; if none is, arrange a rented one
-- [ ] Check whether the paper's pinned model is still available; if not, choose and record a substitute
+- [x] Identify the paper's pinned model: gpt-5.4, the dataset card's baseline judge (availability still to check)
+- [ ] Check API access to gpt-5.4; if it is unavailable, choose and record a substitute
 - [ ] Check whether Fox et al.'s harness accepts an OpenAI-compatible endpoint, and whether the local model supports a reasoning budget; estimate any adaptation work for M4
 - [ ] Fill in route one's published 95% interval for Gate 1 from the paper
 - [ ] Check whether Fox et al.'s severity rubric ships in their MIT-licensed harness
@@ -52,7 +53,7 @@ Six milestones; each is done only when its exit criterion is met, not when its t
 | M1 Reproduction and scoring harness | 1 | Person A | Both published methods reproduced inside their intervals, and baselines on the held-out subset recorded (Gate 1) | Not started |
 | M2 Rules layer and rules-only mode | 1–2 | Person B | `scribecheck demo` runs offline in under a minute; rules precision and recall measured against the 95% and 90% targets | Not started |
 | M3 Full-mode pipeline | 2–3 | Person A | All three passes run end to end on both models; every flag carries a verified quote; calls and cost per note measured | Not started |
-| M4 Development evaluation | 4 | Person A | Results on the 65 development consultations written up; local-model baselines recorded; settings frozen and tagged | Not started |
+| M4 Development evaluation | 4 | Person A | Results on the 65 development consultations (265 pairs) written up; local-model baselines recorded; settings frozen and tagged | Not started |
 | M5 Integrations, calibration and held-out run | 3–5 | Person B; Person A for the held-out run, Inspect task, bench command and preprint draft | Plugins, Action, calibrate and stability commands pass their tests; held-out run done once (Gate 2) | Not started |
 | M6 Preprint, release and launch | 6 | Persons A and B | v0.1 released through Trusted Publishing; preprint posted; release checklist passed | Not started |
 
@@ -98,7 +99,7 @@ Week 2:
 - [ ] Golden-file tests for the JSON and Markdown reports
 - [ ] Network guard: a socket-level block in tests on all three operating systems, plus a no-network container test on Linux
 - [ ] Check whether OmissionBench labels the type of each altered fact; if not, label the structured-fact pairs by hand
-- [ ] Precision and recall per change type, measured on the second person's phrasings and on those alteration pairs outside the held-out subset
+- [ ] Precision and recall per change type, measured on the second person's phrasings and on the 117 development pairs that add or change a fact
 
 Second person, weeks 1–2:
 
@@ -142,7 +143,7 @@ The goal is to tune on development data only and freeze the settings before the 
 - [ ] Run scribecheck on the 65 development consultations with the local model and the API model
 - [ ] Choose a fixed development subset, then tune prompts and settings on it with the local model first, using the API model to confirm
 - [ ] Measure the rules layer's effect by running with and without it
-- [ ] Score Pass B and Pass C on the 182 added and altered pairs outside the held-out subset
+- [ ] Score Pass B and Pass C on the 117 development pairs that add or change a fact
 - [ ] Measure severity agreement with OmissionBench's per-fact grades (Cohen's kappa) for each model
 - [ ] Stability: run each model 3 times on the fixed development subset
 - [ ] Publish minimum model guidance, including the minimum context length
@@ -212,7 +213,7 @@ Five checkpoints release the next stage of work only when their evidence is in. 
 | Gate 0 | End of week 0 | Both lexicons chosen, owners and estimates in, budget approved, GPU and clinician availability confirmed | Met: start week 1. Not met: delay the start; M2's lexicon work cannot begin. |
 | Gate 1 | End of week 1 | Both reproductions inside their published intervals; held-out baselines recorded | Met: proceed. Not met: fix the setup first; rules work continues, but no full-mode number is trusted until the gate passes. |
 | Mid-point check | End of week 3 | Full mode runs end to end on both models | Met: proceed. Not met: move the four-week version's cuts to v1.1, or move launch by a week. |
-| Gate 2 | End of week 5 | One held-out run with frozen settings | Clear gain: launch claiming it. No detectable difference: launch as an open, local implementation of the published method with open-model results. Worse: make the route-one configuration the default and report this variant as a negative result. Outcomes are judged per model, and the launch claim names the model each one holds for. |
+| Gate 2 | End of week 5 | One held-out run with frozen settings: the official 151-pair subset for the headline result, the other 79 held-out pairs as a supplementary check | Clear gain: launch claiming it. No detectable difference: launch as an open, local implementation of the published method with open-model results. Worse: make the route-one configuration the default and report this variant as a negative result. Outcomes are judged per model, and the launch claim names the model each one holds for. |
 | Release gate | End of week 6 | Release checklist passed | Met: publish v0.1.0. Not met: fix and re-check; nothing is published until it passes. |
 
 At any point, a run that exceeds its cost cap stops for review before anything else is spent.

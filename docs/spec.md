@@ -58,7 +58,10 @@ Published results, each measured on its own set. Rates from different sets are n
 | --- | --- | --- | --- |
 | Per-fact pipeline (route one) | Full evaluation set; flag rule set after the fact | 24.6% | 2.7% |
 | Evolved single prompt (route two) | Full evaluation set; flag rule set after the fact | 36.9% (95% CI 31.5–42.5%) | 6.2% |
-| Per-fact pipeline (route one), decision rule | Held-out subset (47 clean notes) | 20.6% | 2.1% |
+| Per-fact pipeline (route one), three-stage rule | Held-out subset, 151 pairs (dataset card) | 20.6% on the first run (22.9% and 21.4% on runs two and three) | 2.1% |
+| Evolved single prompt (route two), prompt-optimised with a reasoning budget | Held-out subset, 151 pairs (dataset card; strict majority of three replicates) | 32.1% | 2.1% |
+
+The dataset card's held-out baselines used gpt-5.4 as the judge.
 
 The baseline for this project's headline result is both methods re-run by us on the held-out subset, not the published figures above.
 
@@ -142,6 +145,8 @@ The rules layer gives the same answer every run, needs no model, and powers rule
 | Dialogue negation | Symptom bound to its answer | "Any chest pain?" then "No" = chest pain negated; single-symptom questions only in v1 |
 | Allergies | Allergen, reaction, or explicit none | "allergic to penicillin", "amoxicillin gives me a rash", "no allergies", NKDA |
 | Drug names | Generic name | Generic names at launch; brand names through a user-supplied map; spelling-tolerant matching |
+
+**Allergy placement.** Allergy statements are searched across the whole note, not only in an Allergies section, because most notes have none: 4 of the 65 development notes have an Allergies section.
 
 Dialogue negation needs its own rule because sentence-level negation tools miss it: the denial sits in the patient's turn, not in the question's sentence. In v1 the rule handles only a question about one symptom followed by a direct answer. Questions about several symptoms go to the model, and the rule is off when speaker labels are missing.
 
@@ -364,29 +369,33 @@ The checker talks only to a model endpoint the user configures, sends nothing an
 
 Headline results come from one run on OmissionBench's held-out subset, compared with both of Fox et al.'s methods re-run by us on the same subset. All tuning happens on other data.
 
+The benchmark is split by consultation, so no development pair shares a transcript or a clean note with a held-out one. Development is 65 consultations and 265 evaluation pairs: 148 omissions (82 complete, 44 partial-weak, 22 partial-strong), 54 additions and 63 changes. Held-out is 47 consultations and 230 evaluation pairs. The headline result uses the official 151-pair held-out subset, whose ID list is stored with the encrypted held-out data, so it stays comparable with the published numbers. The other 79 held-out pairs are a supplementary check, run once with the same frozen settings.
+
 | Dataset | Contents | Used for |
 | --- | --- | --- |
 | Synthetic demo set (bundled) | About 20 authored consultations across general practice, emergency, orthopaedics, cardiology and paediatrics; a clean note for each, plus variants with known errors. No real patient data; clinician-reviewed before release; CC BY 4.0. | Demo, docs, unit tests |
 | Mutation suite (generated) | Synthetic notes with one injected change each (negation flip, side swap, dose doubled or halved, unit swap, frequency change, allergy deleted, drug substituted), with phrasings written by a second person, not the rules author | Rules-layer development |
-| OmissionBench added and altered pairs | The 182 of the 202 pairs (95 additions and 107 alterations in total) that sit outside the held-out subset; authored outside this project | Pass B and Pass C accuracy, and checking that Pass A does not reduce detection of these |
-| OmissionBench development portion | The 65 evaluation-set consultations outside the held-out subset | Development and ablations |
-| OmissionBench held-out subset | 151 pairs over 47 consultations: 131 omissions, 20 added or altered, 47 clean twins | Headline results, run once |
+| OmissionBench development added and changed pairs | The 117 development pairs that add or change a fact (54 additions, 63 changes); authored outside this project | Pass B and Pass C accuracy, and checking that Pass A does not reduce detection of these |
+| OmissionBench development portion | 65 consultations and their 265 evaluation pairs (148 omissions, 54 additions, 63 changes), with 65 clean twins | Development and ablations |
+| OmissionBench held-out consultations | 47 consultations and their 230 evaluation pairs, with 47 clean twins. The official subset is 151 of these pairs (131 omissions, 20 added or altered); the other 79 are supplementary | Headline result on the official subset, supplementary check on the other 79, run once |
 
-Targets for the rules layer are at least 95% precision and 90% recall per change type, measured on the second author's phrasings and on OmissionBench's alteration pairs outside the held-out subset, not only on mutations the rules author generated. These are goals, not measured figures.
+Targets for the rules layer are at least 95% precision and 90% recall per change type, measured on the second author's phrasings and on the 117 development pairs that add or change a fact, not only on mutations the rules author generated. These are goals, not measured figures.
 
 Protocol:
 
 1. **Reproduce** both of Fox et al.'s methods with their released harness on the full evaluation set. Gate 1 passes when each lands inside its published 95% interval: 31.5–42.5% for route two, and the interval the paper reports for route one. Use their pinned model if it is still available; otherwise record the substitute and treat the gate as approximate.
 2. **Re-run both methods on the held-out subset.** These are the baselines.
 3. **State the minimum detectable gain** before any held-out run. With 131 omission pairs over 47 consultations, a rough estimate is about 10 percentage points; smaller gains are unlikely to be distinguishable.
-4. **Develop** on the 65 development consultations: run scribecheck in full mode on the reproduction model and on one local open-weight model that runs on a single consumer GPU, then add the rules layer and measure its effect separately. Develop Pass B and Pass C on the 182 added and altered pairs outside the held-out subset.
-5. **Confirm once** on the held-out subset with settings fixed beforehand. Fox et al. found that gains chosen on a small validation set did not survive a held-out test.
-6. **Score and report.** Benchmark runs use the strict standard. Detection and false alarms count only Pass A omission flags: a note counts as flagged when it has at least *k* omission flags at confidence *c* or higher. Sweeping *k* from 1 to 5 and *c* across possible and confirmed gives the detection curve. Report the points nearest 1, 2 and 3 false alarms on the 47 clean notes (steps of about 2.1 points), broken down by severity and by trace (complete, fragment, restatement). Pass B and Pass C are scored separately on the added and altered pairs. Also report the correct-fact rate: the share of detected notes where a flag names the removed fact. The outcome is one of three: a clear gain, no detectable difference, or worse.
+4. **Develop** on the 65 development consultations: run scribecheck in full mode on the reproduction model and on one local open-weight model that runs on a single consumer GPU, then add the rules layer and measure its effect separately. Develop Pass B and Pass C on the 117 development pairs that add or change a fact.
+5. **Confirm once** on the 47 held-out consultations with settings fixed beforehand: the official 151-pair subset gives the headline result, and the other 79 pairs are a supplementary check in the same run. Fox et al. found that gains chosen on a small validation set did not survive a held-out test.
+6. **Score and report.** Benchmark runs use the strict standard. Detection and false alarms count only Pass A omission flags: a note counts as flagged when it has at least *k* omission flags at confidence *c* or higher. Sweeping *k* from 1 to 5 and *c* across possible and confirmed gives the detection curve. Report the points nearest 1, 2 and 3 false alarms on the 47 clean notes (steps of about 2.1 points), broken down by severity and by trace (complete, fragment, restatement). Pass B and Pass C are scored separately on the pairs that add or change a fact. Also report the correct-fact rate: the share of detected notes where a flag names the removed fact. The outcome is one of three: a clear gain, no detectable difference, or worse.
 7. **Measure severity agreement.** Compare each model's severity grades with OmissionBench's per-fact grades and report Cohen's kappa. For reference, two frontier models agreed at 0.177 without a rubric and 0.662 with one.
 8. **Measure stability.** Run each supported model 3 times on the development portion and publish the share of notes whose decision does not change.
 9. **Publish** every judgement, config and model version.
 
 Statistics follow the benchmark paper: confidence intervals by bootstrap over consultations, and an exact McNemar test for paired comparisons.
+
+**Data handling.** The held-out data and the raw OmissionBench download are encrypted at rest. Every run that touches them (the reproduction, the local-model baselines and Gate 2) is run by a person in a normal terminal, never by Claude Code.
 
 **Compute budget.** A published summary of Fox et al.'s results puts the single call at about $0.046 per note, and the paper puts it at roughly a tenth of the pipeline's cost, so the pipeline costs about $0.46 per note on an API model. One pass over the evaluation set's 607 notes then costs about $280, and the full plan (both reproductions, development runs, three stability runs and the held-out run) an estimated $1,000–2,000 in API costs, plus local GPU time. These are estimates. Each run has a cost cap in the config, and work stops for review if a run exceeds it; development runs use the local model first, so the API model is needed mainly for reproduction and the held-out run.
 
@@ -439,7 +448,7 @@ Open questions:
 - [ ] Owner and estimate for each milestone item, which decide between 4 and 6 weeks
 - [ ] Fill in route one's published 95% interval for Gate 1 from the paper
 - [ ] Which local open-weight model to standardise on for published results
-- [ ] Whether the benchmark paper's pinned model is still available for the reproduction step
+- [x] The benchmark's pinned model: gpt-5.4, the dataset card's baseline judge (API access still to check)
 - [ ] Whether Fox et al.'s severity rubric ships in their MIT-licensed harness or only in the paper
 - [ ] Whether to publish under the Nasken AI GitHub organisation or a personal account
 - [ ] Which clinician reviews the synthetic demo set, the rules-mode severity table and the calibration guidance
