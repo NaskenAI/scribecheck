@@ -9,7 +9,7 @@ description = "Check AI-written clinical notes against the consultation transcri
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "The scribecheck authors" }]
 keywords = ["ai scribe", "clinical note", "omission", "hallucination", "evaluation", "llm"]
 classifiers = [
@@ -20,7 +20,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -62,7 +61,7 @@ markers = ["network: test may open non-loopback network connections"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 # docs/ holds documents exported from Claude Docs; keep them byte-for-byte.
 extend-exclude = ["docs"]
 
@@ -70,6 +69,6 @@ extend-exclude = ["docs"]
 select = ["E", "F", "W", "I", "B", "UP"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 files = ["src"]

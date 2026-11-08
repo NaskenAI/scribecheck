@@ -36,4 +36,4 @@ changed facts and unsupported statements. Spec: `docs/spec.md`. Build plan:
 
 - One build-plan task per session. Use plan mode for anything touching more than one module.
 - Write or update tests first. A task is done when ruff, mypy and pytest pass and the change is committed.
-- Python 3.10+, type hints on all public functions, `src/` layout.
+- Python 3.11+, type hints on all public functions, `src/` layout.

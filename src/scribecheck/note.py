@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -25,7 +25,7 @@ from scribecheck._text import normalise_text, read_text_file, strip_span
 from scribecheck.errors import InputError
 
 
-class CanonicalSection(str, Enum):
+class CanonicalSection(StrEnum):
     """The note sections that fact categories expect (see the spec's fact categories)."""
 
     HISTORY = "History"

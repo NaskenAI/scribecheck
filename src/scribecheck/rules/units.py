@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import re
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 from scribecheck.rules._match import Comparison, Match
 from scribecheck.rules.numbers import NumberMatch, find_numbers
 
 
-class Unit(str, Enum):
+class Unit(StrEnum):
     MG = "mg"
     MCG = "mcg"
     G = "g"

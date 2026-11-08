@@ -380,7 +380,7 @@ The checker talks only to a model endpoint the user configures, sends nothing an
 - Plugins are optional extras.
 - Releases go to PyPI through Trusted Publishing from GitHub Actions, with build attestations and a CycloneDX software bill of materials.
 - Dependabot keeps dependencies current.
-- The project is licensed Apache-2.0, supports Python 3.10 and later, and runs on Linux, macOS and Windows.
+- The project is licensed Apache-2.0, supports Python 3.11 and later, and runs on Linux, macOS and Windows.
 
 ## Test data and evaluation plan
 

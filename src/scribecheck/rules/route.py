@@ -9,12 +9,12 @@ is not a route. "IV" after a staging word ("stage IV", "type iv") is a Roman num
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 
 from scribecheck.rules._match import Match, non_overlapping
 
 
-class Route(str, Enum):
+class Route(StrEnum):
     ORAL = "oral"
     INTRAVENOUS = "intravenous"
     INTRAMUSCULAR = "intramuscular"

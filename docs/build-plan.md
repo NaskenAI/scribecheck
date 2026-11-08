@@ -34,7 +34,7 @@ Week 0 ends when every item below is done; the three blockers come first, becaus
 - [ ] Check arXiv's endorsement rules for the chosen category, and find an endorser if one is needed
 - [ ] Decide the GitHub organisation (Nasken AI or personal) and create the repository under Apache-2.0
 - [ ] Set up a PyPI Trusted Publisher for `scribecheck`
-- [ ] Set up CI on Linux, macOS and Windows for Python 3.10 and later
+- [ ] Set up CI on Linux, macOS and Windows for Python 3.11 and later
 - [ ] Download OmissionBench (CC BY 4.0) and clone the harness (MIT), recording their versions
 - [ ] Name the second person, and confirm the clinician's availability for reviews in weeks 2, 3 and 5
 
