@@ -182,6 +182,11 @@ The checker acts on per-fact verdicts and severity, not on a single note score, 
 | Examination finding in a telephone consultation | Critical |
 | Route changed | Supporting |
 | Medicine missing from the note | Supporting |
+| Dose missing from the note | Supporting |
+| Frequency missing from the note | Supporting |
+| Side missing from the note | Supporting |
+
+In full mode, once the model's quote-verified second check confirms a rules candidate, the model's own severity grade replaces this table's default. Whether a missing dose of a high-alert medicine (insulin, anticoagulants, opioids) should be critical even in rules mode is an open question for the clinician (`docs/review/clinical_questions.md`).
 
 **Standard.** A `standard` setting decides what counts as an omission:
 

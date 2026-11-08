@@ -96,7 +96,7 @@ Week 1:
 Week 2:
 
 - [x] Alignment with the one-consistent-value rule, the Pass B guards and reason codes, and the deterministic negation check. Rules-mode certain flags are disabled: a deny-list could not rule out false ones, and the measured allow-list ceiling on the development data is zero ([docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md))
-- [ ] Rules-mode Pass A structured omission candidates (medicines, doses, frequencies, allergies, sides) at possible confidence, for the model's second check in full mode and as warnings in rules mode; report recall on the 15 development structured omissions and false candidates on the 65 clean notes
+- [x] Rules-mode Pass A structured omission candidates (medicines, doses, frequencies, allergies, sides) at possible confidence, for the model's second check in full mode and as warnings in rules mode (`rules/omission.py`). Measured on 2026-11-09: recall 6 of the 15 development structured omissions; 6 candidates on the 65 clean notes, held as a ratchet by `tests/test_dev_clean_notes.py`. Follow-ups: lexicon gaps (ASA, HCTZ, PCN, sulfa, plain "insulin"), dotted frequencies ("b.i.d.", "2x/day"), "OD" written alone for the right eye, and values after a comma, which are dropped
 - [ ] The examination rule, reporting at possible confidence
 - [ ] Severity table, confidence levels, both standards and the decision rule
 - [ ] JSON report, Markdown renderer, exit codes, and the `demo`, `check` and `batch` commands

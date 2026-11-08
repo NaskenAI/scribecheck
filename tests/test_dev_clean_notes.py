@@ -9,7 +9,12 @@ written by scripts/split_omissionbench.py and gitignored), so CI skips it. It re
 copy at run time, embeds no benchmark text, and reports only consultation keys, rule ids
 and counts. It reads development data only, never the held-out subset.
 
-Run with `-s` to see the unchecked counts by reason.
+It also counts Pass A's structured omission candidates on the same clean notes. These are
+warnings at possible confidence, and a concise clean note may legitimately leave out a
+medicine mentioned in passing, so the test asserts a ratchet (MAX_OMISSION_CANDIDATES) that
+may only go down, rather than zero.
+
+Run with `-s` to see the counts.
 """
 
 from __future__ import annotations
@@ -22,11 +27,15 @@ import pytest
 
 from scribecheck.note import parse_note
 from scribecheck.rules.changed import CERTAIN_DISABLED, check_changed_facts
+from scribecheck.rules.omission import structured_omissions
 from scribecheck.transcript import parse_transcript_file
 
 DEV = Path(__file__).resolve().parents[1] / "data" / "omissionbench"
 PAIRS = DEV / "pairs" / "dataset_v2.json"
 DEVELOPMENT_CONSULTATIONS = 65
+MAX_OMISSION_CANDIDATES = 6
+"""A ratchet: the omission candidates on the clean notes may only go down. Measured at 6
+(all medicine candidates, in 5 notes) on 2026-11-09; lower it whenever the count falls."""
 
 pytestmark = pytest.mark.skipif(
     not PAIRS.is_file(), reason="the OmissionBench development copy is not present"
@@ -65,3 +74,24 @@ def test_no_certain_flags_on_development_clean_notes() -> None:
     )
     assert flagged == [], f"false certain flags (consultation, rule): {flagged}"
     assert candidates == [], f"false would-be flags (consultation, category): {candidates}"
+
+
+def test_omission_candidates_on_development_clean_notes() -> None:
+    twins = _clean_twins()
+    categories: Counter[str] = Counter()
+    notes_with = 0
+    for stratum, consultation, clean in twins.values():
+        transcript = parse_transcript_file(DEV / "transcripts" / stratum / f"{consultation}.txt")
+        result = structured_omissions(transcript, parse_note(clean))
+        categories.update(c.category for c in result.candidates)
+        notes_with += bool(result.candidates)
+        assert all(c.confidence == "possible" for c in result.candidates)
+    summary = ", ".join(f"{category} {n}" for category, n in sorted(categories.items()))
+    total = sum(categories.values())
+    print(
+        f"\nomission candidates on {len(twins)} clean notes: {total} "
+        f"({summary or 'none'}); notes with any: {notes_with}"
+    )
+    assert total <= MAX_OMISSION_CANDIDATES, (
+        f"{total} omission candidates on clean notes; the ratchet allows {MAX_OMISSION_CANDIDATES}"
+    )

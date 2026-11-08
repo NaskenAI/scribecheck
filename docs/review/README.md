@@ -10,6 +10,9 @@ last two.
 | `symptom_phrases_review.csv` | Lay phrasings matched to a symptom (`lay`), Symptom Ontology terms folded into another term (`merge`), and ontology synonyms deliberately not matched (`excluded_synonym`). |
 | `extra_ingredients_review.csv` | Generic ingredients prescribed in India or the UK that RxNorm lacks, matched as drug names. |
 
+Design questions that need a clinical answer, rather than a row-by-row check, are in
+`clinical_questions.md`; please answer them there.
+
 ## How to fill them in
 
 For every row, fill in the `decision` column with one of:
