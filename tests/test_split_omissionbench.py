@@ -137,7 +137,20 @@ def varied_rows(dev: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows.append({k: v for k, v in base.items() if k not in ("tier", "replicate")})  # missing
     rows.append({**base, "tier": None})  # null, which must stay apart from missing
     rows.append(_score_row(stratum, consultation, None))  # its clean twin
+    rows.append({**base, "tier": "B3", "detail": {"missing_facts": MISSING_FACTS}})
+    rows.append({**base, "tier": "B3", "detail": {"missing_facts": []}})
     return rows
+
+
+# Per-fact verdicts as the pipeline tier writes them; the fact text must never be kept.
+MISSING_FACTS = [
+    {"id": "f1", "fact": f"fact {SENTINEL}", "severity": "critical", "verdict": "absent"},
+    {"id": "f2", "fact": f"fact {SENTINEL}", "severity": "critical", "verdict": "absent"},
+    {"id": "f3", "fact": f"fact {SENTINEL}", "severity": "critical", "verdict": "present"},
+    {"id": "f4", "fact": f"fact {SENTINEL}", "severity": "supporting", "verdict": "absent"},
+    {"id": "f5", "fact": f"fact {SENTINEL}", "severity": "peripheral", "verdict": "partial"},
+    f"stray text {SENTINEL}",
+]
 
 
 def build_fixture(
@@ -425,7 +438,7 @@ def test_judge_scores_keep_run_fields_and_never_text_fields(
     assert not set(SPLIT.SCORE_FIELDS) & SPLIT.NEVER_KEPT
     for path in (dev_out / "judge_scores").iterdir():
         for row in json.loads(path.read_text())["records"]:
-            assert set(row) <= set(SPLIT.SCORE_FIELDS)
+            assert set(row) <= set(SPLIT.SCORE_FIELDS) | set(SPLIT.DERIVED_FIELDS)
             assert not set(row) & SPLIT.NEVER_KEPT
             if "varied" not in path.name:  # every field present in w1 and w2
                 assert set(row) == set(SPLIT.SCORE_FIELDS)
@@ -439,6 +452,8 @@ def test_judge_scores_keep_only_the_fields_a_row_has(split: tuple[Path, Path, st
         {k: v for k, v in row.items() if k in SPLIT.SCORE_FIELDS}
         for row in varied_rows(_pairs(dev_out)["pairs"])
     ]
+    expected[-2].update(n_absent_critical=2, n_absent_supporting=1, n_absent_peripheral=0)
+    expected[-1].update(n_absent_critical=0, n_absent_supporting=0, n_absent_peripheral=0)
     path = dev_out / "judge_scores" / "judgements__w3__varied_records.json"
     kept = json.loads(path.read_text())["records"]
     assert kept == expected
@@ -447,9 +462,30 @@ def test_judge_scores_keep_only_the_fields_a_row_has(split: tuple[Path, Path, st
     assert {r["model"] for r in kept} == {"openai/gpt-5.4", "google/gemini-3.1-pro-preview"}
     assert sum(r["parse_failure"] for r in kept) == 1
     assert {r["dataset_version"] for r in kept} == {"factorial-v1", "factorial-v1-armsmoke"}
-    missing, null = kept[-3], kept[-2]
+    missing, null = kept[-5], kept[-4]
     assert "tier" not in missing and "replicate" not in missing  # still missing, not null
     assert "tier" in null and null["tier"] is None
+
+
+def test_absent_fact_counts_are_derived_from_detail_and_detail_is_dropped(
+    split: tuple[Path, Path, str],
+) -> None:
+    dev_out, _, log = split
+    path = dev_out / "judge_scores" / "judgements__w3__varied_records.json"
+    kept = json.loads(path.read_text())["records"]
+    counts = [
+        tuple(row.get(f) for f in SPLIT.DERIVED_FIELDS)
+        for row in kept
+        if "n_absent_critical" in row
+    ]
+    assert SPLIT.DERIVED_FIELDS == (
+        "n_absent_critical", "n_absent_supporting", "n_absent_peripheral",
+    )  # fmt: skip
+    assert counts == [(2, 1, 0), (0, 0, 0)]
+    # Rows whose detail has no missing_facts list (here a string) get no counts at all.
+    assert sum("n_absent_critical" in row for row in kept) == 2
+    assert all("detail" not in row for row in kept)
+    assert SENTINEL not in path.read_text() and SENTINEL not in log
 
 
 def test_long_verdict_aborts(tmp_path: Path) -> None:

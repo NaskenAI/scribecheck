@@ -26,8 +26,10 @@ Rules:
    with those of the fields in SCORE_FIELDS that the row has (ids, scores and the run's
    settings, so replicates, arms and models can be told apart). A field the row lacks stays
    missing rather than becoming null, so a missing value and a null one stay distinct.
-   Fields in NEVER_KEPT, which can carry text, are never kept. A kept value that could hold
-   text aborts the run.
+   Fields in NEVER_KEPT, which can carry text, are never kept. When a row's detail holds a
+   missing_facts list, the counts in DERIVED_FIELDS (its entries whose verdict is "absent",
+   by severity) are worked out from it first, so the pipeline tier's per-fact rule can be
+   recomputed without any detail text. A kept value that could hold text aborts the run.
 6. Before anything is written, the counts must match EXPECTED_COUNTS, and both output
    folders must be empty or absent and outside --raw; otherwise the run stops and writes
    nothing.
@@ -75,6 +77,9 @@ SCORE_FIELDS = (
 # Score-file fields that can carry text; never copied, whatever SCORE_FIELDS says.
 NEVER_KEPT = frozenset({"matched_key", "fact_key", "detail", "samples", "receipts", "totals"})
 assert not NEVER_KEPT & set(SCORE_FIELDS), "a text-bearing field is listed in SCORE_FIELDS"
+# Integer counts worked out from detail.missing_facts before detail is dropped.
+SEVERITIES = ("critical", "supporting", "peripheral")
+DERIVED_FIELDS = tuple(f"n_absent_{severity}" for severity in SEVERITIES)
 LOG_FOLDERS = ("judgements", "validation", "notes")
 MAX_SCORE_STRING = 200
 PAIRS_FILE = Path("pairs") / "dataset_v2.json"
@@ -416,6 +421,7 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
         kept, dropped = [], 0
         for row in records:
             reduced = {f: row[f] for f in SCORE_FIELDS if f in row}
+            reduced.update(_absent_counts(row))
             for f, value in reduced.items():
                 if not _is_scalar(value) or (
                     isinstance(value, str) and len(value) > MAX_SCORE_STRING
@@ -431,6 +437,21 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
                 dropped += 1
         plan.dev_json[Path("judge_scores") / name] = {"records": kept}
         plan.notes.append(f"judge_scores/{name}: kept {len(kept)} rows, dropped {dropped}")
+
+
+def _absent_counts(row: dict[str, Any]) -> dict[str, int]:
+    """Counts of detail.missing_facts entries judged absent, by severity; {} without the list."""
+    detail = row.get("detail")
+    facts = detail.get("missing_facts") if isinstance(detail, dict) else None
+    if not isinstance(facts, list):
+        return {}
+    counts = dict.fromkeys(DERIVED_FIELDS, 0)
+    for fact in facts:
+        if isinstance(fact, dict) and fact.get("verdict") == "absent":
+            name = f"n_absent_{fact.get('severity')}"
+            if name in counts:
+                counts[name] += 1
+    return counts
 
 
 # Writing and reporting
