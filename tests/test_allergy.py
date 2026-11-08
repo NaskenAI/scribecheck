@@ -178,3 +178,33 @@ def test_historical_allergy() -> None:
 def test_relative_with_no_allergies_is_family() -> None:
     (result,) = _find("Mum: no allergies")
     assert result.experiencer == "family"
+
+
+# Regression for the shared ConText cues added with Pass B (other people, uncertainty)
+
+
+@pytest.mark.parametrize(
+    ("text", "experiencer", "possible"),
+    [
+        ("I'm allergic to penicillin.", "patient", False),
+        ("My husband is allergic to penicillin.", "family", False),
+        ("My wife is allergic to penicillin.", "family", False),
+        ("My little boy is allergic to peanuts.", "family", False),
+        ("My mum is allergic to her penicillin.", "family", False),  # "her" keeps mum's scope
+        ("I think I'm allergic to penicillin.", "patient", True),
+        ("I might be allergic to penicillin.", "patient", True),
+        ("I could be allergic to penicillin.", "patient", True),
+        ("Penicillin gives me a rash.", "patient", False),
+    ],
+)
+def test_context_cues_for_allergies(text: str, experiencer: str, possible: bool) -> None:
+    (found,) = find_allergies(text)
+    assert (found.status, found.experiencer, found.possible) == ("allergic", experiencer, possible)
+
+
+@pytest.mark.parametrize(
+    ("text", "status"), [("No allergies.", "none"), ("Not allergic to penicillin.", "not_allergic")]
+)
+def test_negative_allergy_statements_are_unchanged(text: str, status: str) -> None:
+    (found,) = find_allergies(text)
+    assert (found.status, found.experiencer, found.possible) == (status, "patient", False)

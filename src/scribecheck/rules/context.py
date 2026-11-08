@@ -10,7 +10,14 @@ ends it too, unless only other targets and list words lie between: with fever, c
 headache all passed as targets, "no fever, cough or headache" negates all three,
 while "No relief, cough persists" leaves cough alone. In "no fever but has a cough"
 only fever is negated. A family cue stops at a word that brings the patient back
-("he", "she", "I") or a reporting verb, so "mum says he has a fever" is not family.
+("he", "she", "I") or a reporting verb, so "mum says he has a fever" is not family; "her"
+does not stop it, so in "my mum takes her amlodipine" the drug is still mum's. Family cues
+cover other people too (husband, wife, partner, friend, colleague, child, baby), at a
+cost in paediatric consultations, where a parent's "my little boy" means the patient. A
+negation stops at a treatment or cause word ("for", "tried", "treatment", "cause",
+"why"), so "no treatment tried for cough" does not deny the cough. Worry and uncertainty
+("worried", "concerned", "afraid", "might", "may", "could", "I think", "not sure") mark a
+target as possible.
 
 Pseudo-cues ("no change", "no idea", "prior to") are matched alongside the real
 cues so that, keeping the leftmost then longest match, they hide the shorter cue
@@ -110,6 +117,17 @@ _RULES: tuple[_Rule, ...] = (
         "no worse",
         "no response",
         "no relief",
+        "nothing helps",
+        "nothing has helped",
+        "nothing helped",
+        "not tried",
+        "nothing tried",
+        "no treatment",
+        "no clue",
+        "no obvious cause",
+        "no obvious reason",
+        "no cause",
+        "no reason",
         "not keen",
         "nil by mouth",
         "prior to",
@@ -146,6 +164,13 @@ _RULES: tuple[_Rule, ...] = (
         "hasn't got",
         "haven't noticed",
         "didn't notice",
+        "don't get",
+        "doesn't get",
+        "didn't get",
+        "do not get",
+        "does not get",
+        "don't feel",
+        "wouldn't say",
     ),
     _rule("negated", "backward", "is ruled out", "was ruled out", "not present", "absent"),
     _rule(
@@ -169,7 +194,23 @@ _RULES: tuple[_Rule, ...] = (
         "cannot rule out",
         "not sure if",
         "not sure whether",
+        "not sure",
         "suggestive of",
+        "worried",
+        "worried about",
+        "concerned",
+        "concerned about",
+        "afraid",
+        "afraid of",
+        "wonder if",
+        "wondering if",
+        "might",
+        "may",
+        "could",
+        "i think",
+        "i think i have",
+        "don't want",
+        "do not want",
     ),
     _rule(
         "possible",
@@ -181,6 +222,9 @@ _RULES: tuple[_Rule, ...] = (
         "can't be excluded",
         "cannot be ruled out",
         "can't be ruled out",
+        "is an option",
+        "as an option",
+        "would be an option",
     ),
     _Rule(re.compile(r"(?:^|(?<=\s))\?(?=[A-Za-z])"), "possible", "forward"),
     _rule(
@@ -224,6 +268,20 @@ _RULES: tuple[_Rule, ...] = (
         "aunt",
         "uncle",
         "cousin",
+        "husband",
+        "wife",
+        "partner",
+        "boyfriend",
+        "girlfriend",
+        "friend",
+        "colleague",
+        "boy",
+        "girl",
+        "child",
+        "children",
+        "kid",
+        "kids",
+        "baby",
         "family history of",
         "FH of",
         "FH",
@@ -263,12 +321,21 @@ _PERFECT_BEFORE_HAD = re.compile(
     r"(?:\s+(?:not|never|ever|also|just|already))?\s+$",
     re.IGNORECASE,
 )
+_NEGATION_STOP = re.compile(
+    _words(
+        "for", "tried", "try", "trying", "treatment", "treated", "treat", "medicine",
+        "medication", "cause", "causes", "caused", "reason", "trigger", "triggers", "why",
+        "what", "waking", "helps", "helped",
+    ),
+    re.IGNORECASE,
+)  # fmt: skip
+"""A negation does not reach past these: "no treatment tried for cough" denies no cough."""
 _WORD = re.compile(r"[\w'’]+(?:[.\-][\w'’]+)*")
 _LIST_WORDS = frozenset({"and", "or", "nor", "any", "a", "an", "no", "the", "your"})
 _LABEL_COLON = re.compile(r"[ \t]*:")
 _FAMILY_STOP = re.compile(
     _words(
-        "he", "she", "him", "her", "I", "I'm", "I've", "me", "you", "patient", "pt",
+        "he", "she", "him", "I", "I'm", "I've", "me", "you", "patient", "pt",
         "says", "said", "thinks", "thought", "noticed", "reports", "reported",
         "brought", "brings", "mentioned", "worried", "concerned",
     ),
@@ -346,6 +413,8 @@ def _in_scope(
     if has_sentence_break(text, gap_start, gap_end) or _TERMINATOR.search(gap):
         return False
     if cue.attribute == "family" and _FAMILY_STOP.search(gap):
+        return False
+    if cue.attribute == "negated" and _NEGATION_STOP.search(gap):
         return False
     if cue.direction == "forward":
         # A label colon straight after the cue ("Mother: diabetes", "Denies: fever").
