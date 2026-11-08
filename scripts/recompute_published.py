@@ -30,6 +30,26 @@ computed per replicate:
 - Detection rate: the share of errored omission notes flagged.
 - Clean-twin flag rate: the share of distinct clean notes flagged.
 
+Two published operating points are computed the same way, per replicate and as both
+majorities below, with a parse failure counting as not flagged on the full denominator
+(record/figures/extract_data.py:186-189 in the harness). They are named rules:
+
+- route-two-below-10: flag a note when its aggregate is below 10 (FLAG_BELOW; the harness's
+  w2_evalfull_analyze.py:44), for groups whose scores reach 10.
+- pipeline-critical-absent: flag a note when any detail.missing_facts entry is "critical"
+  and "absent" (w2_pipeline_replicates_analyze.py:99-108); without detail, when the split's
+  n_absent_critical count is above 0. Only groups with either input get this rule.
+
+Detection at matched false alarms follows the harness's sweep (extract_data.py:106-135),
+per replicate, over the omission and clean notes that parsed and have a score: the
+candidate thresholds are every observed score v and v + 1e-6, a note is flagged when its
+score is strictly below the threshold, and for each k in MATCHED_K the chosen point has the
+highest detection with at most k clean notes flagged, then the fewest clean notes flagged,
+then the larger threshold. A tie that keeps a count from being reached exactly therefore
+falls back to the best point with fewer. Scores with two or fewer distinct values give no
+point. Across replicates each replicate keeps its own threshold, and the strict majority
+treats a replicate with no point as not flagging.
+
 Replicates are then combined as the dataset card does: discrimination is the mean over
 replicates (each replicate's value is listed too), and detection and clean flag rates get a
 strict-majority result, where a note counts as flagged if it is flagged in more than half of
@@ -42,8 +62,10 @@ Within one replicate, identical duplicate rows count once; a note whose duplicat
 on aggregate or flagged is left out and counted as a conflict. An errored note with no clean
 twin, a null aggregate on either side, or an unknown type is counted, not scored. Groups
 with no dataset version, or from smoke runs or the frozen master list (NOT_COMPARABLE), are
-printed in a separate section. --summary prints one line per complete group instead, then
-the development-complete groups under their own heading. Only numbers, folder names and
+printed in a separate section. --summary prints one line per complete group instead (with
+the matched points and rules indented below it), then the development-complete groups
+under their own heading, then the comparable groups with partial coverage and their
+coverage counts. Only numbers, folder names and
 short group values are printed, never any other field, and no network call is made.
 """
 
@@ -53,7 +75,7 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -81,6 +103,8 @@ DEVELOPMENT_COVERAGE = {"factorial-v1": (265, 65)}
 COMPLETE = "complete"
 DEVELOPMENT_COMPLETE = "development complete"
 PARTIAL = "partial coverage"
+FLAG_BELOW = 10.0
+MATCHED_K = (1, 2, 3)
 FOLDER_TIMESTAMP = re.compile(r"(\d{8}-\d{6})-")
 
 
@@ -130,6 +154,38 @@ FileResult = ReplicateResult
 """The earlier name, for one ungrouped set of rows."""
 
 
+Counts = tuple[int, int, int, int]
+"""(omission notes flagged, omission notes, clean notes flagged, clean notes)."""
+
+
+@dataclass(frozen=True)
+class OperatingPoint:
+    """One replicate's threshold and the counts it gives."""
+
+    threshold: float
+    det_k: int
+    n_err: int
+    fa_k: int
+    n_clean: int
+
+
+@dataclass
+class MatchedResult:
+    """Detection at one matched false-alarm count: per replicate, and the strict majority."""
+
+    per_replicate: dict[str, OperatingPoint | None] = field(default_factory=dict)
+    majority: Counts = (0, 0, 0, 0)
+
+
+@dataclass
+class RuleResult:
+    """One named flag rule: per replicate, and both majority readings."""
+
+    per_replicate: dict[str, Counts] = field(default_factory=dict)
+    majority: Counts = (0, 0, 0, 0)
+    known_majority: Counts = (0, 0, 0, 0)
+
+
 @dataclass
 class GroupResult:
     """One group (file and run settings), per replicate and combined."""
@@ -145,6 +201,10 @@ class GroupResult:
     coverage: dict[str, tuple[int, int]] = field(default_factory=dict)
     """(distinct errored notes, distinct clean notes) per replicate, before parse failures."""
     replicates: dict[str, ReplicateResult] = field(default_factory=dict)
+    matched: dict[int, MatchedResult] = field(default_factory=dict)
+    """Detection at matched false alarms, by k."""
+    rules: dict[str, RuleResult] = field(default_factory=dict)
+    """The named flag rules that apply to the group."""
     replicate_count: int = 0
     """Distinct replicates in the group, counting those whose rows all failed to parse."""
     majority_detection_n: int = 0
@@ -345,10 +405,12 @@ def analyse_files(
         group.files = len({index for tagged in replicates.values() for index, _, _ in tagged})
         group.replicate_count = len(replicates)
         failed: list[dict[str, Any]] = []
+        notes: dict[str, Notes] = {}
         for replicate in sorted(replicates, key=_replicate_order):
             rows, replaced = _latest_shards(replicates[replicate])
             group.replaced += replaced
             group.coverage[replicate] = _coverage(rows)
+            notes[replicate] = _replicate_notes(rows, types)
             kept = [row for row in rows if row.get("parse_failure") is not True]
             failed += [row for row in rows if row.get("parse_failure") is True]
             group.rows += len(kept)
@@ -356,8 +418,167 @@ def analyse_files(
                 group.replicates[replicate] = compute(kept, types)
         group.parse_failures = len(failed)
         _combine(group, failed, types)
+        _operating_points(group, notes)
         results.append(group)
     return results
+
+
+Notes = tuple[dict[str, "dict[str, Any] | None"], dict[str, "dict[str, Any] | None"]]
+"""One replicate's omission notes (by note_key) and clean notes (by clean_key), each with its
+row, or None when the note's duplicate rows disagree."""
+
+
+def _replicate_notes(rows: Iterable[dict[str, Any]], types: Mapping[str, str]) -> Notes:
+    omission: dict[str, dict[str, Any] | None] = {}
+    clean: dict[str, dict[str, Any] | None] = {}
+    for row in rows:
+        kind = _note_kind(row, types)
+        if kind is None:
+            continue
+        side = clean if kind[0] == "clean" else omission
+        if kind[1] in side and side[kind[1]] != row:
+            side[kind[1]] = None
+        else:
+            side.setdefault(kind[1], row)
+    return omission, clean
+
+
+def _score_of(row: Mapping[str, Any] | None) -> float | None:
+    """The row's aggregate; None for a parse failure, a missing row or a non-number."""
+    if row is None or row.get("parse_failure") is True:
+        return None
+    return _score(row.get("aggregate"))
+
+
+def matched_threshold(
+    err_scores: Sequence[float], clean_scores: Sequence[float], k: int
+) -> OperatingPoint | None:
+    """The harness's best point with at most k clean notes flagged (see the module notes)."""
+    values = sorted({round(v, 9) for v in [*err_scores, *clean_scores]})
+    if not err_scores or not clean_scores or len(values) <= 2:
+        return None
+    best: tuple[int, int, float] | None = None
+    for value in values:
+        for threshold in (value, value + 1e-6):
+            fa_k = sum(1 for v in clean_scores if v < threshold)
+            if fa_k > k:
+                continue
+            key = (sum(1 for v in err_scores if v < threshold), -fa_k, threshold)
+            if best is None or key > best:
+                best = key
+    if best is None:
+        return None
+    det_k, minus_fa, threshold = best
+    return OperatingPoint(round(threshold, 6), det_k, len(err_scores), -minus_fa, len(clean_scores))
+
+
+def below_10(row: Mapping[str, Any]) -> bool | None:
+    score = _score_of(row)
+    return None if score is None else score < FLAG_BELOW
+
+
+def critical_absent(row: Mapping[str, Any]) -> bool | None:
+    """Any detail.missing_facts entry critical and absent; else the split's count; else None."""
+    detail = row.get("detail")
+    facts = detail.get("missing_facts") if isinstance(detail, Mapping) else None
+    if isinstance(facts, list):
+        return any(
+            isinstance(f, Mapping)
+            and f.get("severity") == "critical"
+            and f.get("verdict") == "absent"
+            for f in facts
+        )
+    count = row.get("n_absent_critical")
+    if isinstance(count, int) and not isinstance(count, bool):
+        return count > 0
+    return None
+
+
+RULES: dict[str, Callable[[Mapping[str, Any]], bool | None]] = {
+    "route-two-below-10": below_10,
+    "pipeline-critical-absent": critical_absent,
+}
+
+
+def _rule_applies(name: str, notes: Mapping[str, Notes]) -> bool:
+    rows = [r for o, c in notes.values() for r in [*o.values(), *c.values()] if r is not None]
+    if name == "route-two-below-10":
+        return any((s := _score_of(r)) is not None and s >= FLAG_BELOW for r in rows)
+    return any(r.get("parse_failure") is not True and RULES[name](r) is not None for r in rows)
+
+
+FlagOf = Callable[[str, Mapping[str, Any] | None], bool | None]
+"""A note's flag in one replicate, from the replicate and the note's row; None if unknown."""
+
+
+def _apply(
+    notes: Mapping[str, Notes],
+    flag_of: FlagOf,
+    replicates: int,
+) -> RuleResult:
+    """Per-replicate counts (unknown = not flagged, full denominator) and both majorities."""
+    result = RuleResult()
+    votes: tuple[dict[str, list[bool]], dict[str, list[bool]]] = ({}, {})
+    for replicate, sides in notes.items():
+        counts: list[int] = []
+        for side, side_votes in zip(sides, votes, strict=True):
+            flags = {key: flag_of(replicate, row) for key, row in side.items()}
+            counts += [sum(f is True for f in flags.values()), len(flags)]
+            for key, flag in flags.items():
+                known = side_votes.setdefault(key, [])
+                if flag is not None:
+                    known.append(flag)
+        result.per_replicate[replicate] = (counts[0], counts[1], counts[2], counts[3])
+    om, cl = votes
+    result.majority = (
+        sum(strict_majority(v, replicates) for v in om.values()),
+        len(om),
+        sum(strict_majority(v, replicates) for v in cl.values()),
+        len(cl),
+    )
+    om_known, cl_known = [v for v in om.values() if v], [v for v in cl.values() if v]
+    result.known_majority = (
+        sum(strict_majority(v) for v in om_known),
+        len(om_known),
+        sum(strict_majority(v) for v in cl_known),
+        len(cl_known),
+    )
+    return result
+
+
+def _below_threshold(points: Mapping[str, OperatingPoint | None]) -> FlagOf:
+    def flag_of(replicate: str, row: Mapping[str, Any] | None) -> bool | None:
+        point, score = points[replicate], _score_of(row)
+        return None if point is None or score is None else score < point.threshold
+
+    return flag_of
+
+
+def _by_rule(rule: Callable[[Mapping[str, Any]], bool | None]) -> FlagOf:
+    def flag_of(_: str, row: Mapping[str, Any] | None) -> bool | None:
+        if row is None or row.get("parse_failure") is True:
+            return None
+        return rule(row)
+
+    return flag_of
+
+
+def _operating_points(group: GroupResult, notes: Mapping[str, Notes]) -> None:
+    """Matched false-alarm points and the named rules that apply to the group."""
+    for k in MATCHED_K:
+        points = {
+            replicate: matched_threshold(
+                [s for r in omission.values() if (s := _score_of(r)) is not None],
+                [s for r in clean.values() if (s := _score_of(r)) is not None],
+                k,
+            )
+            for replicate, (omission, clean) in notes.items()
+        }
+        majority = _apply(notes, _below_threshold(points), group.replicate_count).majority
+        group.matched[k] = MatchedResult(points, majority)
+    for name, rule in RULES.items():
+        if _rule_applies(name, notes):
+            group.rules[name] = _apply(notes, _by_rule(rule), group.replicate_count)
 
 
 def _latest_shards(
@@ -563,6 +784,43 @@ def _settings(group: GroupResult, skip: tuple[str, ...] = ()) -> str:
     )
 
 
+def _coverage_text(group: GroupResult) -> str:
+    return " | ".join(
+        f"r{rep} errored {errored} clean {clean}"
+        for rep, (errored, clean) in group.coverage.items()
+    )
+
+
+def _counts(counts: Counts) -> str:
+    return f"det {counts[0]}/{counts[1]} fa {counts[2]}/{counts[3]}"
+
+
+def _threshold(value: float) -> str:
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def operating_lines(group: GroupResult) -> list[str]:
+    """The matched false-alarm points and named rules, one line each, numbers only."""
+    lines = []
+    for k, matched in group.matched.items():
+        parts = [
+            f"r{rep} –"
+            if point is None
+            else f"r{rep} det {point.det_k}/{point.n_err} fa {point.fa_k}/{point.n_clean} "
+            f"(t {_threshold(point.threshold)})"
+            for rep, point in matched.per_replicate.items()
+        ]
+        reached = any(point is not None for point in matched.per_replicate.values())
+        parts.append(f"majority {_counts(matched.majority)}" if reached else "majority –")
+        lines.append(f"matched false alarms k{k}: " + " | ".join(parts))
+    for name, rule in group.rules.items():
+        parts = [f"r{rep} {_counts(c)}" for rep, c in rule.per_replicate.items()]
+        parts += [f"majority {_counts(rule.majority)}"]
+        parts += [f"known-only majority {_counts(rule.known_majority)}"]
+        lines.append(f"rule {name}: " + " | ".join(parts))
+    return lines
+
+
 def format_group(group: GroupResult) -> str:
     settings = _settings(group)
     reps = group.replicates
@@ -574,10 +832,7 @@ def format_group(group: GroupResult) -> str:
         total.conflicts += r.conflicts
         total.types_from_pairs += r.types_from_pairs
         total.types_from_rows += r.types_from_rows
-    coverage = " | ".join(
-        f"r{rep} errored {errored} clean {clean}"
-        for rep, (errored, clean) in group.coverage.items()
-    )
+    coverage = _coverage_text(group)
     lines = [
         f"[{group.label}] {settings} — {group.coverage_label}",
         f"  files {group.files}, replaced by later shards {group.replaced}, coverage: {coverage}",
@@ -603,6 +858,7 @@ def format_group(group: GroupResult) -> str:
         ),
         f"  not scored: no twin {total.no_twin}, missing score {total.missing_score}, "
         f"unknown type {total.unknown_type}, conflicts {total.conflicts}",
+        *(f"  {line}" for line in operating_lines(group)),
     ]
     return "\n".join(lines)
 
@@ -639,8 +895,21 @@ def print_summary(groups: Sequence[GroupResult], *, scored: int, skipped: int) -
             print(f"\n== {heading} ==")
         for group in chosen:
             print(summary_line(group))
+            for line in operating_lines(group):
+                print(f"    {line}")
         if not chosen:
             print(f"(no {label} groups)")
+    print("\n== Partial coverage ==")
+    partial_groups = [g for g in groups if g.comparable and g.coverage_label == PARTIAL]
+    for group in partial_groups:
+        print(
+            f"{_short(group.key_values['model'])} family={_short(group.label)} "
+            f"{_settings(group, skip=('model',))} | coverage {_coverage_text(group)} "
+            f"| parse failures excluded {group.parse_failures} "
+            f"| replaced by later shards {group.replaced}"
+        )
+    if not partial_groups:
+        print("(no comparable groups with partial coverage)")
     partial = sum(g.coverage_label == PARTIAL for g in groups)
     print(
         f"\n{scored} file(s) scored, skipped {skipped} file(s) with no scored records; "

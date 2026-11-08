@@ -469,6 +469,7 @@ def test_summary_lists_complete_then_development_groups(
         "Development complete — not comparable to published figures"
     )
     assert heading
+    development = development.partition("== Partial coverage ==")[0]
     lines = [line for line in complete.splitlines() if "family=" in line]
     assert [line.split("family=")[1].split()[0] for line in lines] == ["w2-complete", "w2-confirm"]
     first = lines[0]
@@ -483,3 +484,170 @@ def test_summary_lists_complete_then_development_groups(
     for absent in ("w2-partial", "w2-power", "[w1]", "w2-confirm"):
         assert absent not in development
     assert "w2-partial" not in complete and "w2-power" not in complete
+
+
+# Paired discrimination drops a pair when either side failed to parse
+# (as the harness does: record/figures/extract_data.py:80-87).
+
+
+def test_pair_is_dropped_when_its_clean_twin_failed_to_parse() -> None:
+    rows = [
+        _run(RUN_A, 1, _clean("c1", 0.9, False), parse_failure=True),
+        _run(RUN_A, 1, _errored("c1", 0.1, True)),
+        _run(RUN_A, 1, _clean("c2", 0.9, False)),
+        _run(RUN_A, 1, _errored("c2", 0.1, True), parse_failure=True),
+        _run(RUN_A, 1, _clean("c3", 0.9, False)),
+        _run(RUN_A, 1, _errored("c3", 0.1, True)),
+    ]
+    (group,) = RECOMPUTE.analyse("w6", rows, TYPES)
+    (r1,) = group.replicates.values()
+    assert (r1.omit_n, r1.omit_wins) == (1, 1)  # only c3 is paired
+
+
+# Detection at matched false alarms, by the harness's convention
+# (record/figures/extract_data.py:106-135): thresholds are every observed score v and v+1e-6,
+# a note is flagged when its score is strictly below the threshold, and the chosen point has
+# the highest detection with at most k clean notes flagged, then fewer clean notes flagged,
+# then the larger threshold.
+
+
+def _point(err: list[float], clean: list[float], k: int) -> tuple[float, int, int, int, int]:
+    p = RECOMPUTE.matched_threshold(err, clean, k)
+    return (p.threshold, p.det_k, p.n_err, p.fa_k, p.n_clean)
+
+
+def test_matched_threshold_is_strict_and_at_most_k() -> None:
+    err, clean = [1.0, 5.0, 9.0, 10.0, 10.0], [9.0, 10.0, 10.0, 10.0]
+    # Errored notes AT the threshold (10) are not flagged.
+    assert _point(err, clean, 1) == (10.0, 3, 5, 1, 4)
+    # Three clean notes tie at 10, so no threshold flags exactly two or three: at most k.
+    assert _point(err, clean, 2) == (10.0, 3, 5, 1, 4)
+    assert _point(err, clean, 3) == (10.0, 3, 5, 1, 4)
+
+
+def test_matched_threshold_prefers_fewer_false_alarms_over_a_larger_threshold() -> None:
+    # Thresholds 2 and 6 both detect 2 of 3; 2 flags no clean note and 6 flags one.
+    assert _point([1.0, 1.0, 8.0], [2.0, 6.0], 1) == (2.0, 2, 3, 0, 2)
+    assert _point([1.0, 1.0, 8.0], [2.0, 6.0], 2) == (8.000001, 3, 3, 2, 2)
+
+
+def test_matched_threshold_with_fewer_clean_notes_than_k() -> None:
+    assert _point([1.0, 2.0, 5.0, 9.0], [3.0, 8.0], 3) == (9.000001, 4, 4, 2, 2)
+
+
+def test_matched_threshold_needs_more_than_two_distinct_scores() -> None:
+    assert RECOMPUTE.matched_threshold([0.0, 1.0], [1.0, 1.0], 1) is None
+    assert RECOMPUTE.matched_threshold([], [1.0, 2.0, 3.0], 1) is None
+
+
+# Group M: a powered 0-10 judge over two replicates; c4's replicate-2 row failed to parse.
+RUN_M = {**RUN_A, "arm": "power-gepa-high", "cell": "power-gepa-high", "format": "score"}
+M_SCORES = {
+    1: {"c1": (10, 3), "c2": (10, 9.5), "c3": (10, 10), "c4": (9, 6)},
+    2: {"c1": (10, 2), "c2": (10, 10), "c3": (10, 8), "c4": (10, None)},
+}
+GROUP_M = [
+    row
+    for replicate, scores in M_SCORES.items()
+    for consultation, (clean, err) in scores.items()
+    for row in (
+        _run(RUN_M, replicate, _clean(consultation, clean, False)),
+        _run(RUN_M, replicate, _errored(consultation, err, False), parse_failure=err is None),
+    )
+]
+
+
+def _group_m() -> Any:
+    (group,) = RECOMPUTE.analyse("w2-power", GROUP_M, TYPES)
+    return group
+
+
+def test_matched_false_alarms_per_replicate_and_majority() -> None:
+    m = _group_m().matched[1]
+    r1, r2 = m.per_replicate["1"], m.per_replicate["2"]
+    assert (r1.threshold, r1.det_k, r1.n_err, r1.fa_k, r1.n_clean) == (10.0, 3, 4, 1, 4)
+    # c4 failed in replicate 2, so it is not among the scores swept there.
+    assert (r2.threshold, r2.det_k, r2.n_err, r2.fa_k, r2.n_clean) == (10.0, 2, 3, 0, 4)
+    # Flagged in both replicates (strict majority of 2): c1 only, over all 4 omission notes.
+    assert m.majority == (1, 4, 0, 4)
+
+
+def test_route_two_below_10_rule() -> None:
+    rule = _group_m().rules["route-two-below-10"]
+    # parse failure = not flagged, on the full denominator
+    assert rule.per_replicate == {"1": (3, 4, 1, 4), "2": (2, 4, 0, 4)}
+    assert rule.majority == (1, 4, 0, 4)
+    assert rule.known_majority == (2, 4, 0, 4)  # c4's only known flag is True
+
+
+RUN_B3 = {**RUN_A, "arm": "B3", "cell": "B3", "tier": "B3", "format": "score"}
+CRITICAL_ABSENT = [
+    {"severity": "critical", "verdict": "absent", "fact": SENTINEL},
+    {"severity": "supporting", "verdict": "present", "fact": SENTINEL},
+]
+SUPPORTING_ABSENT = [
+    {"severity": "supporting", "verdict": "absent", "fact": SENTINEL},
+    {"severity": "critical", "verdict": "present", "fact": SENTINEL},
+]
+GROUP_B3 = [
+    _run(RUN_B3, 1, _clean("c1", 0.9, None), n_absent_critical=0),
+    _run(RUN_B3, 1, _clean("c2", 0.9, None), detail={"missing_facts": CRITICAL_ABSENT}),
+    _run(RUN_B3, 1, _errored("c1", 0.2, None), detail={"missing_facts": CRITICAL_ABSENT}),
+    _run(RUN_B3, 1, _errored("c2", 0.2, None), detail={"missing_facts": SUPPORTING_ABSENT}),
+    _run(RUN_B3, 1, _errored("c3", 0.2, None), n_absent_critical=2),
+    _run(RUN_B3, 1, _errored("c4", 0.2, None), parse_failure=True),
+]
+
+
+def test_critical_absent_reads_detail_then_the_split_count() -> None:
+    rule = RECOMPUTE.critical_absent
+    assert rule({"detail": {"missing_facts": CRITICAL_ABSENT}}) is True
+    assert rule({"detail": {"missing_facts": SUPPORTING_ABSENT}}) is False
+    assert rule({"detail": {"missing_facts": []}, "n_absent_critical": 3}) is False
+    assert rule({"n_absent_critical": 2}) is True and rule({"n_absent_critical": 0}) is False
+    assert rule({"detail": "text"}) is None and rule({}) is None
+
+
+def test_pipeline_critical_absent_rule() -> None:
+    (group,) = RECOMPUTE.analyse("w2-pipeline", GROUP_B3, TYPES)
+    rule = group.rules["pipeline-critical-absent"]
+    assert rule.per_replicate == {"1": (2, 4, 1, 2)}
+    assert rule.majority == (2, 4, 1, 2)
+    # Groups with neither detail.missing_facts nor the split's count get no such rule.
+    assert "pipeline-critical-absent" not in _group_m().rules
+
+
+def test_report_prints_rules_and_matched_points_without_text(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for group in RECOMPUTE.analyse("w2-pipeline", GROUP_B3, TYPES) + [_group_m()]:
+        print(RECOMPUTE.format_group(group))
+    out = capsys.readouterr().out
+    assert SENTINEL not in out
+    assert "rule pipeline-critical-absent: r1 det 2/4 fa 1/2 | majority det 2/4 fa 1/2" in out
+    # B3's scores take two values only, so no replicate has a point and neither has a majority.
+    assert "matched false alarms k1: r1 – | majority –" in out
+    assert (
+        "rule route-two-below-10: r1 det 3/4 fa 1/4 | r2 det 2/4 fa 0/4 "
+        "| majority det 1/4 fa 0/4 | known-only majority det 2/4 fa 0/4"
+    ) in out
+    assert (
+        "matched false alarms k1: r1 det 3/4 fa 1/4 (t 10) | r2 det 2/3 fa 0/4 (t 10) "
+        "| majority det 1/4 fa 0/4"
+    ) in out
+
+
+def test_summary_lists_partial_coverage_groups(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    records, pairs = build_fixture(tmp_path)
+    judges = records / "judgements" / "judges"
+    for name, rows in COVERAGE_FILES.items():
+        _write(judges / f"w2-{name}" / "20260820-120000-c0ffee1-r1" / "w2.json", {"records": rows})
+    assert RECOMPUTE.main([str(records), "--pairs", str(pairs), "--summary"]) == 0
+    out = capsys.readouterr().out
+    _, heading, partial = out.partition("== Partial coverage ==")
+    assert heading
+    line = next(line for line in partial.splitlines() if "family=w2-partial" in line)
+    assert "coverage r1 errored 265 clean 65 | r2 errored 264 clean 65" in line
+    assert "family=w2-complete" not in partial and "dataset=factorial-v1-armsmoke" not in partial
