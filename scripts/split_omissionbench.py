@@ -27,9 +27,11 @@ Rules:
    settings, so replicates, arms and models can be told apart). A field the row lacks stays
    missing rather than becoming null, so a missing value and a null one stay distinct.
    Fields in NEVER_KEPT, which can carry text, are never kept. When a row's detail holds a
-   missing_facts list, the counts in DERIVED_FIELDS (its entries whose verdict is "absent",
-   by severity) are worked out from it first, so the pipeline tier's per-fact rule can be
-   recomputed without any detail text. A kept value that could hold text aborts the run.
+   missing_facts list with at least one severity-graded entry, the counts in DERIVED_FIELDS
+   (its entries whose verdict is "absent", by severity) are worked out from it first, so the
+   pipeline tier's per-fact rule can be recomputed without any detail text. A list with no
+   graded entry (the two-stage tier grades none) gets no counts, since 0 would read as
+   "nothing absent". A kept value that could hold text aborts the run.
 6. Before anything is written, the counts must match EXPECTED_COUNTS, and both output
    folders must be empty or absent and outside --raw; otherwise the run stops and writes
    nothing.
@@ -440,10 +442,12 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
 
 
 def _absent_counts(row: dict[str, Any]) -> dict[str, int]:
-    """Counts of detail.missing_facts entries judged absent, by severity; {} without the list."""
+    """Counts of detail.missing_facts entries judged absent, by severity; {} unless graded."""
     detail = row.get("detail")
     facts = detail.get("missing_facts") if isinstance(detail, dict) else None
-    if not isinstance(facts, list):
+    if not isinstance(facts, list) or not any(
+        isinstance(fact, dict) and isinstance(fact.get("severity"), str) for fact in facts
+    ):
         return {}
     counts = dict.fromkeys(DERIVED_FIELDS, 0)
     for fact in facts:

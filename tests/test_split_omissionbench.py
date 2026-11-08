@@ -139,6 +139,7 @@ def varied_rows(dev: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows.append(_score_row(stratum, consultation, None))  # its clean twin
     rows.append({**base, "tier": "B3", "detail": {"missing_facts": MISSING_FACTS}})
     rows.append({**base, "tier": "B3", "detail": {"missing_facts": []}})
+    rows.append({**base, "tier": "B2", "detail": {"missing_facts": UNGRADED_FACTS}})
     return rows
 
 
@@ -150,6 +151,11 @@ MISSING_FACTS = [
     {"id": "f4", "fact": f"fact {SENTINEL}", "severity": "supporting", "verdict": "absent"},
     {"id": "f5", "fact": f"fact {SENTINEL}", "severity": "peripheral", "verdict": "partial"},
     f"stray text {SENTINEL}",
+]
+# The two-stage tier (B2) grades no fact's severity, so its entries carry severity null.
+UNGRADED_FACTS = [
+    {"id": "f1", "fact": f"fact {SENTINEL}", "severity": None, "verdict": "absent"},
+    {"id": "f2", "fact": f"fact {SENTINEL}", "severity": None, "verdict": "partial"},
 ]
 
 
@@ -452,8 +458,7 @@ def test_judge_scores_keep_only_the_fields_a_row_has(split: tuple[Path, Path, st
         {k: v for k, v in row.items() if k in SPLIT.SCORE_FIELDS}
         for row in varied_rows(_pairs(dev_out)["pairs"])
     ]
-    expected[-2].update(n_absent_critical=2, n_absent_supporting=1, n_absent_peripheral=0)
-    expected[-1].update(n_absent_critical=0, n_absent_supporting=0, n_absent_peripheral=0)
+    expected[-3].update(n_absent_critical=2, n_absent_supporting=1, n_absent_peripheral=0)
     path = dev_out / "judge_scores" / "judgements__w3__varied_records.json"
     kept = json.loads(path.read_text())["records"]
     assert kept == expected
@@ -462,7 +467,7 @@ def test_judge_scores_keep_only_the_fields_a_row_has(split: tuple[Path, Path, st
     assert {r["model"] for r in kept} == {"openai/gpt-5.4", "google/gemini-3.1-pro-preview"}
     assert sum(r["parse_failure"] for r in kept) == 1
     assert {r["dataset_version"] for r in kept} == {"factorial-v1", "factorial-v1-armsmoke"}
-    missing, null = kept[-5], kept[-4]
+    missing, null = kept[-6], kept[-5]
     assert "tier" not in missing and "replicate" not in missing  # still missing, not null
     assert "tier" in null and null["tier"] is None
 
@@ -481,9 +486,10 @@ def test_absent_fact_counts_are_derived_from_detail_and_detail_is_dropped(
     assert SPLIT.DERIVED_FIELDS == (
         "n_absent_critical", "n_absent_supporting", "n_absent_peripheral",
     )  # fmt: skip
-    assert counts == [(2, 1, 0), (0, 0, 0)]
-    # Rows whose detail has no missing_facts list (here a string) get no counts at all.
-    assert sum("n_absent_critical" in row for row in kept) == 2
+    assert counts == [(2, 1, 0)]
+    # No counts without a missing_facts list (a string detail), for an empty list, or for
+    # entries with no severity grade (B2): a count of 0 there would read as "none absent".
+    assert sum("n_absent_critical" in row for row in kept) == 1
     assert all("detail" not in row for row in kept)
     assert SENTINEL not in path.read_text() and SENTINEL not in log
 
