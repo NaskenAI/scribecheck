@@ -160,7 +160,7 @@ Dialogue negation needs its own rule because sentence-level negation tools miss 
 
 **Deterministic negation check.** When a lexicon symptom appears in both the transcript and the note, the rules compare its negation status, using ConText and dialogue negation on the transcript side. A mismatch, such as "no chest pain" in the transcript and "chest pain" in the note, becomes a candidate for the model's check, not a certain flag. Symptoms outside the lexicon go to the model.
 
-In rules-only mode the layer reports changed values (dose, frequency, side, route), negation reversals of lexicon symptoms, and omissions of medicines, doses, frequencies, allergies and sides, all as warnings at possible confidence. Pass C runs only its examination rule, and all other checks need the model. Rules-extracted facts count as core facts, because rules mode has no model audit. Severity in rules mode follows the table in the next section.
+In rules-only mode the layer reports changed values (dose, frequency, side, route), negation reversals of lexicon symptoms, and omissions of medicines, doses, frequencies, allergies and sides, all as warnings at possible confidence. A changed-value warning is an item that passed every guard and would have been a certain flag; every other item is listed as unchecked with its reason codes. In full mode both kinds of warning go to the model's quote-verified second check. Pass C runs only its examination rule, and all other checks need the model. Rules-extracted facts count as core facts, because rules mode has no model audit. Severity in rules mode follows the table in the next section.
 
 ## Severity, decision rule and calibration
 
@@ -292,6 +292,20 @@ Inputs are a transcript and a note; output is a versioned JSON report, with Mark
 
 In this example, failing on confirmed critical flags has been opted into (`--fail-on critical`); by default the same report would warn. F2 is a rules candidate confirmed by the model's second check.
 
+Every report also has an `unchecked` list after `flags`: the items the rules could not decide, each with its category, item, reason codes (`reasons`, the first being the primary one) and evidence quotes. In rules mode `model` is null. Flags are numbered omissions first, then changed facts, each in transcript order.
+
+```json
+"unchecked": [
+  {
+    "category": "medicine",
+    "item": "amlodipine",
+    "reasons": ["planned_or_past"],
+    "transcript_evidence": [{"text": "amlodipine", "turn": 2, "start": 15, "end": 25}],
+    "note_evidence": []
+  }
+]
+```
+
 The report never repeats the full transcript or note; only the evidence quotes. `--include-facts` adds the full fact list for debugging.
 
 **Exit codes:** 0 = pass or warn, 1 = fail under the decision rule (full mode with failing opted into), 2 = tool error. In rules mode the exit code is never 1. In GitHub Actions the Markdown report is also written to the job summary.
@@ -333,7 +347,32 @@ print(report.decision, len(report.flags))
 | `scribecheck bench omissionbench` | Downloads OmissionBench, prints its CC BY attribution, and reports detection, false alarms and correct-fact rate |
 | `scribecheck init` | Writes a starter config file |
 
-Shared flags are `--mode rules|full`, `--standard clinical|strict`, `--format json|md|html`, `--fail-on critical|supporting` (full mode only, and opt-in: run `stability` on your own test set first), `--repeats N` (majority vote over N runs) and `--config`. In rules mode the report is warnings only.
+Shared flags are `--mode rules|full`, `--standard clinical|strict`, `--format json|md|html`, `--fail-on critical|supporting` (full mode only, and opt-in: run `stability` on your own test set first), `--repeats N` (majority vote over N runs), `--config` and `--output`. In rules mode the report is warnings only.
+
+`batch` pairs files by name, ignoring case. In the folder itself, `case1.transcript.json` (or `.txt`) pairs with `case1.note.md` (or `.txt`). In `transcripts/` and `notes/` subfolders, `transcripts/case1.json` pairs with `notes/case1.md` (the `.transcript` and `.note` markers are optional there). Both layouts are read together. An unmatched, duplicated or unreadable file, or a pair that cannot be checked, is listed as a problem; every other pair still runs and is reported, and the exit code is 2, so a missing case never passes silently. The batch JSON report is `{"schema_version", "cases": [{"id", "transcript", "note", "report"}], "problems"}`, so each report names its files.
+
+**Config file.** Settings are read from `--config`, otherwise `./scribecheck.toml` if present; command-line options override them. `scribecheck init` writes a commented starter file. Unknown keys and values are errors.
+
+```toml
+mode = "rules"
+standard = "clinical"
+
+[decision]
+fail_on = []                              # full mode only, e.g. ["critical"]
+fail_confidence = ["certain", "confirmed"]
+
+[speakers]       # added to the built-in labels
+"GP" = "clinician"
+
+[headings]       # added to the built-in headings
+"Current meds" = "Medications"
+
+[brands]
+"Examplol" = ["paracetamol"]
+
+[symptoms]
+"wheezy" = "wheezing"
+```
 
 ### Plugins
 

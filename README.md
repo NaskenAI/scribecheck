@@ -3,8 +3,22 @@
 Checks an AI-written clinical note against the consultation transcript, and reports omissions,
 changed facts and unsupported statements, each with the passage that supports the flag.
 
-> **Status: pre-alpha.** Only the package skeleton exists. Checking arrives milestone by
-> milestone; see `docs/build-plan.md`. Nothing here is ready for use yet.
+> **Status: pre-alpha.** Rules mode (no model) runs; full mode arrives milestone by milestone;
+> see `docs/build-plan.md`. Nothing here is ready for use yet.
+
+## Try it
+
+Requires Python 3.11 or later. From a clone of this repository:
+
+```bash
+python -m pip install -e .
+scribecheck demo
+```
+
+The demo runs offline in rules mode on three bundled synthetic consultations. Rules mode needs
+no model or API key; its findings are warnings and never fail a build. Check your own files with
+`scribecheck check -t transcript.json -n note.md`, or a folder of them with
+`scribecheck batch cases/`. `scribecheck init` writes a starter config file.
 
 ## What it checks, and what it doesn't
 

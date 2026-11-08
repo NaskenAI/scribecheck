@@ -86,7 +86,7 @@ The goal is a working rules-only checker that installs and runs offline, and the
 
 Week 1:
 
-- [ ] Package skeleton, config file format and `scribecheck init`
+- [x] Package skeleton, config file format and `scribecheck init` (`config.py`: TOML read with the standard library's tomllib, after dropping Python 3.10; the user's speaker map, heading map, brand map and extra symptoms extend the built-in ones; unknown keys are errors)
 - [ ] Publish a first development release to PyPI as soon as the package installs, to secure the name
 - [ ] Input parsers for plain-text and JSON transcripts, and note section detection with the user's heading map
 - [ ] Normalisers for numbers, units, frequency, route and side
@@ -98,9 +98,9 @@ Week 2:
 - [x] Alignment with the one-consistent-value rule, the Pass B guards and reason codes, and the deterministic negation check. Rules-mode certain flags are disabled: a deny-list could not rule out false ones, and the measured allow-list ceiling on the development data is zero ([docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md))
 - [x] Rules-mode Pass A structured omission candidates (medicines, doses, frequencies, allergies, sides) at possible confidence, for the model's second check in full mode and as warnings in rules mode (`rules/omission.py`). Measured on 2026-11-09: recall 6 of the 15 development structured omissions; 6 candidates on the 65 clean notes, held as a ratchet by `tests/test_dev_clean_notes.py`. Follow-ups: lexicon gaps (ASA, HCTZ, PCN, sulfa, plain "insulin"), dotted frequencies ("b.i.d.", "2x/day"), "OD" written alone for the right eye, and values after a comma, which are dropped
 - [ ] The examination rule, reporting at possible confidence
-- [ ] Severity table, confidence levels, both standards and the decision rule
-- [ ] JSON report, Markdown renderer, exit codes, and the `demo`, `check` and `batch` commands
-- [ ] Golden-file tests for the JSON and Markdown reports
+- [x] Severity table, confidence levels, both standards and the decision rule (`decision.py`). Rules mode never fails; in full mode failing needs both a `fail_on` severity and a `fail_confidence` level. Follow-up: user overrides of the rules-mode severity table
+- [x] JSON report, Markdown renderer, exit codes, and the `demo`, `check` and `batch` commands (`report.py`, `checker.py`, `cli.py`), with three synthetic demo consultations in `src/scribecheck/demo/`, marked `"reviewed": false` for the clinician. In rules mode a Pass B item that would have been a certain flag is reported as a changed-fact warning at possible confidence. Follow-ups: HTML output; the GitHub Action's job summary; values after a comma are dropped ("5 mg once a day, sometimes 10 mg" warns of a dose change), which now shows as a warning; in Pass A, an answer naming two allergens where one is in the drug lexicon ("Penicillin and codeine.") reports that one as a missing medicine rather than an allergy; a `.txt` transcript containing JSON is read as plain text
+- [x] Golden-file tests for the JSON and Markdown reports (`tests/golden/`, regenerated with `SCRIBECHECK_UPDATE_GOLDEN=1`)
 - [ ] Network guard: a socket-level block in tests on all three operating systems, plus a no-network container test on Linux
 - [ ] Check whether OmissionBench labels the type of each altered fact; if not, label the structured-fact pairs by hand
 - [ ] Precision and recall per change type, measured on the second person's phrasings and on the 117 development pairs that add or change a fact
@@ -128,6 +128,7 @@ Week 2:
 Week 3:
 
 - [ ] Merge rules facts into Pass A, and send rules "absent" verdicts for structured facts to the second check
+- [ ] Send rules-mode changed-value warnings (Pass B items that would have been certain flags, reported at possible confidence by `checker.py`) to the model's quote-verified second check, like the omission candidates
 - [ ] Pass B model path, certainty changes and its second check
 - [ ] Pass C: statement splitting, checking, the second check and the default exemptions
 - [ ] Deduplication across the three passes
