@@ -67,7 +67,7 @@ The baseline for this project's headline result is both methods re-run by us on 
 
 Licences: the OmissionBench data is CC BY 4.0 and the harness is MIT, so both can be reused with attribution. The benchmark is built partly on PriMock57 and ACI-Bench.
 
-What this project adds, each measured against those re-run baselines: deterministic checks for structured facts, results on local open-weight models, and calibration on clinician-adjudicated flags. Section-aware checking for the restatement case follows in v1.1.
+What this project adds, each measured against those re-run baselines: structured rule candidates feeding the model check, measured by ablation in M4; results on local open-weight models; and calibration on clinician-adjudicated flags. It also reports a measured ceiling on deterministic certainty for conversational transcripts ([docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md)). Section-aware checking for the restatement case follows in v1.1.
 
 ## Architecture
 
@@ -123,7 +123,7 @@ Pairs the rules cannot align go to the model. Certainty changes are always judge
 2. Check each against the transcript as supported, contradicted, unsupported or not verifiable, with the transcript quote where one exists.
 3. **Second check.** Each contradicted or unsupported verdict is re-checked against the transcript, with a quote requirement, before it can be marked confirmed.
 4. **Default exemptions.** Content clinicians normally add without saying it aloud is reported as "not verifiable" and never fails a note: examination findings in face-to-face visits, vitals, test results, history taken from the record, and prefilled demographics. Users can change this list.
-5. **Examination rule.** When the modality is telephone, any examination finding is flagged as unsupported. For video, only hands-on findings such as palpation, auscultation and reflexes are flagged. Without a modality, the rule does not run. Findings are detected in the note's Examination section and after phrases such as "O/E" and "on examination". A finding inside an Examination section is a certain flag; one detected only by phrase is possible.
+5. **Examination rule.** When the modality is telephone, any examination finding is flagged as unsupported. For video, only hands-on findings such as palpation, auscultation and reflexes are flagged. Without a modality, the rule does not run. Findings are detected in the note's Examination section and after phrases such as "O/E" and "on examination". A finding inside an Examination section, and one detected only by phrase, are reported at possible confidence, because rules-mode certain flags are disabled (see the deterministic rules layer).
 6. Grade each flag for severity, as in Pass A.
 7. In rules mode only the examination rule runs.
 
@@ -131,7 +131,15 @@ In full mode the pipeline makes roughly 10 model calls per note, with presence c
 
 ## Deterministic rules layer
 
-The rules layer gives the same answer every run, needs no model, and powers rules-only mode. It favours precision: when it cannot align two facts with confidence, it passes them to the model, or in rules-only mode reports them as unchecked rather than guessing. A certain flag also needs one consistent value or status for the item in the transcript, matched on temporality and experiencer. When the transcript mentions the item more than once with different values (a dose changed during the consultation, a symptom present last week and absent today, both knees discussed), the rules emit no certain flag and send the item to the model.
+The rules layer gives the same answer every run, needs no model, and powers rules-only mode.
+
+**Rules-mode certain flags are disabled.** Two adversarial reviews showed that blocking cues cannot rule out false certain flags in open clinical language. An allow-list of plain sentence shapes was then measured on the development data, and its ceiling is zero: the transcripts are conversation, not statements (only 1 of 3,917 patient sentences names a drug with a dose). The measurements are in [docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md). The rules layer therefore has three roles:
+
+1. **Nominate structured candidates** (medicines, doses, frequencies, allergies, sides, lexicon symptoms) for the model's quote-verified check in full mode.
+2. **Guard against false certain flags**: every item the rules cannot decide is reported as unchecked with a reason code (one consistent value matched on temporality and experiencer, no spelling-tolerant or unreviewed match, no eye abbreviation, no planned or past use, no ambiguous value, and the other guards in `rules/changed.py`).
+3. **Give a no-model quick screen** in rules-only mode, whose findings are warnings and never fail a build.
+
+It still favours precision: when it cannot align two facts with confidence, it passes them to the model, or in rules-only mode reports them as unchecked rather than guessing. When the transcript mentions an item more than once with different values (a dose changed during the consultation, a symptom present last week and absent today, both knees discussed), the item goes to the model.
 
 | Fact type | Normalised to | Examples handled |
 | --- | --- | --- |
@@ -150,9 +158,9 @@ The rules layer gives the same answer every run, needs no model, and powers rule
 
 Dialogue negation needs its own rule because sentence-level negation tools miss it: the denial sits in the patient's turn, not in the question's sentence. In v1 the rule handles only a question about one symptom followed by a direct answer. Questions about several symptoms go to the model, and the rule is off when speaker labels are missing.
 
-**Deterministic negation check.** When a lexicon symptom appears in both the transcript and the note, the rules compare its negation status, using ConText and dialogue negation on the transcript side. A mismatch, such as "no chest pain" in the transcript and "chest pain" in the note, is a certain negation-reversed flag. Symptoms outside the lexicon go to the model.
+**Deterministic negation check.** When a lexicon symptom appears in both the transcript and the note, the rules compare its negation status, using ConText and dialogue negation on the transcript side. A mismatch, such as "no chest pain" in the transcript and "chest pain" in the note, becomes a candidate for the model's check, not a certain flag. Symptoms outside the lexicon go to the model.
 
-In rules-only mode the layer reports changed values (dose, frequency, side, route), negation reversals of lexicon symptoms, and omissions of medicines, doses, allergies and sides. Pass C runs only its examination rule, and all other checks need the model. Rules-extracted facts count as core facts, because rules mode has no model audit. Confidence and severity in rules mode follow the tables in the next section.
+In rules-only mode the layer reports changed values (dose, frequency, side, route), negation reversals of lexicon symptoms, and omissions of medicines, doses, frequencies, allergies and sides, all as warnings at possible confidence. Pass C runs only its examination rule, and all other checks need the model. Rules-extracted facts count as core facts, because rules mode has no model audit. Severity in rules mode follows the table in the next section.
 
 ## Severity, decision rule and calibration
 
@@ -160,7 +168,7 @@ The checker acts on per-fact verdicts and severity, not on a single note score, 
 
 **Confidence** describes the evidence, not where the flag came from:
 
-- *Certain:* a deterministic mismatch found by the rules layer, when the transcript gives one consistent value or status for the item: a value mismatch on an aligned pair (dose, frequency, side or route), a negation reversal of a lexicon symptom, or an examination finding inside the Examination section of a telephone consultation's note.
+- *Certain:* reserved for a deterministic mismatch the rules layer can prove. It is not emitted in v1, because rules-mode certain flags are disabled ([docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md)).
 - *Confirmed:* a model verdict in any pass upheld by its quote-verified second check.
 - *Possible:* everything else, including rules-based omissions in rules mode, where no model can confirm them (a medicine may have been stopped, declined or a relative's), partial verdicts, and model verdicts the second check did not uphold.
 
@@ -180,13 +188,14 @@ The checker acts on per-fact verdicts and severity, not on a single note score, 
 - *Clinical* (default): critical and supporting core facts must appear in the note. Peripheral and contextual facts are not checked.
 - *Strict:* every core fact must appear, including peripheral ones, as in OmissionBench. Use it for benchmarking and calibration runs, not for routine checks of real notes, because a concise note can legitimately leave transcript facts out.
 
-**Default decision rule:**
+**Default decision rule:** nothing fails by default.
 
-- **Fail** on any critical flag at certain or confirmed confidence.
-- **Warn** on supporting flags, partial verdicts, and critical flags at possible confidence.
+- **Rules mode:** every finding is a warning, and nothing fails a build.
+- **Full mode:** failing is opt-in. After running the stability command on their own test set, a user can set `--fail-on critical` to fail on critical flags at confirmed confidence.
+- **Warn** on critical and supporting flags and on partial verdicts, unless failing has been opted into.
 - **Report only** peripheral flags (strict standard only) and statements marked not verifiable.
 
-The GitHub Action is stricter about stability: by default only critical flags at certain confidence fail the build, and model-derived flags warn, until the user has measured run-to-run stability on their own test set with the stability command. Users change all of these rules in the config file.
+Users change all of these rules in the config file.
 
 **Calibration.** Clinician-approved notes are not clean under the tool's standard: Fox et al. found material discrepancies in every reference note they audited in two public corpora. So `calibrate` works from adjudicated flags, not from notes labelled clean:
 
@@ -249,9 +258,10 @@ Inputs are a transcript and a note; output is a versioned JSON report, with Mark
       "category": "side",
       "verdict": "changed",
       "severity": "critical",
-      "confidence": "certain",
+      "confidence": "confirmed",
       "origin": "rules",
       "rule_id": "side.mismatch",
+      "second_check": "model",
       "transcript_value": "left knee",
       "note_value": "right knee",
       "transcript_evidence": {"text": "my left knee has been swelling", "turn": 5, "start": 12, "end": 42},
@@ -275,9 +285,11 @@ Inputs are a transcript and a note; output is a versioned JSON report, with Mark
 }
 ```
 
+In this example, failing on confirmed critical flags has been opted into (`--fail-on critical`); by default the same report would warn. F2 is a rules candidate confirmed by the model's second check.
+
 The report never repeats the full transcript or note; only the evidence quotes. `--include-facts` adds the full fact list for debugging.
 
-**Exit codes:** 0 = pass or warn, 1 = fail under the decision rule, 2 = tool error. In GitHub Actions the Markdown report is also written to the job summary.
+**Exit codes:** 0 = pass or warn, 1 = fail under the decision rule (full mode with failing opted into), 2 = tool error. In rules mode the exit code is never 1. In GitHub Actions the Markdown report is also written to the job summary.
 
 ## Interfaces
 
@@ -316,7 +328,7 @@ print(report.decision, len(report.flags))
 | `scribecheck bench omissionbench` | Downloads OmissionBench, prints its CC BY attribution, and reports detection, false alarms and correct-fact rate |
 | `scribecheck init` | Writes a starter config file |
 
-Shared flags are `--mode rules|full`, `--standard clinical|strict`, `--format json|md|html`, `--fail-on critical|supporting`, `--repeats N` (majority vote over N runs) and `--config`.
+Shared flags are `--mode rules|full`, `--standard clinical|strict`, `--format json|md|html`, `--fail-on critical|supporting` (full mode only, and opt-in: run `stability` on your own test set first), `--repeats N` (majority vote over N runs) and `--config`. In rules mode the report is warnings only.
 
 ### Plugins
 
@@ -334,7 +346,7 @@ The docs for each plugin explain how to turn off that framework's own telemetry 
 
 ### GitHub Action
 
-A composite action installs the package, runs `batch` on a folder of test consultations, writes the Markdown report to the job summary, uploads the JSON report as an artifact, and fails the job under the decision rule. By default only critical flags at certain confidence fail the build, and model-derived flags warn. The model endpoint comes from a repository secret; rules mode needs none.
+A composite action installs the package, runs `batch` on a folder of test consultations, writes the Markdown report to the job summary and uploads the JSON report as an artifact. In rules mode nothing fails the build: the report is warnings only. In full mode, failing the job on confirmed critical flags is opt-in, once the team has run the stability command on its own test set. The model endpoint comes from a repository secret; rules mode needs none.
 
 GitHub-hosted runners cannot run a local model at useful speed, so there the Action runs in rules mode or calls an API endpoint. Teams testing on real patient data need self-hosted runners, and the docs say so.
 
