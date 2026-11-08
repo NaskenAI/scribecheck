@@ -1,17 +1,26 @@
 """Recompute the published OmissionBench numbers from released scored-records files.
 
 Usage:
-    python scripts/recompute_published.py <records-dir> --pairs <pairs/dataset_v2.json>
+    python scripts/recompute_published.py <records-dir> --pairs <pairs/dataset_v2.json> [--summary]
 
 Gate 1(a): validates the scoring code against the benchmark's released judgements, with no
 API calls. Every *.json under <records-dir> with a "records" array of rows carrying note_key
-is read; it is labelled with its parent folder (for the split's flattened copies,
-"a__b__c.json", the original parent "b").
+is read. Each released file is one shard of a run, and a run is spread over many folders of
+one family, judgements/judges/<family>/<YYYYMMDD-HHMMSS>-<commit>-r<N>/ (or, in the split's
+flattened copies, "judgements__judges__<family>__<folder>__<file>.json"). A file's family
+is that directory; a file outside judges/ takes its parent folder as its family.
 
-Rows with parse_failure true are left out and counted. The rest are grouped by file and
-GROUP_FIELDS (model, arm, cell, criterion, format, k, tier, reasoning effort, dataset
-version); a missing field is its own value, so groups never merge by accident. Within a
-group every metric is computed per replicate:
+Rows are grouped across files by family and GROUP_FIELDS (model, arm, cell, criterion,
+format, k, tier, reasoning effort, dataset version), ignoring the folder's timestamp and
+commit; a missing field is its own value, so groups never merge by accident. Within a group
+and replicate, a note_key found in folders with different timestamps keeps only the rows
+from the latest folder, and the others are counted as replaced; when any of its folders has
+no timestamp, all its rows stay. Coverage (the distinct errored and clean notes of each
+replicate) is counted next, then rows with parse_failure true are left out and counted.
+A group is "complete" when every replicate covers COVERAGE for its dataset version,
+"development complete" when every replicate covers exactly DEVELOPMENT_COVERAGE (never
+counted as complete), and "partial coverage" otherwise. Within a group every metric is
+computed per replicate:
 
 - Paired discrimination, as the dataset card defines it: each errored note is compared with
   its clean twin (the clean row with the same clean_key in the same group and replicate). A
@@ -32,15 +41,17 @@ over the notes with at least one known flag.
 Within one replicate, identical duplicate rows count once; a note whose duplicates disagree
 on aggregate or flagged is left out and counted as a conflict. An errored note with no clean
 twin, a null aggregate on either side, or an unknown type is counted, not scored. Groups
-from smoke runs or the frozen master list (NOT_COMPARABLE) are printed in a separate section.
-Only numbers, folder names and short group values are printed, never any other field, and
-no network call is made.
+with no dataset version, or from smoke runs or the frozen master list (NOT_COMPARABLE), are
+printed in a separate section. --summary prints one line per complete group instead, then
+the development-complete groups under their own heading. Only numbers, folder names and
+short group values are printed, never any other field, and no network call is made.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -62,7 +73,15 @@ GROUP_FIELDS = (
 )
 NOT_COMPARABLE = ("armsmoke", "pairs_master_frozen")
 MISSING = "(missing)"
+NULL = "(null)"
 MAX_VALUE = 60
+# (errored notes, clean notes) each replicate must cover, by dataset version.
+COVERAGE = {"factorial-v1": (495, 112), "factorial-v1-armconfirm": (151, 47)}
+DEVELOPMENT_COVERAGE = {"factorial-v1": (265, 65)}
+COMPLETE = "complete"
+DEVELOPMENT_COMPLETE = "development complete"
+PARTIAL = "partial coverage"
+FOLDER_TIMESTAMP = re.compile(r"(\d{8}-\d{6})-")
 
 
 @dataclass
@@ -116,9 +135,15 @@ class GroupResult:
     """One group (file and run settings), per replicate and combined."""
 
     label: str
+    """The family."""
     key_values: dict[str, str]
+    files: int = 0
     rows: int = 0
     parse_failures: int = 0
+    replaced: int = 0
+    """Rows replaced by the same note_key in a later shard of the same replicate."""
+    coverage: dict[str, tuple[int, int]] = field(default_factory=dict)
+    """(distinct errored notes, distinct clean notes) per replicate, before parse failures."""
     replicates: dict[str, ReplicateResult] = field(default_factory=dict)
     replicate_count: int = 0
     """Distinct replicates in the group, counting those whose rows all failed to parse."""
@@ -134,7 +159,23 @@ class GroupResult:
     @property
     def comparable(self) -> bool:
         version = self.key_values["dataset_version"]
+        if version in (MISSING, NULL):
+            return False
         return not any(marker in version for marker in NOT_COMPARABLE)
+
+    @property
+    def coverage_label(self) -> str:
+        version, covered = self.key_values["dataset_version"], list(self.coverage.values())
+        if not covered or not self.comparable:
+            return PARTIAL
+        if version in COVERAGE:
+            errored, clean = COVERAGE[version]
+            if all(e >= errored and c >= clean for e, c in covered):
+                return COMPLETE
+        if version in DEVELOPMENT_COVERAGE:
+            if all(c == DEVELOPMENT_COVERAGE[version] for c in covered):
+                return DEVELOPMENT_COMPLETE
+        return PARTIAL
 
     @property
     def omit_mean(self) -> float | None:
@@ -190,6 +231,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("records_dir", type=Path)
     parser.add_argument("--pairs", type=Path, required=True)
+    parser.add_argument(
+        "--summary", action="store_true", help="one line per complete group, numbers only"
+    )
     args = parser.parse_args(argv)
     try:
         types = load_types(args.pairs)
@@ -207,13 +251,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             files.append((path, rows))
         else:
             skipped += 1
-    names = labels([path for path, _ in files])
-    groups = [
-        group
-        for name, (_, rows) in zip(names, files, strict=True)
-        for group in analyse(name, rows, types)
-    ]
-    print_report(groups, scored=len(files), skipped=skipped)
+    groups = analyse_files([(source(path), rows) for path, rows in files], types)
+    if args.summary:
+        print_summary(groups, scored=len(files), skipped=skipped)
+    else:
+        print_report(groups, scored=len(files), skipped=skipped)
     return 0
 
 
@@ -245,19 +287,23 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def labels(paths: Sequence[Path]) -> list[str]:
-    """Parent folder names; the original parent for flattened "a__b__c.json" copies."""
-    names = []
-    for path in paths:
-        parts = path.name.split("__")
-        names.append(parts[-2] if len(parts) >= 3 else path.parent.name)
-    counts: dict[str, int] = {}
-    for name in names:
-        counts[name] = counts.get(name, 0) + 1
-    return [
-        f"{name}:{path.stem}" if counts[name] > 1 else name
-        for name, path in zip(names, paths, strict=True)
-    ]
+@dataclass(frozen=True)
+class Source:
+    """Where a file sits: its family, and its folder's timestamp when the name has one."""
+
+    family: str
+    timestamp: str | None
+
+
+def source(path: Path) -> Source:
+    """judges/<family>/<folder>/<file>, in a real path or a flattened "a__b__c.json" name."""
+    parts = [*path.parent.parts, *path.name.split("__")]
+    judges = [i for i, part in enumerate(parts) if part == "judges" and i + 3 < len(parts)]
+    if not judges:
+        return Source(parts[-2] if len(parts) >= 2 else path.stem, None)
+    family, folder = parts[judges[-1] + 1], parts[judges[-1] + 2]
+    match = FOLDER_TIMESTAMP.match(folder)
+    return Source(family, match.group(1) if match else None)
 
 
 def _value(row: Mapping[str, Any], name: str) -> str:
@@ -265,7 +311,7 @@ def _value(row: Mapping[str, Any], name: str) -> str:
     if name not in row:
         return MISSING
     value = row[name]
-    return "(null)" if value is None else str(value)
+    return NULL if value is None else str(value)
 
 
 def _replicate_order(value: str) -> tuple[int, int | str]:
@@ -275,33 +321,82 @@ def _replicate_order(value: str) -> tuple[int, int | str]:
 def analyse(
     label: str, rows: Sequence[dict[str, Any]], types: Mapping[str, str]
 ) -> list[GroupResult]:
-    """Group a file's rows, then score each replicate and combine the replicates."""
-    grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
-    failed: dict[tuple[str, ...], list[dict[str, Any]]] = {}
-    for row in rows:
-        key = tuple(_value(row, name) for name in GROUP_FIELDS)
-        grouped.setdefault(key, [])
-        failed.setdefault(key, [])
-        (failed if row.get("parse_failure") is True else grouped)[key].append(row)
+    """Group one set of rows, as if it were a single file of family `label`."""
+    return analyse_files([(Source(label, None), rows)], types)
+
+
+def analyse_files(
+    files: Sequence[tuple[Source, Sequence[dict[str, Any]]]], types: Mapping[str, str]
+) -> list[GroupResult]:
+    """Group rows across files, then score each replicate and combine the replicates."""
+    Tagged = tuple[int, str | None, dict[str, Any]]  # (file index, folder timestamp, row)
+    grouped: dict[tuple[str, ...], dict[str, list[Tagged]]] = {}
+    for index, (where, rows) in enumerate(files):
+        for row in rows:
+            key = (where.family, *(_value(row, name) for name in GROUP_FIELDS))
+            replicates = grouped.setdefault(key, {})
+            replicates.setdefault(_value(row, "replicate"), []).append(
+                (index, where.timestamp, row)
+            )
 
     results = []
-    for key, members in grouped.items():
-        group = GroupResult(label, dict(zip(GROUP_FIELDS, key, strict=True)))
-        group.rows, group.parse_failures = len(members), len(failed[key])
-        by_replicate: dict[str, list[dict[str, Any]]] = {}
-        for row in members:
-            by_replicate.setdefault(_value(row, "replicate"), []).append(row)
-        for replicate in sorted(by_replicate, key=_replicate_order):
-            group.replicates[replicate] = compute(by_replicate[replicate], types)
-        group.replicate_count = len({_value(row, "replicate") for row in members + failed[key]})
-        _combine(group, failed[key], types)
+    for key, replicates in grouped.items():
+        group = GroupResult(key[0], dict(zip(GROUP_FIELDS, key[1:], strict=True)))
+        group.files = len({index for tagged in replicates.values() for index, _, _ in tagged})
+        group.replicate_count = len(replicates)
+        failed: list[dict[str, Any]] = []
+        for replicate in sorted(replicates, key=_replicate_order):
+            rows, replaced = _latest_shards(replicates[replicate])
+            group.replaced += replaced
+            group.coverage[replicate] = _coverage(rows)
+            kept = [row for row in rows if row.get("parse_failure") is not True]
+            failed += [row for row in rows if row.get("parse_failure") is True]
+            group.rows += len(kept)
+            if kept:
+                group.replicates[replicate] = compute(kept, types)
+        group.parse_failures = len(failed)
+        _combine(group, failed, types)
         results.append(group)
     return results
 
 
+def _latest_shards(
+    tagged: Sequence[tuple[int, str | None, dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], int]:
+    """The rows left once each note_key keeps only its latest folder's rows; and how many went."""
+    stamps: dict[str, set[str | None]] = {}
+    for _, timestamp, row in tagged:
+        if isinstance(row.get("note_key"), str):
+            stamps.setdefault(row["note_key"], set()).add(timestamp)
+    kept, replaced = [], 0
+    for _, timestamp, row in tagged:
+        seen = stamps.get(row.get("note_key"))  # type: ignore[arg-type]
+        if seen and None not in seen and timestamp != max(seen):  # type: ignore[type-var]
+            replaced += 1
+        else:
+            kept.append(row)
+    return kept, replaced
+
+
+def _is_clean(row: Mapping[str, Any]) -> bool:
+    return row.get("note_role") == "clean" or row.get("pair_id") is None
+
+
+def _coverage(rows: Iterable[Mapping[str, Any]]) -> tuple[int, int]:
+    """(distinct errored note_keys, distinct clean clean_keys)."""
+    errored, clean = set(), set()
+    for row in rows:
+        if _is_clean(row):
+            if isinstance(row.get("clean_key"), str):
+                clean.add(row["clean_key"])
+        elif isinstance(row.get("note_key"), str):
+            errored.add(row["note_key"])
+    return len(errored), len(clean)
+
+
 def _note_kind(row: Mapping[str, Any], types: Mapping[str, str]) -> tuple[str, str] | None:
     """("clean", clean_key) or ("omit", note_key) for a row, as compute() classes it."""
-    if row.get("note_role") == "clean" or row.get("pair_id") is None:
+    if _is_clean(row):
         key = row.get("clean_key")
         return ("clean", key) if isinstance(key, str) else None
     kind = types.get(row["pair_id"])
@@ -371,10 +466,8 @@ def _score(value: object) -> float | None:
 def compute(rows: Sequence[dict[str, Any]], types: Mapping[str, str]) -> ReplicateResult:
     """Score one replicate of one group (or any single set of rows)."""
     result = ReplicateResult()
-    clean_rows = [r for r in rows if r.get("note_role") == "clean" or r.get("pair_id") is None]
-    errored_rows = [
-        r for r in rows if r.get("note_role") != "clean" and r.get("pair_id") is not None
-    ]
+    clean_rows = [r for r in rows if _is_clean(r)]
+    errored_rows = [r for r in rows if not _is_clean(r)]
     clean, clean_conflicts = _distinct(clean_rows, "clean_key")
     errored, errored_conflicts = _distinct(errored_rows, "note_key")
     result.conflicts = clean_conflicts + errored_conflicts
@@ -461,12 +554,17 @@ def _rate_line(
     return f"{name}: " + " | ".join(parts)
 
 
-def format_group(group: GroupResult) -> str:
-    settings = " ".join(
+def _settings(group: GroupResult, skip: tuple[str, ...] = ()) -> str:
+    return " ".join(
         f"{'effort' if k == 'reasoning_effort' else 'dataset' if k == 'dataset_version' else k}="
         f"{_short(v)}"
         for k, v in group.key_values.items()
+        if k not in skip
     )
+
+
+def format_group(group: GroupResult) -> str:
+    settings = _settings(group)
     reps = group.replicates
     total = ReplicateResult()
     for r in reps.values():
@@ -476,8 +574,13 @@ def format_group(group: GroupResult) -> str:
         total.conflicts += r.conflicts
         total.types_from_pairs += r.types_from_pairs
         total.types_from_rows += r.types_from_rows
+    coverage = " | ".join(
+        f"r{rep} errored {errored} clean {clean}"
+        for rep, (errored, clean) in group.coverage.items()
+    )
     lines = [
-        f"[{group.label}] {settings}",
+        f"[{group.label}] {settings} — {group.coverage_label}",
+        f"  files {group.files}, replaced by later shards {group.replaced}, coverage: {coverage}",
         f"  rows {group.rows}, parse failures excluded {group.parse_failures}, "
         f"replicates {' '.join(reps)} (of {group.replicate_count}), "
         f"types from --pairs {total.types_from_pairs} "
@@ -504,13 +607,57 @@ def format_group(group: GroupResult) -> str:
     return "\n".join(lines)
 
 
+def summary_line(group: GroupResult) -> str:
+    """One line of numbers and labels for a group."""
+    reps = group.replicates
+
+    def per_replicate(name: str, values: Iterable[tuple[str, float | None]]) -> str:
+        return f"{name} " + " ".join(f"r{rep} {_rate(value)}" for rep, value in values)
+
+    parts = [
+        f"{_short(group.key_values['model'])} family={_short(group.label)} "
+        + _settings(group, skip=("model",)),
+        per_replicate("omit", ((k, r.omit_discrimination) for k, r in reps.items())),
+        per_replicate("add/change", ((k, r.change_discrimination) for k, r in reps.items())),
+        per_replicate("detection", ((k, r.detection_rate) for k, r in reps.items())),
+        per_replicate("clean", ((k, r.clean_flag_rate) for k, r in reps.items())),
+        f"majority detection {_rate(group.majority_detection_rate)} "
+        f"clean {_rate(group.majority_clean_rate)}",
+        f"known-only majority detection {_rate(group.known_majority_detection_rate)} "
+        f"clean {_rate(group.known_majority_clean_rate)}",
+    ]
+    return " | ".join(parts)
+
+
+def print_summary(groups: Sequence[GroupResult], *, scored: int, skipped: int) -> None:
+    for label, heading in (
+        (COMPLETE, None),
+        (DEVELOPMENT_COMPLETE, "Development complete — not comparable to published figures"),
+    ):
+        chosen = [g for g in groups if g.comparable and g.coverage_label == label]
+        if heading:
+            print(f"\n== {heading} ==")
+        for group in chosen:
+            print(summary_line(group))
+        if not chosen:
+            print(f"(no {label} groups)")
+    partial = sum(g.coverage_label == PARTIAL for g in groups)
+    print(
+        f"\n{scored} file(s) scored, skipped {skipped} file(s) with no scored records; "
+        f"{len(groups)} group(s), {partial} with partial coverage or not comparable"
+    )
+
+
 def print_report(groups: Sequence[GroupResult], *, scored: int, skipped: int) -> None:
     comparable = [g for g in groups if g.comparable]
     other = [g for g in groups if not g.comparable]
     for group in comparable:
         print(format_group(group) + "\n")
     if other:
-        print("== Not comparable to published figures (smoke runs or the frozen master list) ==\n")
+        print(
+            "== Not comparable to published figures "
+            "(no dataset version, smoke runs or the frozen master list) ==\n"
+        )
         for group in other:
             print(format_group(group) + "\n")
     print(

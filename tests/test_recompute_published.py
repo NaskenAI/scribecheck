@@ -140,19 +140,18 @@ def test_conflicting_errored_duplicates_are_excluded() -> None:
     assert result.omit_n == 0 and result.detection_n == 0 and result.conflicts == 1
 
 
-def test_labels() -> None:
-    paths = [
-        Path("records/w1/scored.json"),
-        Path("judge_scores/judgements__judges__m1__run1__scored.json"),
-        Path("judge_scores/judgements__judges__m2__run1__scored.json"),
-        Path("judge_scores/validation__sitting__scored.json"),
-    ]
-    assert RECOMPUTE.labels(paths) == [
-        "w1",
-        "run1:judgements__judges__m1__run1__scored",
-        "run1:judgements__judges__m2__run1__scored",
-        "sitting",
-    ]
+def test_source_reads_family_and_folder_timestamp() -> None:
+    source = RECOMPUTE.source
+    raw = Path("raw/judgements/judges/w2-power/20260818-162144-d710faf-r1/w2_power.json")
+    flat = Path("judge_scores/judgements__judges__w2-power__20260819-090000-bbbbbbb-r2__x.json")
+    assert source(raw) == RECOMPUTE.Source("w2-power", "20260818-162144")
+    assert source(flat) == RECOMPUTE.Source("w2-power", "20260819-090000")
+    assert source(Path("records/w1/scored.json")) == RECOMPUTE.Source("w1", None)
+    assert source(Path("judge_scores/validation__sitting__scored.json")) == RECOMPUTE.Source(
+        "sitting", None
+    )
+    undated = Path("raw/judgements/judges/w2-strong/latest/scored.json")
+    assert source(undated) == RECOMPUTE.Source("w2-strong", None)
 
 
 def test_bad_pairs_file_exits_1(tmp_path: Path) -> None:
@@ -337,3 +336,150 @@ def test_main_prints_groups_sections_and_no_text(
     clean = next(line for line in block.splitlines() if "clean flag rate:" in line)
     assert "| majority 1/4 0.250 | known-only majority 1/4 0.250" in clean
     assert "skipped 2 file(s)" in out and "parse failures excluded in total: 5" in out
+
+
+# Run shards: one run spread over several timestamped folders of one family.
+
+SHARD_RUN = {**RUN_A, "arm": "power-gepa-high", "cell": "power"}
+SHARD_FOLDERS = (
+    "20260818-162144-d710faf-r1",
+    "20260818-170000-a1b2c3d-r1",
+    "20260819-090000-bbbbbbb-r1",
+)
+CLEAN_SCORES = (("c1", 0.8), ("c2", 0.5), ("c3", 0.3))
+SHARDS = {
+    SHARD_FOLDERS[0]: [
+        _run(SHARD_RUN, 1, _clean("c1", 0.8, False)),
+        _run(SHARD_RUN, 1, _errored("c1", 0.9, False)),  # replaced by shard 2
+        _run(SHARD_RUN, 1, _clean("c2", 0.5, False)),
+        _run(SHARD_RUN, 1, _errored("c2", 0.2, True)),  # replaced by shard 3
+    ],
+    SHARD_FOLDERS[1]: [
+        _run(SHARD_RUN, 1, _clean("c3", 0.3, True)),
+        _run(SHARD_RUN, 1, _errored("c3", 0.1, True)),
+        _run(SHARD_RUN, 1, _errored("c1", 0.2, True)),
+    ],
+    SHARD_FOLDERS[2]: [
+        _run(SHARD_RUN, 1, _errored("c2", 0.0, True), parse_failure=True),  # latest, then fails
+        *[_run(SHARD_RUN, 2, _clean(c, a, False)) for c, a in CLEAN_SCORES],
+        _run(SHARD_RUN, 2, _errored("c1", 0.2, True)),
+        _run(SHARD_RUN, 2, _errored("c2", 0.6, False)),
+        _run(SHARD_RUN, 2, _errored("c3", 0.1, True)),
+    ],
+}  # fmt: skip
+
+
+def _shard_files() -> list[tuple[Any, list[dict[str, Any]]]]:
+    return [(RECOMPUTE.Source("w2-power", folder[:15]), rows) for folder, rows in SHARDS.items()]
+
+
+def test_shards_of_one_run_form_one_group() -> None:
+    (group,) = RECOMPUTE.analyse_files(_shard_files(), TYPES)
+    assert group.label == "w2-power" and group.files == 3
+    assert list(group.replicates) == ["1", "2"] and group.replicate_count == 2
+    assert group.coverage == {"1": (3, 3), "2": (3, 3)}
+    assert group.coverage_label == "partial coverage"
+
+
+def test_latest_shard_replaces_older_rows_before_parse_failures_drop() -> None:
+    (group,) = RECOMPUTE.analyse_files(_shard_files(), TYPES)
+    assert group.replaced == 2 and group.parse_failures == 1
+    r1, r2 = group.replicates.values()
+    assert (r1.omit_n, r1.omit_wins) == (2, 2)  # c1 from shard 2 (a win), c2 failed in shard 3
+    assert (r1.detection_flagged, r1.detection_n) == (2, 2)
+    assert (r1.clean_flagged, r1.clean_n) == (1, 3)
+    assert (r2.omit_n, r2.omit_wins) == (3, 2)
+    assert group.omit_mean == pytest.approx((1.0 + 2 / 3) / 2)
+    assert (group.majority_detection_flagged, group.majority_detection_n) == (2, 3)
+    assert (group.known_majority_detection_flagged, group.known_majority_detection_n) == (2, 3)
+    assert (group.majority_clean_flagged, group.majority_clean_n) == (0, 3)
+
+
+def _covering(run: dict[str, Any], errored: int, clean: int, replicate: int = 1) -> list[Any]:
+    """A replicate covering `errored` errored notes over `clean` consultations."""
+    rows = [_run(run, replicate, _clean(f"k{i}", 0.9, False)) for i in range(clean)]
+    for i in range(errored):
+        row = _errored(f"k{i % clean}", 0.1, True)
+        row.update(
+            pair_id=f"s|k{i % clean}|e{i}|f1", note_key=f"s|k{i % clean}|e{i}", pair_type="omit"
+        )
+        rows.append(_run(run, replicate, row))
+    return rows
+
+
+RUN_CONFIRM = {**RUN_A, "arm": "pipeline", "dataset_version": "factorial-v1-armconfirm"}
+RUN_DEV = {**RUN_A, "arm": "ragas"}
+RUN_PARTIAL = {**RUN_A, "arm": "geval"}
+COVERAGE_FILES = {
+    "complete": _covering(RUN_A, 495, 112) + _covering(RUN_A, 495, 112, replicate=2),
+    "confirm": _covering(RUN_CONFIRM, 151, 47),
+    "development": _covering(RUN_DEV, 265, 65) + _covering(RUN_DEV, 265, 65, replicate=2),
+    # replicate 2 is one errored note short, so the group is partial
+    "partial": _covering(RUN_PARTIAL, 265, 65) + _covering(RUN_PARTIAL, 264, 65, replicate=2),
+}
+
+
+def _coverage_groups() -> dict[str, Any]:
+    files = [(RECOMPUTE.Source(name, None), rows) for name, rows in COVERAGE_FILES.items()]
+    return {g.label: g for g in RECOMPUTE.analyse_files(files, TYPES)}
+
+
+def test_coverage_labels() -> None:
+    groups = _coverage_groups()
+    assert groups["complete"].coverage == {"1": (495, 112), "2": (495, 112)}
+    assert groups["complete"].coverage_label == "complete"
+    assert groups["confirm"].coverage_label == "complete"
+    assert groups["development"].coverage_label == "development complete"
+    assert groups["partial"].coverage == {"1": (265, 65), "2": (264, 65)}
+    assert groups["partial"].coverage_label == "partial coverage"
+
+
+def test_coverage_counts_parse_failures() -> None:
+    rows = _covering(RUN_DEV, 265, 65)
+    rows[-1]["parse_failure"] = True
+    (group,) = RECOMPUTE.analyse_files([(RECOMPUTE.Source("dev", None), rows)], TYPES)
+    assert group.coverage == {"1": (265, 65)} and group.parse_failures == 1
+    assert group.coverage_label == "development complete"
+
+
+def test_missing_or_null_dataset_version_is_not_comparable() -> None:
+    missing = {k: v for k, v in RUN_A.items() if k != "dataset_version"}
+    rows = [
+        _run(missing, 1, _clean("c1", 0.5, False)),
+        _run({**RUN_A, "dataset_version": None}, 1, _clean("c1", 0.5, False)),
+    ]
+    groups = RECOMPUTE.analyse("w5", rows, TYPES)
+    assert sorted(g.key_values["dataset_version"] for g in groups) == ["(missing)", "(null)"]
+    assert not any(g.comparable for g in groups)
+
+
+def test_summary_lists_complete_then_development_groups(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    records, pairs = build_fixture(tmp_path)
+    judges = records / "judgements" / "judges"
+    for folder, rows in SHARDS.items():
+        _write(judges / "w2-power" / folder / "w2_power.json", {"records": rows})
+    for name, rows in COVERAGE_FILES.items():
+        _write(judges / f"w2-{name}" / "20260820-120000-c0ffee1-r1" / "w2.json", {"records": rows})
+    assert RECOMPUTE.main([str(records), "--pairs", str(pairs), "--summary"]) == 0
+    out = capsys.readouterr().out
+    assert SENTINEL not in out
+    complete, heading, development = out.partition(
+        "Development complete — not comparable to published figures"
+    )
+    assert heading
+    lines = [line for line in complete.splitlines() if "family=" in line]
+    assert [line.split("family=")[1].split()[0] for line in lines] == ["w2-complete", "w2-confirm"]
+    first = lines[0]
+    assert first.startswith("openai/gpt-5.4 family=w2-complete arm=B2 cell=B2-F-bin-k1")
+    assert "dataset=factorial-v1 " in first
+    assert "| omit r1 1.000 r2 1.000 |" in first and "| add/change r1 – r2 – |" in first
+    assert "| detection r1 1.000 r2 1.000 | clean r1 0.000 r2 0.000 |" in first
+    assert "| majority detection 1.000 clean 0.000" in first
+    assert "| known-only majority detection 1.000 clean 0.000" in first
+    dev_lines = [line for line in development.splitlines() if "family=" in line]
+    assert [line.split("family=")[1].split()[0] for line in dev_lines] == ["w2-development"]
+    for absent in ("w2-partial", "w2-power", "[w1]", "w2-confirm"):
+        assert absent not in development
+    assert "w2-partial" not in complete and "w2-power" not in complete
