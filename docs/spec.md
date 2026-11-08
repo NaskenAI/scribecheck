@@ -372,6 +372,20 @@ fail_confidence = ["certain", "confirmed"]
 
 [symptoms]
 "wheezy" = "wheezing"
+
+[model]          # full mode; keys come from environment variables only
+provider = "anthropic"                    # or "openai" for any OpenAI-compatible endpoint
+name = "claude-sonnet-5-5"
+effort = "low"                            # Anthropic: one fixed level for the run
+cache_ttl = "1h"                          # Anthropic prompt caching: "5m" or "1h"
+
+[model.prices]   # USD per million tokens, from the provider's price list
+input = 0.0
+output = 0.0
+batch_multiplier = 0.5
+
+[budget]
+cost_cap_usd = 10.0
 ```
 
 ### Plugins
@@ -402,13 +416,15 @@ The checker talks only to a model endpoint the user configures, sends nothing an
 
 **Backends.** Any OpenAI-compatible chat endpoint (Ollama, vLLM, LM Studio, llama.cpp server, Azure OpenAI, OpenAI), plus an Anthropic adapter. Calls go through `httpx` directly rather than an LLM framework, to keep the dependency tree small.
 
-**Model output handling.** Every call asks for JSON, which is validated against a schema; one retry on a parse failure, after which the item is reported as unchecked. Calls use temperature 0 and a fixed seed where the backend supports one, and every report records the model name and version. Run-to-run stability is measured for each supported model and published as a release metric. Minimum model guidance, including the minimum context length, is published from milestone 1 results, not guessed.
+**Model output handling.** Every call asks for JSON, which is validated against a schema; one retry on a parse failure, with the validation error added to the request, after which the item is reported as unchecked (`model_parse_failure`). A refusal is reported as `model_refusal`, a call that kept failing after transport retries as `model_error`, and a call the cost cap stopped as `cost_cap_reached`. A rejected setup (a bad request shape, key, model or endpoint) stops the run with exit code 2. OpenAI-compatible calls use temperature 0 and a fixed seed. The Anthropic API (version `2026-10-21`) accepts no sampling parameters on any model, so Anthropic calls send none and rely on one fixed effort level per run; the report records `temperature: null` there. Every report records the model requested, the model id the provider reported, and the endpoint host. Run-to-run stability is measured for each supported model and published as a release metric. Minimum model guidance, including the minimum context length, is published from milestone 1 results, not guessed.
 
 **Privacy rules:**
 
 - No telemetry, analytics or update checks.
 - Rules mode makes no network calls; a test runs it with the network blocked to prove this.
 - A warning is printed when the model endpoint is not on the local machine or local network.
+- API keys are read only from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or one named by `[model] api_key_env`), never from the config file, and never appear in logs or reports. A `base_url` may not carry a user name, password or query, and `[model] query` may not carry a key. Errors repeat only the provider's HTTP status and error type, never its message, because some servers quote the input there; and a failure's detail never quotes the model's reply.
+- Token usage is always recorded. Cost is computed only from prices the user sets in the config (`[model.prices]`, in USD per million tokens); none is built in. A per-run cap (`[budget] cost_cap_usd`) stops new calls once the estimated spend reaches it, and the remaining items are reported as unchecked (`cost_cap_reached`).
 - Logs contain no transcript or note text unless `--debug-log` is set, which prints a warning.
 - The response cache is off by default, because it would store patient text; turning it on requires a directory path, and it is meant for synthetic test fixtures in CI.
 - Reports contain evidence quotes, so the docs tell users to treat reports as patient data.

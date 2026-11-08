@@ -118,9 +118,9 @@ The goal is all three passes working with a language model, on both the API mode
 
 Week 2:
 
-- [ ] Model client for OpenAI-compatible endpoints over `httpx`, plus the Anthropic adapter, which is required because Claude Sonnet 5.5 is the headline API model: Batch API, prompt caching (transcript first in every prompt) and one fixed effort level
-- [ ] JSON schema validation with one retry, temperature 0 and a fixed seed, and the model name and version written to every report
-- [ ] Cost tracking and the per-run cost cap
+- [x] Model client for OpenAI-compatible endpoints over `httpx`, plus the Anthropic adapter, which is required because Claude Sonnet 5.5 is the headline API model: Batch API, prompt caching (transcript first in every prompt) and one fixed effort level (`src/scribecheck/model/`; tested against mocked HTTP only; `scripts/smoke_model.py` makes one tiny real call per adapter when a person runs it with their own key). The fixed effort level is still to choose, by measurement on development data, before Gate 2
+- [x] JSON schema validation with one retry, temperature 0 and a fixed seed, and the model name and version written to every report. The Anthropic API (version `2026-10-21`) rejects `temperature`, `top_p` and `top_k` on every model, so the Anthropic adapter sends none and the report records `temperature: null`; the OpenAI-compatible adapter sends temperature 0 and a fixed seed. Writing the model info into full-mode reports happens when the passes are wired up
+- [x] Cost tracking and the per-run cost cap: usage is always recorded; cost comes only from `[model.prices]` in config; once spend reaches `[budget] cost_cap_usd` no further call is made and the remaining items are unchecked with `cost_cap_reached` (a batch is checked before submission against a worst-case estimate)
 - [ ] Transcript chunking with overlap, and merging of facts across chunks
 - [ ] Batch mode extracts facts once per transcript and reuses them across that transcript's notes
 - [ ] Pass A: extraction from the transcript only, audit with severity grading, per-fact presence check with the whole note, and the second look
