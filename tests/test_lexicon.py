@@ -360,3 +360,49 @@ def test_extra_ingredient_loader_rejects_existing_names() -> None:
         _add_extra_ingredients(entries, generics, ["domperidone"])
     _add_extra_ingredients(entries, generics, ["examplazole"])
     assert generics["examplazole"] == ("examplazole",)
+
+
+# Review status: matches that rely on a data file or entry marked "reviewed": false
+
+
+@pytest.mark.parametrize(
+    ("text", "reviewed"),
+    [
+        ("metformin", True),  # RxNorm ingredient
+        ("Tylenol", True),  # RxNorm brand
+        ("Augmentin", True),
+        ("acetaminophen / codeine", True),
+        ("metfromin", True),  # spelling tolerance is reported by `fuzzy`, not here
+        ("paracetamol", False),  # inn_usan.json
+        ("co-codamol", False),  # inn_usan.json
+        ("domperidone", False),  # ingredients_extra.json
+    ],
+)
+def test_drug_reviewed_flag(text: str, reviewed: bool) -> None:
+    assert _one_drug(text).reviewed is reviewed
+
+
+def test_user_brand_is_unreviewed_when_resolved_through_an_unreviewed_name() -> None:
+    assert _one_drug("Examplol", brands={"Examplol": ["acetaminophen"]}).reviewed is True
+    assert _one_drug("Examplol", brands={"Examplol": ["paracetamol"]}).reviewed is False
+    assert _one_drug("Examplol", brands={"Examplol": ["domperidone"]}).reviewed is False
+
+
+@pytest.mark.parametrize(
+    ("text", "reviewed"),
+    [
+        ("chest pain", True),  # SYMP label
+        ("stomach cramp", True),  # SYMP exact synonym
+        ("tiredness", False),  # merged form, awaiting review
+        ("blood in urine", False),  # lay phrasing, awaiting review
+        ("short of breath", False),  # lay phrasing
+    ],
+)
+def test_symptom_reviewed_flag(text: str, reviewed: bool) -> None:
+    (found,) = find_symptoms(text)
+    assert found.reviewed is reviewed
+
+
+def test_user_symptom_phrasing_is_the_users_own_and_counts_as_reviewed() -> None:
+    (found,) = find_symptoms("legs feel heavy", extra={"legs feel heavy": "leg weakness"})
+    assert (found.via, found.reviewed) == ("user", True)

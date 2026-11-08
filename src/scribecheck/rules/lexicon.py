@@ -27,6 +27,10 @@ international names of 7 or more letters (brand names must be spelt exactly), an
 never for a name within one edit of another lexicon name, nor for an English word or
 inflection one edit from a name ("aspiring", "creating").
 
+Every match reports whether it relies on data awaiting review (`reviewed` False): an
+international or extra ingredient name, a user brand resolved through one, or a symptom
+lay phrasing or merged form. Matches with `reviewed` False never give a certain flag.
+
 Some names never match on their own: brand names that are everyday words or first
 names ("Align", "Julie") and ingredients that are everyday words or lab analytes
 ("water", "sodium"). Both lists are in drugs.json. A user brand map entry can still
@@ -62,6 +66,8 @@ class DrugMatch(Match):
     via: DrugVia
     fuzzy: bool = False
     """True when matched with one spelling edit."""
+    reviewed: bool = True
+    """False when the match relies on a data file or entry marked "reviewed": false."""
 
 
 class SymptomMatch(Match):
@@ -71,6 +77,8 @@ class SymptomMatch(Match):
     symp_id: str | None
     """The SYMP ID, or None for a user term outside the lexicon."""
     via: SymptomVia
+    reviewed: bool = True
+    """False for a lay phrasing or merged form awaiting clinical review."""
 
 
 def find_drugs(
@@ -97,6 +105,7 @@ def find_drugs(
                 rxcui=entry.rxcui,
                 via=entry.via,
                 fuzzy=fuzzy,
+                reviewed=entry.reviewed,
             )
         )
     return tuple(results)
@@ -115,7 +124,7 @@ def find_symptoms(text: str, *, extra: Mapping[str, str] | None = None) -> tuple
         for phrase, term in extra.items():
             known = labels.get(term.casefold())
             additions[phrase] = _Symptom(
-                known.term if known else term, known.symp_id if known else None, "user"
+                known.term if known else term, known.symp_id if known else None, "user", True
             )
         index = index.extended(additions.items())
     return tuple(
@@ -126,6 +135,7 @@ def find_symptoms(text: str, *, extra: Mapping[str, str] | None = None) -> tuple
             term=entry.term,
             symp_id=entry.symp_id,
             via=entry.via,
+            reviewed=entry.reviewed,
         )
         for start, end, entry, _ in index.scan(text)
     )
@@ -352,6 +362,7 @@ class _Drug:
     generic: tuple[str, ...]
     rxcui: str | None
     via: DrugVia
+    reviewed: bool = True
 
 
 def _spelling_tolerant(entry: _Drug) -> bool:
@@ -365,10 +376,13 @@ class _DrugIndex(_Index[_Drug]):
         entries: dict[Key, _Drug],
         generics: dict[str, tuple[str, ...]],
         fuzzy_blocked: frozenset[str],
+        unreviewed: frozenset[str] = frozenset(),
     ) -> None:
         super().__init__(entries, fuzzy=_spelling_tolerant, fuzzy_blocked=fuzzy_blocked)
         self.generics = generics
         """Ingredient and international names (casefolded) -> US generic names."""
+        self.unreviewed = unreviewed
+        """Names in `generics` (casefolded) that come from a file awaiting review."""
 
     def with_user_brands(self, brands: Mapping[str, Sequence[str]]) -> _DrugIndex:
         entries = dict(self.entries)
@@ -387,8 +401,9 @@ class _DrugIndex(_Index[_Drug]):
             key = _key(brand)
             if key is None:
                 raise ValueError(f"cannot match brand {brand!r}: use words separated by spaces")
-            entries[key] = _Drug(brand, tuple(sorted(set(generic))), None, "user_brand")
-        return _DrugIndex(entries, self.generics, self.fuzzy_blocked)
+            reviewed = all(name.casefold() not in self.unreviewed for name in names)
+            entries[key] = _Drug(brand, tuple(sorted(set(generic))), None, "user_brand", reviewed)
+        return _DrugIndex(entries, self.generics, self.fuzzy_blocked, self.unreviewed)
 
 
 def _read(name: str) -> Any:
@@ -418,17 +433,27 @@ def _drug_index() -> _DrugIndex:
         if key is not None and name.casefold() not in blocked_ingredients:
             entries.setdefault(key, _Drug(name, generic, rxcui, "ingredient"))
 
-    for pair in _read("inn_usan.json")["pairs"]:
+    unreviewed: set[str] = set()
+    inn = _read("inn_usan.json")
+    for pair in inn["pairs"]:
         generic = tuple(sorted({g for us in pair["us"] for g in generics[us.casefold()]}))
         international = pair["international"]
-        generics.setdefault(international.casefold(), generic)
+        if international.casefold() not in generics:
+            generics[international.casefold()] = generic
+            if not inn["reviewed"]:
+                unreviewed.add(international.casefold())
         key = _key(international)
         if key is not None:
-            entries.setdefault(key, _Drug(international, generic, None, "international"))
+            entries.setdefault(
+                key, _Drug(international, generic, None, "international", inn["reviewed"])
+            )
 
+    extra = _read("ingredients_extra.json")
     _add_extra_ingredients(
-        entries, generics, [e["name"] for e in _read("ingredients_extra.json")["ingredients"]]
+        entries, generics, [e["name"] for e in extra["ingredients"]], reviewed=extra["reviewed"]
     )
+    if not extra["reviewed"]:
+        unreviewed.update(e["name"].casefold() for e in extra["ingredients"])
 
     for rxcui, name, ingredients in drugs["brands"]:
         key = _key(name)
@@ -439,11 +464,17 @@ def _drug_index() -> _DrugIndex:
 
     # Blocked names never match, not even as a near spelling of another name.
     never = blocked_ingredients | blocked_brands
-    return _DrugIndex(entries, generics, frozenset(drugs["fuzzy_blocked"]) | never)
+    return _DrugIndex(
+        entries, generics, frozenset(drugs["fuzzy_blocked"]) | never, frozenset(unreviewed)
+    )
 
 
 def _add_extra_ingredients(
-    entries: dict[Key, _Drug], generics: dict[str, tuple[str, ...]], names: Iterable[str]
+    entries: dict[Key, _Drug],
+    generics: dict[str, tuple[str, ...]],
+    names: Iterable[str],
+    *,
+    reviewed: bool = True,
 ) -> None:
     """Add generic names missing from RxNorm; each must be new and matchable."""
     for name in names:
@@ -451,7 +482,7 @@ def _add_extra_ingredients(
         if key is None or key in entries or name.casefold() in generics:
             raise ValueError(f"ingredients_extra.json: {name!r} is not a new matchable name")
         generics[name.casefold()] = (name,)
-        entries[key] = _Drug(name, (name,), None, "extra_ingredient")
+        entries[key] = _Drug(name, (name,), None, "extra_ingredient", reviewed)
 
 
 # Symptom data
@@ -462,23 +493,25 @@ class _Symptom:
     term: str
     symp_id: str | None
     via: SymptomVia
+    reviewed: bool = True
 
 
 @cache
 def _symptom_index() -> _Index[_Symptom]:
     entries: dict[Key, _Symptom] = {}
     for term in _read("symptoms.json")["terms"]:
-        forms: list[tuple[str, SymptomVia]] = []
+        forms: list[tuple[str, SymptomVia, bool]] = []
         if term["match_label"]:
-            forms.append((term["label"], "label"))
-        forms += [(synonym, "synonym") for synonym in term["synonyms"]]
+            forms.append((term["label"], "label", True))
+        forms += [(synonym, "synonym", True) for synonym in term["synonyms"]]
         for merged in term["merged"]:
+            reviewed = merged.get("reviewed", True)
             if merged["match_label"]:
-                forms.append((merged["label"], "synonym"))
-            forms += [(synonym, "synonym") for synonym in merged["synonyms"]]
-        forms += [(lay["text"], "lay") for lay in term["lay"]]
-        for form, via in forms:
+                forms.append((merged["label"], "synonym", reviewed))
+            forms += [(synonym, "synonym", reviewed) for synonym in merged["synonyms"]]
+        forms += [(lay["text"], "lay", lay.get("reviewed", True)) for lay in term["lay"]]
+        for form, via, reviewed in forms:
             key = _key(form)
             if key is not None:
-                entries.setdefault(key, _Symptom(term["label"], term["id"], via))
+                entries.setdefault(key, _Symptom(term["label"], term["id"], via, reviewed))
     return _Index(entries)
