@@ -143,6 +143,7 @@ The goal is to tune on development data only and freeze the settings before the 
 
 - [ ] Before starting, check the week's GPU hours against M3's seconds per note, and rent a second GPU if they don't fit (benchmark data only)
 - [ ] Re-run both published methods on the held-out subset with the local model, adapting the harness if week 0 showed it is needed. This run touches the encrypted held-out data, so it is run by a person in a normal terminal, never by Claude Code. If the local model cannot run route two, record that baseline as not applicable rather than reporting a misleading number.
+- [ ] Route one (the three-stage pipeline, tier B3) uses three model families: Claude Opus 5 for fact extraction (stage 1), GPT-5.5 for the audit and the refute pass (stages 1b and 3), and GPT-5.4 for the per-note check (stage 2). The Claude baseline is therefore a single-model variant with every stage on Claude Sonnet 5.5. That needs model overrides for stages 1, 1b and 3 (the harness's `--check-role` covers stage 2 only), and the preprint must describe it as a variant of the published method. The published multi-model numbers remain the reference.
 - [ ] State the minimum detectable gain for the local-model comparison before any held-out run of scribecheck
 - [ ] Tune prompts and settings on the local model, using a fixed 20-consultation development subset
 - [ ] Run scribecheck on the 65 development consultations with the local model
