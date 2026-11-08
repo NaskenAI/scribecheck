@@ -23,9 +23,11 @@ Rules:
    development consultation with certainty; anything uncertain is left out and listed.
 5. Nothing from judgements/, validation/ or notes/ is copied, except a reduced copy of each
    scored-records file in --dev-out/judge_scores/: rows for development consultations only,
-   with the fields in SCORE_FIELDS (ids, scores and the run's settings, so replicates, arms
-   and models can be told apart). Fields in NEVER_KEPT, which can carry text, are never
-   kept. A kept value that could hold text aborts the run.
+   with those of the fields in SCORE_FIELDS that the row has (ids, scores and the run's
+   settings, so replicates, arms and models can be told apart). A field the row lacks stays
+   missing rather than becoming null, so a missing value and a null one stay distinct.
+   Fields in NEVER_KEPT, which can carry text, are never kept. A kept value that could hold
+   text aborts the run.
 6. Before anything is written, the counts must match EXPECTED_COUNTS, and both output
    folders must be empty or absent and outside --raw; otherwise the run stops and writes
    nothing.
@@ -413,7 +415,7 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
             continue
         kept, dropped = [], 0
         for row in records:
-            reduced = {f: row.get(f) for f in SCORE_FIELDS}
+            reduced = {f: row[f] for f in SCORE_FIELDS if f in row}
             for f, value in reduced.items():
                 if not _is_scalar(value) or (
                     isinstance(value, str) and len(value) > MAX_SCORE_STRING

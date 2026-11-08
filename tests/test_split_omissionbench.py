@@ -122,6 +122,24 @@ def _score_row(stratum: str, consultation: str, pair_id: str | None) -> dict[str
     }
 
 
+def varied_rows(dev: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Development rows across replicates, arms and models, with fields missing or null."""
+    stratum, consultation, pair_id = dev[0]["stratum"], dev[0]["id"], dev[0]["pair_id"]
+    base = {**_score_row(stratum, consultation, pair_id), "fact_key": SENTINEL}
+    base.update(samples=[SENTINEL], totals={"text": SENTINEL})
+    rows = [
+        {**base, "replicate": replicate, "run_id": f"run-{replicate}"} for replicate in (1, 2, 3)
+    ]
+    rows.append({**base, "arm": "gepa-optimized", "arm_family": "gepa"})  # second arm, same file
+    rows.append({**base, "model": "google/gemini-3.1-pro-preview", "model_key": "gemini31"})
+    rows.append({**base, "parse_failure": True, "aggregate": None, "flagged": None})
+    rows.append({**base, "dataset_version": "factorial-v1-armsmoke"})
+    rows.append({k: v for k, v in base.items() if k not in ("tier", "replicate")})  # missing
+    rows.append({**base, "tier": None})  # null, which must stay apart from missing
+    rows.append(_score_row(stratum, consultation, None))  # its clean twin
+    return rows
+
+
 def build_fixture(
     root: Path,
     *,
@@ -186,6 +204,7 @@ def build_fixture(
     rows = [_score_row(p["stratum"], p["id"], p["pair_id"]) for p in dev[:20] + heldout[:20]]
     rows += [_score_row(s, c, None) for s, c in DEV_KEYS[:5] + HELDOUT_KEYS[:5] + OTHER_KEYS[:1]]
     _write(raw / "judgements" / "w1" / "scored_records.json", {"model": "x", "records": rows})
+    _write(raw / "judgements" / "w3" / "varied_records.json", {"records": varied_rows(dev)})
     # The published held-out subset: 151 of the 230 held-out pairs, covering all 47
     # consultations (the first pair of each, then the next ones in order).
     firsts = {p["key"]: p for p in reversed(heldout)}
@@ -275,6 +294,7 @@ def test_judge_scores_are_reduced_and_development_only(split: tuple[Path, Path, 
     assert [f.name for f in files] == [
         "judgements__w1__scored_records.json",
         "judgements__w2__pipeline_scored_records.json",
+        "judgements__w3__varied_records.json",
     ]
     w1 = json.loads(files[0].read_text())["records"]
     assert len(w1) == 20 + 5
@@ -405,10 +425,31 @@ def test_judge_scores_keep_run_fields_and_never_text_fields(
     assert not set(SPLIT.SCORE_FIELDS) & SPLIT.NEVER_KEPT
     for path in (dev_out / "judge_scores").iterdir():
         for row in json.loads(path.read_text())["records"]:
-            assert set(row) == set(SPLIT.SCORE_FIELDS)
-            assert row["arm"] == "B2" and row["replicate"] == 1
+            assert set(row) <= set(SPLIT.SCORE_FIELDS)
             assert not set(row) & SPLIT.NEVER_KEPT
+            if "varied" not in path.name:  # every field present in w1 and w2
+                assert set(row) == set(SPLIT.SCORE_FIELDS)
+                assert row["arm"] == "B2" and row["replicate"] == 1
         assert SENTINEL not in path.read_text()
+
+
+def test_judge_scores_keep_only_the_fields_a_row_has(split: tuple[Path, Path, str]) -> None:
+    dev_out, _, _ = split
+    expected = [
+        {k: v for k, v in row.items() if k in SPLIT.SCORE_FIELDS}
+        for row in varied_rows(_pairs(dev_out)["pairs"])
+    ]
+    path = dev_out / "judge_scores" / "judgements__w3__varied_records.json"
+    kept = json.loads(path.read_text())["records"]
+    assert kept == expected
+    assert [r["replicate"] for r in kept[:3]] == [1, 2, 3]
+    assert {r["arm"] for r in kept} == {"B2", "gepa-optimized"}
+    assert {r["model"] for r in kept} == {"openai/gpt-5.4", "google/gemini-3.1-pro-preview"}
+    assert sum(r["parse_failure"] for r in kept) == 1
+    assert {r["dataset_version"] for r in kept} == {"factorial-v1", "factorial-v1-armsmoke"}
+    missing, null = kept[-3], kept[-2]
+    assert "tier" not in missing and "replicate" not in missing  # still missing, not null
+    assert "tier" in null and null["tier"] is None
 
 
 def test_long_verdict_aborts(tmp_path: Path) -> None:
