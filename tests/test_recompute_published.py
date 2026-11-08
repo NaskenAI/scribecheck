@@ -209,7 +209,26 @@ GROUP_B = [
 ]
 GROUP_C = [_run(RUN_C, 1, _clean("c1", 0.5, False)), _run(RUN_C, 1, _errored("c1", 0.5, False))]
 GROUP_D = [_run(RUN_D, 1, _clean("c1", 0.4, False)), _run(RUN_D, 1, _errored("c1", 0.1, True))]
-REPLICATED = GROUP_A + GROUP_B + GROUP_C + GROUP_D
+# Group F: three replicates where parse failures hit notes that are scored in other
+# replicates. Each failed row would be a win and a flag if it were counted.
+RUN_F = {**RUN_A, "arm": "checklist", "cell": "checklist", "tier": "B3"}
+FAILED = {"parse_failure": True}
+GROUP_F = [
+    _run(RUN_F, replicate, _clean(consultation, 0.8, False))
+    for replicate in (1, 2, 3)
+    for consultation in ("c1", "c2", "c3")
+] + [
+    _run(RUN_F, 1, _errored("c1", 0.2, True)),
+    _run(RUN_F, 1, _errored("c2", 0.3, True)),
+    _run(RUN_F, 1, _errored("c3", 0.1, True)),
+    _run(RUN_F, 2, _errored("c1", 0.2, True)),
+    _run(RUN_F, 2, _errored("c2", 0.9, False)),
+    _run(RUN_F, 2, _errored("c3", 0.0, True), **FAILED),
+    _run(RUN_F, 3, _errored("c1", 0.0, True), **FAILED),
+    _run(RUN_F, 3, _errored("c2", 0.0, True), **FAILED),
+    _run(RUN_F, 3, _errored("c3", 0.0, True), **FAILED),
+]
+REPLICATED = GROUP_A + GROUP_B + GROUP_C + GROUP_D + GROUP_F
 SMOKE = [_run(RUN_E, 1, _clean("c1", 0.5, False)), _run(RUN_E, 1, _errored("c1", 0.1, True))]
 
 
@@ -227,6 +246,7 @@ def test_groups_split_by_arm_model_and_missing_fields() -> None:
         "B3/openai/gpt-5.4/B3",
         "B2/google/gemini-3.1-pro-preview/B2",
         "B2/google/gemini-3.1-pro-preview/(missing)",
+        "checklist/openai/gpt-5.4/B3",
     }
     assert all(g.comparable for g in groups.values())
 
@@ -244,10 +264,13 @@ def test_group_a_per_replicate_and_combined() -> None:
     assert a.change_mean == pytest.approx(0.5)
     assert [(r.detection_flagged, r.detection_n) for r in (r1, r2, r3)] == [(2, 3), (1, 3), (1, 3)]
     assert [(r.clean_flagged, r.clean_n) for r in (r1, r2, r3)] == [(1, 4), (1, 4), (1, 3)]
-    # c1 is flagged in replicates 1 and 3 (majority); c3 only in replicate 2 (not).
-    assert (a.majority_detection_flagged, a.majority_detection_n) == (1, 3)
+    # c1 is flagged in replicates 1 and 3 (majority); c3 only in replicate 2 (not). c4 failed
+    # to parse in its only replicate: not flagged in all three, and absent from known-only.
+    assert (a.majority_detection_flagged, a.majority_detection_n) == (1, 4)
+    assert (a.known_majority_detection_flagged, a.known_majority_detection_n) == (1, 3)
     # Clean c3 is flagged in replicates 1 and 3; clean c5 has two known flags, both False.
     assert (a.majority_clean_flagged, a.majority_clean_n) == (1, 4)
+    assert (a.known_majority_clean_flagged, a.known_majority_clean_n) == (1, 4)
 
 
 def test_types_come_from_pairs_then_rows() -> None:
@@ -266,6 +289,33 @@ def test_majority_needs_more_than_half() -> None:
     assert RECOMPUTE.strict_majority([True, False]) is False
     assert RECOMPUTE.strict_majority([True, True, False]) is True
     assert RECOMPUTE.strict_majority([True]) is True
+    # Over all three replicates, a lost replicate counts as not flagged.
+    assert RECOMPUTE.strict_majority([True, False], replicates=3) is False  # 1 of 2, 1 lost
+    assert RECOMPUTE.strict_majority([True, True], replicates=3) is True  # 2 of 2, 1 lost
+    assert RECOMPUTE.strict_majority([True], replicates=3) is False  # 1 of 1, 2 lost
+
+
+def test_parse_failures_drop_out_of_every_replicate_metric() -> None:
+    f = _groups()["checklist/openai/gpt-5.4/B3"]
+    assert f.parse_failures == 4 and f.rows == len(GROUP_F) - 4
+    assert list(f.replicates) == ["1", "2", "3"]
+    r1, r2, r3 = f.replicates.values()
+    assert (r1.omit_n, r1.omit_wins) == (3, 3)
+    assert (r2.omit_n, r2.omit_wins) == (2, 1)  # c3's failed row is not a win
+    assert (r3.omit_n, r3.omit_discrimination) == (0, None)
+    assert f.omit_mean == pytest.approx((1.0 + 0.5) / 2)
+    assert [(r.detection_flagged, r.detection_n) for r in (r1, r2, r3)] == [(3, 3), (1, 2), (0, 0)]
+
+
+def test_majority_readings_on_lost_replicates() -> None:
+    f = _groups()["checklist/openai/gpt-5.4/B3"]
+    # c1: 2 of 2 known, 1 lost -> flagged in both readings.
+    # c2: 1 of 2 known, 1 lost -> flagged in neither.
+    # c3: 1 of 1 known, 2 lost -> flagged only in the known-only reading.
+    assert (f.majority_detection_flagged, f.majority_detection_n) == (1, 3)
+    assert (f.known_majority_detection_flagged, f.known_majority_detection_n) == (2, 3)
+    assert (f.majority_clean_flagged, f.majority_clean_n) == (0, 3)
+    assert (f.known_majority_clean_flagged, f.known_majority_clean_n) == (0, 3)
 
 
 def test_main_prints_groups_sections_and_no_text(
@@ -276,11 +326,14 @@ def test_main_prints_groups_sections_and_no_text(
     out = capsys.readouterr().out
     assert SENTINEL not in out
     comparable, _, smoke = out.partition("Not comparable to published figures")
-    assert comparable.count("[w1]") == 4 and "[w2]" not in comparable
+    assert comparable.count("[w1]") == 5 and "[w2]" not in comparable
     assert smoke.count("[w2]") == 1 and "dataset=factorial-v1-armsmoke" in smoke
     block = comparable[comparable.index("arm=B2") :]
     assert "parse failures excluded 1" in block
     assert "omission discrimination: mean 0.556" in block
     assert "r1 0.500 (n 3, wins 1, ties 1)" in block
-    assert "majority 1/3 0.333" in block and "majority 1/4 0.250" in block
-    assert "skipped 2 file(s)" in out and "parse failures excluded in total: 1" in out
+    detection = next(line for line in block.splitlines() if "detection:" in line)
+    assert "| majority 1/4 0.250 | known-only majority 1/3 0.333" in detection
+    clean = next(line for line in block.splitlines() if "clean flag rate:" in line)
+    assert "| majority 1/4 0.250 | known-only majority 1/4 0.250" in clean
+    assert "skipped 2 file(s)" in out and "parse failures excluded in total: 5" in out

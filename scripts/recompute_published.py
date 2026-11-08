@@ -24,7 +24,10 @@ group every metric is computed per replicate:
 Replicates are then combined as the dataset card does: discrimination is the mean over
 replicates (each replicate's value is listed too), and detection and clean flag rates get a
 strict-majority result, where a note counts as flagged if it is flagged in more than half of
-the replicates whose flag for it is known.
+the group's replicates; a replicate in which the note failed to parse, or has no known flag,
+counts as not flagged, and a note seen only in failed rows still counts. Beside it is the
+"known-only majority": more than half of the replicates whose flag for the note is known,
+over the notes with at least one known flag.
 
 Within one replicate, identical duplicate rows count once; a note whose duplicates disagree
 on aggregate or flagged is left out and counted as a conflict. An errored note with no clean
@@ -117,10 +120,16 @@ class GroupResult:
     rows: int = 0
     parse_failures: int = 0
     replicates: dict[str, ReplicateResult] = field(default_factory=dict)
+    replicate_count: int = 0
+    """Distinct replicates in the group, counting those whose rows all failed to parse."""
     majority_detection_n: int = 0
     majority_detection_flagged: int = 0
     majority_clean_n: int = 0
     majority_clean_flagged: int = 0
+    known_majority_detection_n: int = 0
+    known_majority_detection_flagged: int = 0
+    known_majority_clean_n: int = 0
+    known_majority_clean_flagged: int = 0
 
     @property
     def comparable(self) -> bool:
@@ -143,6 +152,14 @@ class GroupResult:
     def majority_clean_rate(self) -> float | None:
         return _ratio(self.majority_clean_flagged, self.majority_clean_n)
 
+    @property
+    def known_majority_detection_rate(self) -> float | None:
+        return _ratio(self.known_majority_detection_flagged, self.known_majority_detection_n)
+
+    @property
+    def known_majority_clean_rate(self) -> float | None:
+        return _ratio(self.known_majority_clean_flagged, self.known_majority_clean_n)
+
 
 def _discrimination(wins: int, ties: int, n: int) -> float | None:
     return (wins + 0.5 * ties) / n if n else None
@@ -157,9 +174,16 @@ def _mean(values: Iterable[float | None]) -> float | None:
     return sum(known) / len(known) if known else None
 
 
-def strict_majority(flags: Sequence[bool]) -> bool:
-    """Flagged in more than half of the replicates whose flag is known."""
-    return sum(flags) * 2 > len(flags)
+def strict_majority(flags: Sequence[bool], replicates: int | None = None) -> bool:
+    """Flagged in more than half of the replicates.
+
+    With `replicates`, the count is over that many replicates and any without a known flag
+    count as not flagged; without it, over the replicates whose flag is known.
+    """
+    total = len(flags) if replicates is None else replicates
+    if total < len(flags):
+        raise ValueError("more known flags than replicates")
+    return sum(flags) * 2 > total
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -253,30 +277,43 @@ def analyse(
 ) -> list[GroupResult]:
     """Group a file's rows, then score each replicate and combine the replicates."""
     grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
-    failures: dict[tuple[str, ...], int] = {}
+    failed: dict[tuple[str, ...], list[dict[str, Any]]] = {}
     for row in rows:
         key = tuple(_value(row, name) for name in GROUP_FIELDS)
         grouped.setdefault(key, [])
-        if row.get("parse_failure") is True:
-            failures[key] = failures.get(key, 0) + 1
-        else:
-            grouped[key].append(row)
+        failed.setdefault(key, [])
+        (failed if row.get("parse_failure") is True else grouped)[key].append(row)
 
     results = []
     for key, members in grouped.items():
         group = GroupResult(label, dict(zip(GROUP_FIELDS, key, strict=True)))
-        group.rows, group.parse_failures = len(members), failures.get(key, 0)
+        group.rows, group.parse_failures = len(members), len(failed[key])
         by_replicate: dict[str, list[dict[str, Any]]] = {}
         for row in members:
             by_replicate.setdefault(_value(row, "replicate"), []).append(row)
         for replicate in sorted(by_replicate, key=_replicate_order):
             group.replicates[replicate] = compute(by_replicate[replicate], types)
-        _combine(group)
+        group.replicate_count = len({_value(row, "replicate") for row in members + failed[key]})
+        _combine(group, failed[key], types)
         results.append(group)
     return results
 
 
-def _combine(group: GroupResult) -> None:
+def _note_kind(row: Mapping[str, Any], types: Mapping[str, str]) -> tuple[str, str] | None:
+    """("clean", clean_key) or ("omit", note_key) for a row, as compute() classes it."""
+    if row.get("note_role") == "clean" or row.get("pair_id") is None:
+        key = row.get("clean_key")
+        return ("clean", key) if isinstance(key, str) else None
+    kind = types.get(row["pair_id"])
+    if kind is None and row.get("pair_type") in PAIR_TYPES:
+        kind = row["pair_type"]
+    key = row.get("note_key")
+    return ("omit", key) if kind == "omit" and isinstance(key, str) else None
+
+
+def _combine(
+    group: GroupResult, failed: Sequence[Mapping[str, Any]], types: Mapping[str, str]
+) -> None:
     """Strict-majority detection and clean flag rates across the group's replicates."""
     omission: dict[str, list[bool]] = {}
     clean: dict[str, list[bool]] = {}
@@ -285,10 +322,22 @@ def _combine(group: GroupResult) -> None:
             omission.setdefault(note, []).append(flag)
         for note, flag in replicate.clean_flags.items():
             clean.setdefault(note, []).append(flag)
-    group.majority_detection_n = len(omission)
-    group.majority_detection_flagged = sum(strict_majority(f) for f in omission.values())
-    group.majority_clean_n = len(clean)
-    group.majority_clean_flagged = sum(strict_majority(f) for f in clean.values())
+    group.known_majority_detection_n = len(omission)
+    group.known_majority_detection_flagged = sum(strict_majority(f) for f in omission.values())
+    group.known_majority_clean_n = len(clean)
+    group.known_majority_clean_flagged = sum(strict_majority(f) for f in clean.values())
+
+    # Notes seen only in failed rows join the primary count, never flagged.
+    every = {"omit": dict(omission), "clean": dict(clean)}
+    for row in failed:
+        kind = _note_kind(row, types)
+        if kind is not None:
+            every[kind[0]].setdefault(kind[1], [])
+    n = group.replicate_count
+    group.majority_detection_n = len(every["omit"])
+    group.majority_detection_flagged = sum(strict_majority(f, n) for f in every["omit"].values())
+    group.majority_clean_n = len(every["clean"])
+    group.majority_clean_flagged = sum(strict_majority(f, n) for f in every["clean"].values())
 
 
 def _distinct(rows: Iterable[dict[str, Any]], key: str) -> tuple[dict[str, dict[str, Any]], int]:
@@ -400,10 +449,15 @@ def _discrimination_line(
     return " | ".join(parts)
 
 
-def _rate_line(name: str, pairs: Sequence[tuple[str, int, int]], majority: tuple[int, int]) -> str:
+def _rate_line(
+    name: str,
+    pairs: Sequence[tuple[str, int, int]],
+    majority: tuple[int, int],
+    known_majority: tuple[int, int],
+) -> str:
     parts = [f"r{rep} {flagged}/{n} {_rate(_ratio(flagged, n))}" for rep, flagged, n in pairs]
-    flagged, n = majority
-    parts.append(f"majority {flagged}/{n} {_rate(_ratio(flagged, n))}")
+    for label, (flagged, n) in (("majority", majority), ("known-only majority", known_majority)):
+        parts.append(f"{label} {flagged}/{n} {_rate(_ratio(flagged, n))}")
     return f"{name}: " + " | ".join(parts)
 
 
@@ -425,7 +479,8 @@ def format_group(group: GroupResult) -> str:
     lines = [
         f"[{group.label}] {settings}",
         f"  rows {group.rows}, parse failures excluded {group.parse_failures}, "
-        f"replicates {' '.join(reps)}, types from --pairs {total.types_from_pairs} "
+        f"replicates {' '.join(reps)} (of {group.replicate_count}), "
+        f"types from --pairs {total.types_from_pairs} "
         f"/ from rows {total.types_from_rows}",
         "  " + _discrimination_line("omission discrimination", group.omit_mean, reps, True),
         "  " + _discrimination_line("add/change discrimination", group.change_mean, reps, False),
@@ -434,12 +489,14 @@ def format_group(group: GroupResult) -> str:
             "detection",
             [(k, r.detection_flagged, r.detection_n) for k, r in reps.items()],
             (group.majority_detection_flagged, group.majority_detection_n),
+            (group.known_majority_detection_flagged, group.known_majority_detection_n),
         ),
         "  "
         + _rate_line(
             "clean flag rate",
             [(k, r.clean_flagged, r.clean_n) for k, r in reps.items()],
             (group.majority_clean_flagged, group.majority_clean_n),
+            (group.known_majority_clean_flagged, group.known_majority_clean_n),
         ),
         f"  not scored: no twin {total.no_twin}, missing score {total.missing_score}, "
         f"unknown type {total.unknown_type}, conflicts {total.conflicts}",
