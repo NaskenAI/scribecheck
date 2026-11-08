@@ -126,18 +126,41 @@ _SEPARATOR = re.compile(
     ).pattern,
     re.IGNORECASE,
 )  # fmt: skip
-_PLANNED_OR_PAST = _any(
+_PLANNED = _any(
     "increase", "increased", "increasing", "decrease", "decreased", "decreasing", "reduce",
-    "reduced", "reducing", "start", "started", "starting", "stop", "stopped", "stopping",
-    "switch", "switched", "switching", "change", "changed", "changing", "titrate",
-    "titrated", "titrating", "uptitrate", "go up", "going up", "gone up", "go down",
-    "going down", "wean", "weaning", "taper", "tapering", "double", "doubled", "halve",
-    "restart", "commence", "commenced", "begin", "discontinue", "discontinued", "cut down",
-    "come off", "came off", "been off", "try", "trial", "consider", "will", "going to",
-    "let's", "from tomorrow", "from now on", "next week", "used to", "was on", "were on",
-    "took", "until", "last year", "last month", "last week", "any more", "anymore",
-    "no longer", "previously", "before",
+    "reduced", "reducing", "start", "starting", "stop", "stopping", "switch", "switched",
+    "switching", "change", "changed", "changing", "titrate", "titrated", "titrating",
+    "uptitrate", "go up", "going up", "gone up", "go down", "going down", "wean", "weaning",
+    "taper", "tapering", "double", "doubled", "halve", "restart", "commence", "begin", "try",
+    "trial", "consider", "will", "I'll", "we'll", "you'll", "going to", "let's", "let me",
+    "prescribe", "prescribing", "put you on", "I'd like you to", "from tomorrow",
+    "from now on", "next week",
 )  # fmt: skip
+"""A planned change: the value may be future, not current."""
+_PAST = _any(
+    "started", "stopped", "commenced", "discontinue", "discontinued", "cut down", "come off",
+    "came off", "been off", "off", "used to", "was on", "were on", "was taking",
+    "were taking", "took", "quit", "gave up", "given up", "until", "last year", "last month",
+    "last week", "any more", "anymore", "no longer", "previously", "before",
+)  # fmt: skip
+"""Past or stopped use: not a current medicine."""
+_PLANNED_OR_PAST = re.compile(f"{_PLANNED.pattern}|{_PAST.pattern}", re.IGNORECASE)
+_STOPPED = _any(
+    "stopped it", "stopped them", "stopped taking", "quit it", "quit them", "quit taking",
+    "gave it up", "gave them up", "gave up taking", "came off it", "came off them",
+    "come off it", "come off them", "been off it", "off it", "off them", "don't take it",
+    "don't take them", "no longer take", "not taking it", "not taking them",
+)  # fmt: skip
+"""A stop in a sentence that names no drug ("I stopped it") may refer to any drug."""
+_QUESTION_START = re.compile(
+    r"^\W*(?:(?:and|so|ok|okay|well|now|right)\b[\s,]*)*(?:"
+    r"(?:are|is|was|were|do|does|did|have|has|had|can|could|should|would|will|shall)\s+"
+    r"(?:you|i|we|he|she|it|they|there|your|my|this|that|the)\b|any\b)",
+    re.IGNORECASE,
+)
+"""A sentence that opens like a question is one, even without its "?" (speech to text)."""
+_THIRD_PERSON = _any("he", "she", "he's", "she's", "his", "him", "her", "they", "their", "them")
+_YEAR = re.compile(r"(?:19|20)\d\d")
 _RANGE_OR_MAX = re.compile(
     r"\d\s*(?:-|–|to|or)\s*\d|"
     + _any(
@@ -196,6 +219,12 @@ class DrugFact:
     ambiguous: frozenset[ValueKind] = frozenset()
     """Kinds of value another drug could equally claim."""
     planned_or_past: bool = False
+    """In a question, or speaking of a planned change or past use (union of the next three)."""
+    planned: bool = False
+    past: bool = False
+    question: bool = False
+    third_person: bool = False
+    """A patient's sentence about "he" or "she" with no "I", "me" or "my": someone else's."""
     range_or_max: bool = False
     has_count: bool = False
     count: Decimal | None = None
@@ -211,6 +240,10 @@ class SideFact:
     turn: int | None
     match: SideMatch
     attributes: frozenset[Attribute]
+    role: str | None = None
+    """The speaker's role for a transcript mention; None in the note."""
+    question: bool = False
+    third_person: bool = False
 
     @property
     def key(self) -> tuple[str | None, str | None]:
@@ -251,6 +284,8 @@ class Facts:
     """Orphan values whose sentence speaks of a planned change or past use."""
     resolutions: tuple[Span, ...] = ()
     """Words that say a symptom has gone."""
+    orphan_stops: tuple[Span, ...] = ()
+    """Sentences that stop "it" without naming a drug ("I stopped it last week")."""
 
 
 @dataclass
@@ -262,6 +297,7 @@ class _Collected:
     orphan_values: list[Span] = field(default_factory=list)
     orphan_changes: list[Span] = field(default_factory=list)
     resolutions: list[Span] = field(default_factory=list)
+    orphan_stops: list[Span] = field(default_factory=list)
 
     def facts(self) -> Facts:
         return Facts(
@@ -272,6 +308,7 @@ class _Collected:
             tuple(self.orphan_values),
             tuple(self.orphan_changes),
             tuple(self.resolutions),
+            tuple(self.orphan_stops),
         )
 
 
@@ -380,7 +417,8 @@ def _unit_facts(
             continue
         sentence_start, sentence_end = sentence_span(text, drug.start, drug.end)
         sentence = text[sentence_start:sentence_end]
-        question = text[sentence_end : sentence_end + 1] == "?"
+        question = is_question(text, sentence_start, sentence_end)
+        planned, past = bool(_PLANNED.search(sentence)), bool(_PAST.search(sentence))
         mine = attached[index]
         strengths = [
             d
@@ -401,18 +439,31 @@ def _unit_facts(
                 ),
                 routes=tuple(r for r in mine.get("routes", []) if isinstance(r, RouteMatch)),
                 ambiguous=frozenset(ambiguous[index]),
-                planned_or_past=question or bool(_PLANNED_OR_PAST.search(sentence)),
+                planned_or_past=question or planned or past,
+                planned=planned,
+                past=past,
+                question=question,
+                third_person=_third_person(speaker, sentence),
                 range_or_max=bool(_RANGE_OR_MAX.search(sentence)),
                 has_count=has_count,
                 count=count,
             )
         )
 
-    out.sides += [
-        SideFact(turn=turn, match=side, attributes=context.attributes)
-        for side, context in zip(sides, side_contexts, strict=True)
-        if not context.attributes & _DROPPED
-    ]
+    for side, context in zip(sides, side_contexts, strict=True):
+        if context.attributes & _DROPPED:
+            continue
+        sentence_start, sentence_end = sentence_span(text, side.start, side.end)
+        out.sides.append(
+            SideFact(
+                turn=turn,
+                match=side,
+                attributes=context.attributes,
+                role=speaker.role if speaker.transcript is not None else None,
+                question=is_question(text, sentence_start, sentence_end),
+                third_person=_third_person(speaker, text[sentence_start:sentence_end]),
+            )
+        )
     out.plural_sites += [
         PluralSite(Span(turn, *m.span()), _PLURAL[m.group("part").lower()])
         for m, context in zip(plurals, plural_contexts, strict=True)
@@ -425,6 +476,22 @@ def _unit_facts(
     ]
     if speaker.transcript is not None:
         out.resolutions += [Span(turn, *m.span()) for m in _RESOLUTION.finditer(text)]
+        for stop in _STOPPED.finditer(text):
+            bounds = sentence_span(text, stop.start(), stop.end())
+            if not any(sentence_span(text, d.start, d.end) == bounds for d in drugs):
+                out.orphan_stops.append(Span(turn, *strip_span(text, *bounds)))
+
+
+def is_question(text: str, start: int, end: int) -> bool:
+    """A sentence ending in "?", or opening like a question ("Are you on ...")."""
+    return text[end : end + 1] == "?" or bool(_QUESTION_START.match(text, start, end))
+
+
+def _third_person(speaker: _Speaker, sentence: str) -> bool:
+    """A patient talking about "he" or "she", with no "I", "me" or "my" in the sentence."""
+    if speaker.transcript is None or speaker.role != "patient":
+        return False
+    return bool(_THIRD_PERSON.search(sentence)) and not _FIRST_PERSON.search(sentence)
 
 
 def _same_sentence(text: str, a: Match, b: Match) -> bool:
@@ -480,7 +547,7 @@ def _count(
         n_start, n_end = start + number.start, start + number.end
         if any(s <= n_start and n_end <= e for s, e in covered):
             continue
-        if _DURATION.match(text, n_end):
+        if _DURATION.match(text, n_end) or _YEAR.fullmatch(text[n_start:n_end]):
             continue
         counted.append(number.value)
     if _MULTIPLIER.search(text, start, end):
@@ -514,8 +581,8 @@ def _symptom(
 
     mention = Span(turn, symptom.start, symptom.end)
     if speaker.transcript is not None and turn is not None:
-        _, sentence_end = sentence_span(text, symptom.start, symptom.end)
-        if text[sentence_end : sentence_end + 1] == "?":
+        sentence_start, sentence_end = sentence_span(text, symptom.start, symptom.end)
+        if is_question(text, sentence_start, sentence_end):
             # A question asserts nothing, unless its answer was bound.
             bound = answers.get((turn, symptom.start, symptom.end))
             if bound is None:
