@@ -12,7 +12,11 @@ is that directory; a file outside judges/ takes its parent folder as its family.
 
 Rows are grouped across files by family and GROUP_FIELDS (model, arm, cell, criterion,
 format, k, tier, reasoning effort, dataset version), ignoring the folder's timestamp and
-commit; a missing field is its own value, so groups never merge by accident. Within a group
+commit; a missing field is its own value, so groups never merge by accident. The one
+exception: a row with parse_failure true and a null model (a failed call records no model)
+joins the group whose rows share its family, arm, cell, dataset version and replicate,
+when exactly one group does; otherwise it stays apart and is counted as unmatched or
+ambiguous. Within a group
 and replicate, a note_key found in folders with different timestamps keeps only the rows
 from the latest folder, and the others are counted as replaced; when any of its folders has
 no timestamp, all its rows stay. Coverage (the distinct errored and clean notes of each
@@ -38,7 +42,11 @@ majorities below, with a parse failure counting as not flagged on the full denom
   w2_evalfull_analyze.py:44), for groups whose scores reach 10.
 - pipeline-critical-absent: flag a note when any detail.missing_facts entry is "critical"
   and "absent" (w2_pipeline_replicates_analyze.py:99-108); without detail, when the split's
-  n_absent_critical count is above 0. Only groups with either input get this rule.
+  n_absent_critical count is above 0. A list with no severity-graded entry cannot apply the
+  rule (the two-stage tier, B2, grades none), and only groups where some row can apply it
+  get this rule.
+
+A rule that does not apply to a group prints "–", never a count.
 
 Detection at matched false alarms follows the harness's sweep (extract_data.py:106-135),
 per replicate, over the omission and clean notes that parsed and have a score: the
@@ -62,10 +70,25 @@ Within one replicate, identical duplicate rows count once; a note whose duplicat
 on aggregate or flagged is left out and counted as a conflict. An errored note with no clean
 twin, a null aggregate on either side, or an unknown type is counted, not scored. Groups
 with no dataset version, or from smoke runs or the frozen master list (NOT_COMPARABLE), are
-printed in a separate section. --summary prints one line per complete group instead (with
-the matched points and rules indented below it), then the development-complete groups
-under their own heading, then the comparable groups with partial coverage and their
-coverage counts. Only numbers, folder names and
+printed in a separate section.
+
+Full set (combined): when a factorial-v1 group and a factorial-v1-armconfirm group of one
+family agree on every other field, their union over each replicate present in both is
+scored the same way as a group of its own, with dataset version COMBINED and the
+factorial-v1 target. A note in both follows the shard rule above.
+
+Each replicate is marked complete, development complete, or partial with its counts
+against its version's target. For a group with partial coverage, each replicate's missing
+notes are listed: errored notes (by pair_id) that the group's other replicates have, plus,
+for factorial-v1 and the combined set, the evaluation-set pairs from --pairs; and clean
+notes (by clean_key) that the group's other replicates have. For each, the other groups
+holding rows for them are given (any dataset version, combined groups aside) as counts and
+group labels, same family first, at most MAX_FOUND_IN of them.
+
+--summary prints one line per complete group instead (with the matched points and rules
+indented below it), then the development-complete groups under their own heading, then the
+combined full sets, then the comparable groups with partial coverage, each with its
+replicate marks, rules and missing notes. Only numbers, folder names and
 short group values are printed, never any other field, and no network call is made.
 """
 
@@ -98,11 +121,16 @@ MISSING = "(missing)"
 NULL = "(null)"
 MAX_VALUE = 60
 # (errored notes, clean notes) each replicate must cover, by dataset version.
-COVERAGE = {"factorial-v1": (495, 112), "factorial-v1-armconfirm": (151, 47)}
+FULL_SET_PARTS = ("factorial-v1", "factorial-v1-armconfirm")
+COMBINED = "factorial-v1+armconfirm"
+COVERAGE = {"factorial-v1": (495, 112), "factorial-v1-armconfirm": (151, 47), COMBINED: (495, 112)}
+EVAL_SET_VERSIONS = ("factorial-v1", COMBINED)
+MAX_FOUND_IN = 10
 DEVELOPMENT_COVERAGE = {"factorial-v1": (265, 65)}
 COMPLETE = "complete"
 DEVELOPMENT_COMPLETE = "development complete"
 PARTIAL = "partial coverage"
+assert GROUP_FIELDS[-1] == "dataset_version", "group keys end with the dataset version"
 FLAG_BELOW = 10.0
 MATCHED_K = (1, 2, 3)
 FOLDER_TIMESTAMP = re.compile(r"(\d{8}-\d{6})-")
@@ -187,6 +215,19 @@ class RuleResult:
 
 
 @dataclass
+class MissingNotes:
+    """One replicate's missing notes, and the other groups that hold rows for them."""
+
+    errored: int = 0
+    clean: int = 0
+    found_in: list[tuple[str, int, int]] = field(default_factory=list)
+    """(group label, errored notes found there, clean notes found there)."""
+    more_groups: int = 0
+    """Further groups holding some of them, past MAX_FOUND_IN."""
+    not_found: tuple[int, int] = (0, 0)
+
+
+@dataclass
 class GroupResult:
     """One group (file and run settings), per replicate and combined."""
 
@@ -207,6 +248,20 @@ class GroupResult:
     """The named flag rules that apply to the group."""
     replicate_count: int = 0
     """Distinct replicates in the group, counting those whose rows all failed to parse."""
+    combined: bool = False
+    """A full set: the union of a factorial-v1 group and its factorial-v1-armconfirm twin."""
+    joined: int = 0
+    """Null-model parse failures matched into this group."""
+    unmatched: int = 0
+    """Null-model parse failures left in this group because no group matched them."""
+    ambiguous: int = 0
+    """Null-model parse failures left in this group because several groups matched them."""
+    pair_ids: dict[str, set[str]] = field(default_factory=dict, repr=False)
+    """Errored notes' pair_ids per replicate, failed rows included."""
+    clean_keys: dict[str, set[str]] = field(default_factory=dict, repr=False)
+    """Clean notes' clean_keys per replicate, failed rows included."""
+    missing: dict[str, MissingNotes] = field(default_factory=dict)
+    """Per replicate, for groups with partial coverage."""
     majority_detection_n: int = 0
     majority_detection_flagged: int = 0
     majority_clean_n: int = 0
@@ -296,7 +351,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        types = load_types(args.pairs)
+        types, eval_pairs = load_types(args.pairs), load_eval_pairs(args.pairs)
     except (OSError, ValueError) as error:
         print(f"recompute_published: cannot read --pairs: {type(error).__name__}", file=sys.stderr)
         return 1
@@ -311,7 +366,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             files.append((path, rows))
         else:
             skipped += 1
-    groups = analyse_files([(source(path), rows) for path, rows in files], types)
+    groups = analyse_files(
+        [(source(path), rows) for path, rows in files], types, eval_pairs=eval_pairs
+    )
     if args.summary:
         print_summary(groups, scored=len(files), skipped=skipped)
     else:
@@ -331,6 +388,18 @@ def load_types(path: Path) -> dict[str, str]:
         and isinstance(p.get("pair_id"), str)
         and isinstance(p.get("type"), str)
     }
+
+
+def load_eval_pairs(path: Path) -> frozenset[str]:
+    """The pair_ids of the evaluation set (eval_set true) in pairs/dataset_v2.json."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("pairs"), list):
+        raise ValueError("no top-level 'pairs' list")
+    return frozenset(
+        p["pair_id"]
+        for p in data["pairs"]
+        if isinstance(p, dict) and isinstance(p.get("pair_id"), str) and p.get("eval_set") is True
+    )
 
 
 def _records(path: Path) -> list[dict[str, Any]]:
@@ -385,42 +454,162 @@ def analyse(
     return analyse_files([(Source(label, None), rows)], types)
 
 
+Tagged = tuple[int, "str | None", "dict[str, Any]"]
+"""(file index, folder timestamp, row)."""
+GroupKey = tuple[str, ...]
+"""(family, *GROUP_FIELDS values)."""
+
+
 def analyse_files(
-    files: Sequence[tuple[Source, Sequence[dict[str, Any]]]], types: Mapping[str, str]
+    files: Sequence[tuple[Source, Sequence[dict[str, Any]]]],
+    types: Mapping[str, str],
+    eval_pairs: frozenset[str] = frozenset(),
 ) -> list[GroupResult]:
     """Group rows across files, then score each replicate and combine the replicates."""
-    Tagged = tuple[int, str | None, dict[str, Any]]  # (file index, folder timestamp, row)
-    grouped: dict[tuple[str, ...], dict[str, list[Tagged]]] = {}
+    grouped, joins = _group_rows(files)
+    results = [
+        _analyse_group(key, replicates, types, joins.get(key, {}))
+        for key, replicates in grouped.items()
+    ]
+    for key, replicates in _full_sets(grouped):
+        group = _analyse_group(key, replicates, types, {})
+        group.combined = True
+        results.append(group)
+    _trace_missing(results, eval_pairs)
+    return results
+
+
+def _is_null_model_failure(row: Mapping[str, Any]) -> bool:
+    return row.get("parse_failure") is True and "model" in row and row["model"] is None
+
+
+def _group_rows(
+    files: Sequence[tuple[Source, Sequence[dict[str, Any]]]],
+) -> tuple[dict[GroupKey, dict[str, list[Tagged]]], dict[GroupKey, dict[str, int]]]:
+    """Rows by group key and replicate, with null-model parse failures joined to their run;
+    and, per group key, how many such rows joined it or stayed in it unmatched or ambiguous."""
+
+    def key_of(family: str, row: Mapping[str, Any]) -> GroupKey:
+        return (family, *(_value(row, name) for name in GROUP_FIELDS))
+
+    def run_of(family: str, row: Mapping[str, Any]) -> GroupKey:
+        names = ("arm", "cell", "dataset_version", "replicate")
+        return (family, *(_value(row, name) for name in names))
+
+    runs: dict[GroupKey, set[GroupKey]] = {}
+    for where, rows in files:
+        for row in rows:
+            if not _is_null_model_failure(row) and _value(row, "model") != NULL:
+                runs.setdefault(run_of(where.family, row), set()).add(key_of(where.family, row))
+
+    grouped: dict[GroupKey, dict[str, list[Tagged]]] = {}
+    joins: dict[GroupKey, dict[str, int]] = {}
     for index, (where, rows) in enumerate(files):
         for row in rows:
-            key = (where.family, *(_value(row, name) for name in GROUP_FIELDS))
+            key = key_of(where.family, row)
+            if _is_null_model_failure(row):
+                candidates = runs.get(run_of(where.family, row), set())
+                outcome = (
+                    "joined" if len(candidates) == 1 else "ambiguous" if candidates else "unmatched"
+                )
+                if outcome == "joined":
+                    (key,) = candidates
+                counts = joins.setdefault(key, {})
+                counts[outcome] = counts.get(outcome, 0) + 1
             replicates = grouped.setdefault(key, {})
             replicates.setdefault(_value(row, "replicate"), []).append(
                 (index, where.timestamp, row)
             )
+    return grouped, joins
 
-    results = []
+
+def _full_sets(
+    grouped: Mapping[GroupKey, Mapping[str, list[Tagged]]],
+) -> list[tuple[GroupKey, dict[str, list[Tagged]]]]:
+    """Each factorial-v1 group's union with its armconfirm twin, over the shared replicates."""
+    development_version, held_out_version = FULL_SET_PARTS
+    out = []
     for key, replicates in grouped.items():
-        group = GroupResult(key[0], dict(zip(GROUP_FIELDS, key[1:], strict=True)))
-        group.files = len({index for tagged in replicates.values() for index, _, _ in tagged})
-        group.replicate_count = len(replicates)
-        failed: list[dict[str, Any]] = []
-        notes: dict[str, Notes] = {}
-        for replicate in sorted(replicates, key=_replicate_order):
-            rows, replaced = _latest_shards(replicates[replicate])
-            group.replaced += replaced
-            group.coverage[replicate] = _coverage(rows)
-            notes[replicate] = _replicate_notes(rows, types)
-            kept = [row for row in rows if row.get("parse_failure") is not True]
-            failed += [row for row in rows if row.get("parse_failure") is True]
-            group.rows += len(kept)
-            if kept:
-                group.replicates[replicate] = compute(kept, types)
-        group.parse_failures = len(failed)
-        _combine(group, failed, types)
-        _operating_points(group, notes)
-        results.append(group)
-    return results
+        twin = grouped.get((*key[:-1], held_out_version))
+        if key[-1] != development_version or twin is None:
+            continue
+        shared = [r for r in replicates if r in twin]
+        if shared:
+            out.append(((*key[:-1], COMBINED), {r: [*replicates[r], *twin[r]] for r in shared}))
+    return out
+
+
+def _analyse_group(
+    key: GroupKey,
+    replicates: Mapping[str, list[Tagged]],
+    types: Mapping[str, str],
+    joins: Mapping[str, int],
+) -> GroupResult:
+    group = GroupResult(key[0], dict(zip(GROUP_FIELDS, key[1:], strict=True)))
+    group.joined = joins.get("joined", 0)
+    group.unmatched = joins.get("unmatched", 0)
+    group.ambiguous = joins.get("ambiguous", 0)
+    group.files = len({index for tagged in replicates.values() for index, _, _ in tagged})
+    group.replicate_count = len(replicates)
+    failed: list[dict[str, Any]] = []
+    notes: dict[str, Notes] = {}
+    for replicate in sorted(replicates, key=_replicate_order):
+        rows, replaced = _latest_shards(replicates[replicate])
+        group.replaced += replaced
+        group.coverage[replicate] = _coverage(rows)
+        group.pair_ids[replicate] = {
+            r["pair_id"] for r in rows if not _is_clean(r) and isinstance(r.get("pair_id"), str)
+        }
+        group.clean_keys[replicate] = {
+            r["clean_key"] for r in rows if _is_clean(r) and isinstance(r.get("clean_key"), str)
+        }
+        notes[replicate] = _replicate_notes(rows, types)
+        kept = [row for row in rows if row.get("parse_failure") is not True]
+        failed += [row for row in rows if row.get("parse_failure") is True]
+        group.rows += len(kept)
+        if kept:
+            group.replicates[replicate] = compute(kept, types)
+    group.parse_failures = len(failed)
+    _combine(group, failed, types)
+    _operating_points(group, notes)
+    return group
+
+
+def _trace_missing(groups: Sequence[GroupResult], eval_pairs: frozenset[str]) -> None:
+    """For each replicate of a partial group, where its missing notes are (module notes)."""
+    held = [
+        (g, set().union(*g.pair_ids.values()), set().union(*g.clean_keys.values()))
+        for g in groups
+        if not g.combined
+    ]
+    for group in groups:
+        if group.coverage_label != PARTIAL:
+            continue
+        expected_errored = set().union(*group.pair_ids.values())
+        if group.key_values["dataset_version"] in EVAL_SET_VERSIONS:
+            expected_errored |= eval_pairs
+        expected_clean = set().union(*group.clean_keys.values())
+        for replicate in group.coverage:
+            errored = expected_errored - group.pair_ids[replicate]
+            clean = expected_clean - group.clean_keys[replicate]
+            report = MissingNotes(len(errored), len(clean))
+            found_errored: set[str] = set()
+            found_clean: set[str] = set()
+            hits = []
+            for other, other_errored, other_clean in held:
+                if other is group:
+                    continue
+                e, c = errored & other_errored, clean & other_clean
+                found_errored |= e
+                found_clean |= c
+                if e or c:
+                    same_family = other.label == group.label
+                    hits.append((not same_family, -(len(e) + len(c)), group_label(other), e, c))
+            hits.sort(key=lambda hit: hit[:3])
+            report.found_in = [(label, len(e), len(c)) for _, _, label, e, c in hits[:MAX_FOUND_IN]]
+            report.more_groups = max(0, len(hits) - MAX_FOUND_IN)
+            report.not_found = (len(errored - found_errored), len(clean - found_clean))
+            group.missing[replicate] = report
 
 
 Notes = tuple[dict[str, "dict[str, Any] | None"], dict[str, "dict[str, Any] | None"]]
@@ -482,12 +671,10 @@ def critical_absent(row: Mapping[str, Any]) -> bool | None:
     detail = row.get("detail")
     facts = detail.get("missing_facts") if isinstance(detail, Mapping) else None
     if isinstance(facts, list):
-        return any(
-            isinstance(f, Mapping)
-            and f.get("severity") == "critical"
-            and f.get("verdict") == "absent"
-            for f in facts
-        )
+        graded = [f for f in facts if isinstance(f, Mapping) and isinstance(f.get("severity"), str)]
+        if not graded:
+            return None  # no severity grades (B2), or nothing missing: the rule cannot say
+        return any(f["severity"] == "critical" and f.get("verdict") == "absent" for f in graded)
     count = row.get("n_absent_critical")
     if isinstance(count, int) and not isinstance(count, bool):
         return count > 0
@@ -813,11 +1000,54 @@ def operating_lines(group: GroupResult) -> list[str]:
         reached = any(point is not None for point in matched.per_replicate.values())
         parts.append(f"majority {_counts(matched.majority)}" if reached else "majority –")
         lines.append(f"matched false alarms k{k}: " + " | ".join(parts))
-    for name, rule in group.rules.items():
+    for name in RULES:
+        rule = group.rules.get(name)
+        if rule is None:
+            lines.append(f"rule {name}: –")
+            continue
         parts = [f"r{rep} {_counts(c)}" for rep, c in rule.per_replicate.items()]
         parts += [f"majority {_counts(rule.majority)}"]
         parts += [f"known-only majority {_counts(rule.known_majority)}"]
         lines.append(f"rule {name}: " + " | ".join(parts))
+    return lines
+
+
+def group_label(group: GroupResult) -> str:
+    return f"[{group.label}] {_settings(group)}"
+
+
+def replicate_mark(group: GroupResult, replicate: str) -> str:
+    version = group.key_values["dataset_version"]
+    errored, clean = group.coverage[replicate]
+    if version in COVERAGE:
+        want_errored, want_clean = COVERAGE[version]
+        if errored >= want_errored and clean >= want_clean:
+            return COMPLETE
+    if DEVELOPMENT_COVERAGE.get(version) == (errored, clean):
+        return DEVELOPMENT_COMPLETE
+    if version in COVERAGE:
+        return f"partial ({errored}/{want_errored} errored, {clean}/{want_clean} clean)"
+    return f"partial ({errored} errored, {clean} clean; no target)"
+
+
+def marks_line(group: GroupResult) -> str:
+    return "replicates: " + " | ".join(
+        f"r{rep} {replicate_mark(group, rep)}" for rep in group.coverage
+    )
+
+
+def missing_lines(group: GroupResult) -> list[str]:
+    """Where each replicate's missing notes are, as counts and group labels."""
+    lines = []
+    for replicate, report in group.missing.items():
+        if not report.errored and not report.clean:
+            continue
+        parts = [f"missing r{replicate}: {report.errored} errored, {report.clean} clean"]
+        parts += [f"{e} errored, {c} clean in {label}" for label, e, c in report.found_in]
+        if report.more_groups:
+            parts.append(f"and {report.more_groups} more group(s)")
+        parts.append(f"not found: {report.not_found[0]} errored, {report.not_found[1]} clean")
+        lines.append(" | ".join(parts))
     return lines
 
 
@@ -836,6 +1066,15 @@ def format_group(group: GroupResult) -> str:
     lines = [
         f"[{group.label}] {settings} — {group.coverage_label}",
         f"  files {group.files}, replaced by later shards {group.replaced}, coverage: {coverage}",
+        f"  {marks_line(group)}",
+        *(
+            [
+                f"  null-model parse failures: joined {group.joined}, "
+                f"unmatched {group.unmatched}, ambiguous {group.ambiguous}"
+            ]
+            if group.joined or group.unmatched or group.ambiguous
+            else []
+        ),
         f"  rows {group.rows}, parse failures excluded {group.parse_failures}, "
         f"replicates {' '.join(reps)} (of {group.replicate_count}), "
         f"types from --pairs {total.types_from_pairs} "
@@ -859,6 +1098,7 @@ def format_group(group: GroupResult) -> str:
         f"  not scored: no twin {total.no_twin}, missing score {total.missing_score}, "
         f"unknown type {total.unknown_type}, conflicts {total.conflicts}",
         *(f"  {line}" for line in operating_lines(group)),
+        *(f"  {line}" for line in missing_lines(group)),
     ]
     return "\n".join(lines)
 
@@ -886,30 +1126,35 @@ def summary_line(group: GroupResult) -> str:
 
 
 def print_summary(groups: Sequence[GroupResult], *, scored: int, skipped: int) -> None:
-    for label, heading in (
-        (COMPLETE, None),
-        (DEVELOPMENT_COMPLETE, "Development complete — not comparable to published figures"),
-    ):
-        chosen = [g for g in groups if g.comparable and g.coverage_label == label]
+    single = [g for g in groups if g.comparable and not g.combined]
+    sections = (
+        (None, [g for g in single if g.coverage_label == COMPLETE], "complete groups", False),
+        (
+            "Development complete — not comparable to published figures",
+            [g for g in single if g.coverage_label == DEVELOPMENT_COMPLETE],
+            "development complete groups",
+            False,
+        ),
+        ("Full set (combined)", [g for g in groups if g.combined], "combined full sets", True),
+        (
+            "Partial coverage",
+            [g for g in single if g.coverage_label == PARTIAL],
+            "comparable groups with partial coverage",
+            True,
+        ),
+    )
+    for heading, chosen, none, detailed in sections:
         if heading:
             print(f"\n== {heading} ==")
         for group in chosen:
             print(summary_line(group))
-            for line in operating_lines(group):
+            extra = [marks_line(group)] if detailed else []
+            extra += operating_lines(group)
+            extra += missing_lines(group) if detailed else []
+            for line in extra:
                 print(f"    {line}")
         if not chosen:
-            print(f"(no {label} groups)")
-    print("\n== Partial coverage ==")
-    partial_groups = [g for g in groups if g.comparable and g.coverage_label == PARTIAL]
-    for group in partial_groups:
-        print(
-            f"{_short(group.key_values['model'])} family={_short(group.label)} "
-            f"{_settings(group, skip=('model',))} | coverage {_coverage_text(group)} "
-            f"| parse failures excluded {group.parse_failures} "
-            f"| replaced by later shards {group.replaced}"
-        )
-    if not partial_groups:
-        print("(no comparable groups with partial coverage)")
+            print(f"(no {none})")
     partial = sum(g.coverage_label == PARTIAL for g in groups)
     print(
         f"\n{scored} file(s) scored, skipped {skipped} file(s) with no scored records; "
@@ -918,10 +1163,15 @@ def print_summary(groups: Sequence[GroupResult], *, scored: int, skipped: int) -
 
 
 def print_report(groups: Sequence[GroupResult], *, scored: int, skipped: int) -> None:
-    comparable = [g for g in groups if g.comparable]
-    other = [g for g in groups if not g.comparable]
+    comparable = [g for g in groups if g.comparable and not g.combined]
+    combined = [g for g in groups if g.combined]
+    other = [g for g in groups if not g.comparable and not g.combined]
     for group in comparable:
         print(format_group(group) + "\n")
+    if combined:
+        print("== Full set (combined) ==\n")
+        for group in combined:
+            print(format_group(group) + "\n")
     if other:
         print(
             "== Not comparable to published figures "

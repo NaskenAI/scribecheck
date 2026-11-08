@@ -603,7 +603,10 @@ def test_critical_absent_reads_detail_then_the_split_count() -> None:
     rule = RECOMPUTE.critical_absent
     assert rule({"detail": {"missing_facts": CRITICAL_ABSENT}}) is True
     assert rule({"detail": {"missing_facts": SUPPORTING_ABSENT}}) is False
-    assert rule({"detail": {"missing_facts": []}, "n_absent_critical": 3}) is False
+    # A list with no graded entry cannot apply the rule: B2 grades no severity.
+    assert rule({"detail": {"missing_facts": []}, "n_absent_critical": 3}) is None
+    ungraded = [{"severity": None, "verdict": "absent", "fact": SENTINEL}]
+    assert rule({"detail": {"missing_facts": ungraded}}) is None
     assert rule({"n_absent_critical": 2}) is True and rule({"n_absent_critical": 0}) is False
     assert rule({"detail": "text"}) is None and rule({}) is None
 
@@ -649,5 +652,190 @@ def test_summary_lists_partial_coverage_groups(
     _, heading, partial = out.partition("== Partial coverage ==")
     assert heading
     line = next(line for line in partial.splitlines() if "family=w2-partial" in line)
-    assert "coverage r1 errored 265 clean 65 | r2 errored 264 clean 65" in line
+    marks = partial[partial.index(line) :].splitlines()[1]
+    assert marks.strip() == (
+        "replicates: r1 development complete | r2 partial (264/495 errored, 65/112 clean)"
+    )
+    assert "rule route-two-below-10:" in partial and "rule pipeline-critical-absent: –" in partial
     assert "family=w2-complete" not in partial and "dataset=factorial-v1-armsmoke" not in partial
+
+
+# Rules whose fields are absent print a dash, never a count.
+
+RUN_B2 = {**RUN_B3, "arm": "B2", "cell": "B2", "tier": "B2"}
+UNGRADED = [{"severity": None, "verdict": "absent", "fact": SENTINEL}]
+GROUP_B2 = [
+    _run(RUN_B2, 1, _clean("c1", 0.9, None), detail={"missing_facts": []}),
+    _run(RUN_B2, 1, _errored("c1", 0.2, None), detail={"missing_facts": UNGRADED}),
+]
+
+
+def test_rule_without_its_fields_prints_a_dash() -> None:
+    (group,) = RECOMPUTE.analyse("w2-pipeline", GROUP_B2, TYPES)
+    assert "pipeline-critical-absent" not in group.rules
+    lines = RECOMPUTE.operating_lines(group)
+    assert "rule pipeline-critical-absent: –" in lines
+    assert "rule route-two-below-10: –" in lines  # scores never reach 10 here
+
+
+# Parse failures with a null model join their run's group.
+
+RUN_R = {
+    **RUN_A, "arm": "ragas", "cell": "ragas", "format": "score", "tier": None,
+    "reasoning_effort": None,
+}  # fmt: skip
+FAILED_NULL = {"model": None, "reasoning_effort": None, "k": None, "parse_failure": True}
+
+
+def _ragas(run: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for c, (clean, err) in {"c1": (0.9, 0.2), "c2": (0.8, 0.3), "c3": (0.7, 0.9)}.items():
+        rows += [_run(run, 1, _clean(c, clean, False)), _run(run, 1, _errored(c, err, True))]
+    return rows
+
+
+def test_null_model_parse_failures_join_their_run() -> None:
+    orphans = [
+        _run(RUN_R, 1, _clean("c4", None, None), **FAILED_NULL),
+        _run(RUN_R, 1, _errored("c4", None, None), **FAILED_NULL),
+    ]
+    (group,) = RECOMPUTE.analyse("w2-baselines", _ragas(RUN_R) + orphans, TYPES)
+    assert group.key_values["model"] == "openai/gpt-5.4"
+    assert group.joined == 2 and group.parse_failures == 2
+    assert group.coverage == {"1": (4, 4)}
+    (r1,) = group.replicates.values()
+    assert (r1.omit_n, r1.omit_wins) == (3, 2)  # c4 is not paired
+    # c4 counts on the full denominator of the majority, never flagged.
+    assert (group.majority_detection_flagged, group.majority_detection_n) == (3, 4)
+
+
+def test_null_model_parse_failures_stay_apart_when_ambiguous_or_unmatched() -> None:
+    gemini = {**RUN_R, "model": "google/gemini-3.1-pro-preview"}
+    ambiguous = _run(RUN_R, 1, _errored("c4", None, None), **FAILED_NULL)
+    unmatched = _run({**RUN_R, "arm": "geval", "cell": "geval"}, 1, _errored("c4", None, None))
+    unmatched.update(FAILED_NULL)
+    rows = _ragas(RUN_R) + _ragas(gemini) + [ambiguous, unmatched]
+    groups = {
+        (g.key_values["model"], g.key_values["arm"]): g
+        for g in RECOMPUTE.analyse("w2-baselines", rows, TYPES)
+    }
+    assert groups[("(null)", "ragas")].ambiguous == 1
+    assert groups[("(null)", "geval")].unmatched == 1
+    assert groups[("openai/gpt-5.4", "ragas")].joined == 0
+    out = RECOMPUTE.format_group(groups[("(null)", "ragas")])
+    assert "null-model parse failures: joined 0, unmatched 0, ambiguous 1" in out
+
+
+# The full set: a factorial-v1 group and a factorial-v1-armconfirm group of the same run.
+
+
+def _span(run: dict[str, Any], replicate: int, clean: range, errored: range) -> list[Any]:
+    """Clean notes k<i> for i in `clean`, and errored notes e<j> spread over them."""
+    rows = [_run(run, replicate, _clean(f"k{i}", 0.9, False)) for i in clean]
+    for j in errored:
+        c = f"k{clean[j % len(clean)]}"
+        row = _errored(c, 0.1, True)
+        row.update(pair_id=f"s|{c}|e{j}|f1", note_key=f"s|{c}|e{j}", pair_type="omit")
+        rows.append(_run(run, replicate, row))
+    return rows
+
+
+RUN_FULL = {**RUN_A, "arm": "power-gepa-high", "cell": "power-gepa-high"}
+RUN_CONFIRM_HALF = {**RUN_FULL, "dataset_version": "factorial-v1-armconfirm"}
+
+
+def _full_set_groups() -> dict[str, Any]:
+    development = _span(RUN_FULL, 1, range(65), range(344)) + _span(
+        RUN_FULL, 2, range(65), range(344)
+    )
+    held = _span(RUN_CONFIRM_HALF, 1, range(65, 112), range(344, 495))
+    held.append(_span(RUN_CONFIRM_HALF, 1, range(65), range(1))[-1])  # e0, also in factorial-v1
+    files = [
+        (RECOMPUTE.Source("w2-power", "20260820-100000"), development),
+        (RECOMPUTE.Source("w2-power", "20260821-100000"), held),
+    ]
+    return {g.key_values["dataset_version"]: g for g in RECOMPUTE.analyse_files(files, TYPES)}
+
+
+def test_full_set_combines_the_two_dataset_versions() -> None:
+    groups = _full_set_groups()
+    combined = groups["factorial-v1+armconfirm"]
+    assert combined.combined and combined.comparable
+    assert list(combined.coverage) == ["1"]  # replicate 2 has no armconfirm half
+    assert combined.coverage == {"1": (495, 112)}
+    assert combined.coverage_label == "complete"
+    assert combined.replaced == 1  # e0 from the later armconfirm folder wins
+    (r1,) = combined.replicates.values()
+    assert (r1.detection_flagged, r1.detection_n) == (495, 495)
+    assert groups["factorial-v1"].coverage_label == "partial coverage"
+    assert not groups["factorial-v1"].combined
+
+
+def test_summary_prints_the_combined_full_set(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    records, pairs = build_fixture(tmp_path)
+    judges = records / "judgements" / "judges" / "w2-power"
+    development = _span(RUN_FULL, 1, range(65), range(344))
+    held = _span(RUN_CONFIRM_HALF, 1, range(65, 112), range(344, 495))
+    _write(judges / "20260820-100000-aaaaaaa-r1" / "w2_power.json", {"records": development})
+    _write(judges / "20260821-100000-bbbbbbb-r1" / "w2_power.json", {"records": held})
+    assert RECOMPUTE.main([str(records), "--pairs", str(pairs), "--summary"]) == 0
+    out = capsys.readouterr().out
+    _, heading, section = out.partition("== Full set (combined) ==")
+    assert heading
+    section = section.partition("== Partial coverage ==")[0]
+    assert "family=w2-power" in section and "dataset=factorial-v1+armconfirm" in section
+    assert "replicates: r1 complete" in section
+    assert SENTINEL not in out
+
+
+# Diagnostic: where a partial replicate's missing notes are.
+
+RUN_P = {**RUN_A, "arm": "geval", "cell": "geval"}
+RUN_P_SMOKE = {**RUN_P, "dataset_version": "factorial-v1-armsmoke"}
+
+
+def _pair(run: dict[str, Any], replicate: int, consultation: str) -> list[dict[str, Any]]:
+    return [
+        _run(run, replicate, _clean(consultation, 0.9, False)),
+        _run(run, replicate, _errored(consultation, 0.1, True)),
+    ]
+
+
+GROUP_P = [
+    *[row for c in ("c1", "c2", "c3") for row in _pair(RUN_P, 1, c)],
+    *[row for c in ("c1", "c2") for row in _pair(RUN_P, 2, c)],
+    _run(RUN_P_SMOKE, 1, _clean("c3", 0.9, False)),
+    _run(RUN_P_SMOKE, 1, _errored("c3", 0.1, True)),
+]  # fmt: skip
+EVAL_PAIRS = frozenset({"s|c1|e1|f1", "s|c2|e1|f1", "s|c3|e1|f1", "s|c7|e1|f1"})
+
+
+def test_missing_notes_are_traced_to_other_groups() -> None:
+    files = [(RECOMPUTE.Source("w2-baselines", None), GROUP_P)]
+    groups = RECOMPUTE.analyse_files(files, TYPES, eval_pairs=EVAL_PAIRS)
+    (group,) = [g for g in groups if g.key_values["dataset_version"] == "factorial-v1"]
+    r1, r2 = group.missing["1"], group.missing["2"]
+    # c7 is an evaluation-set pair that no group has.
+    assert (r1.errored, r1.clean, r1.found_in, r1.not_found) == (1, 0, [], (1, 0))
+    assert (r2.errored, r2.clean, r2.not_found) == (2, 1, (1, 0))
+    ((label, errored, clean),) = r2.found_in
+    assert label.startswith("[w2-baselines] model=openai/gpt-5.4 arm=geval")
+    assert "dataset=factorial-v1-armsmoke" in label and (errored, clean) == (1, 1)
+    out = RECOMPUTE.format_group(group)
+    assert (
+        "missing r2: 2 errored, 1 clean | 1 errored, 1 clean in [w2-baselines]" in out
+        and "| not found: 1 errored, 0 clean" in out
+    )
+    assert SENTINEL not in out
+
+
+def test_load_eval_pairs(tmp_path: Path) -> None:
+    pairs = tmp_path / "dataset_v2.json"
+    _write(pairs, {"pairs": [
+        {"pair_id": "a|b|e|f", "type": "omit", "eval_set": True},
+        {"pair_id": "a|c|e|f", "type": "omit", "eval_set": False},
+        {"pair_id": "a|d|e|f", "type": "add"},
+    ]})  # fmt: skip
+    assert RECOMPUTE.load_eval_pairs(pairs) == frozenset({"a|b|e|f"})
