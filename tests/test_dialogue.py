@@ -5,7 +5,12 @@ from collections.abc import Sequence
 
 import pytest
 
-from scribecheck.rules.dialogue import DialogueNegation, bind_negations
+from scribecheck.rules.dialogue import (
+    DialogueAffirmation,
+    DialogueNegation,
+    bind_affirmations,
+    bind_negations,
+)
 from scribecheck.transcript import Transcript, parse_transcript
 
 # Words the tests treat as targets; in the pipeline the symptom lexicon supplies these.
@@ -175,3 +180,86 @@ def test_bracketed_transcript_binds() -> None:
 
 def test_relative_answer_does_not_bind() -> None:
     assert _bind("[doctor] any chest pain ?\n[relative] no .") == ()
+
+
+# Affirmations: a bare "Yes" to a single-target question
+
+
+def _affirm(text: str) -> tuple[DialogueAffirmation, ...]:
+    transcript = parse_transcript(text)
+    results = bind_affirmations(transcript, _targets(transcript))
+    for result in results:
+        assert transcript.quote(result.question_turn, result.target.start, result.target.end) == (
+            result.target.text
+        )
+        assert transcript.quote(result.answer_turn, result.answer.start, result.answer.end) == (
+            result.answer.text
+        )
+    return results
+
+
+@pytest.mark.parametrize(
+    ("answer", "cue"), [("Yes.", "Yes"), ("yeah", "yeah"), ("Yep!", "Yep"), ("  Yes  ", "Yes")]
+)
+def test_bare_yes_binds_a_single_target_question(answer: str, cue: str) -> None:
+    (result,) = _affirm(f"Doctor: Any chest pain?\nPatient: {answer}")
+    assert (result.question_turn, result.answer_turn) == (1, 2)
+    assert (result.target.text, result.answer.text) == ("chest pain", cue)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Doctor: Any chest pain?\nPatient: Yes, sometimes.",  # more than a bare yes
+        "Doctor: Any chest pain?\nPatient: Yes, chest pain.",  # names the target
+        "Doctor: Any chest pain?\nPatient: Yeah but only at night.",
+        "Doctor: Any chest pain?\nPatient: Yes?",  # a question back
+        "Doctor: Any chest pain?\nPatient: No.",  # a negative is not an affirmation
+        "Doctor: Any chest pain or fever?\nPatient: Yes.",  # two targets
+        "Doctor: Any chest pain at night?\nPatient: Yes.",  # a condition
+        "Doctor: Any chest pain in your family?\nPatient: Yes.",  # family qualifier
+        "Doctor: Any chest pain?\nRelative: Yes.",  # not the patient
+        "Patient: Any chest pain?\nDoctor: Yes.",  # wrong way round
+        "Any chest pain?\nYes.",  # no speaker labels
+    ],
+)
+def test_other_answers_do_not_affirm(text: str) -> None:
+    assert _affirm(text) == ()
+
+
+def test_affirmations_validate_their_targets() -> None:
+    transcript = parse_transcript("Doctor: Any chest pain?\nPatient: Yes.")
+    with pytest.raises(ValueError):
+        bind_affirmations(transcript, {9: [(0, 3)]})
+
+
+# Regression for the rules added with Pass B
+
+
+@pytest.mark.parametrize("question", ["Did you have a fever?", "Have you had a fever?"])
+def test_past_tense_questions_still_bind_a_no(question: str) -> None:
+    (result,) = _bind(f"Doctor: {question}\nPatient: No.")
+    assert result.target.text == "fever"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Did you have a fever?",
+        "Have you had a fever?",
+        "Was there a fever?",
+        "Has there been a fever?",
+        "Did you get a cough over the weekend?",
+    ],
+)
+def test_past_tense_questions_never_bind_a_yes(question: str) -> None:
+    assert _affirm(f"Doctor: {question}\nPatient: Yes.") == ()
+
+
+@pytest.mark.parametrize(
+    "question", ["Any fever in the house?", "Any cough at home?", "Any fever over the weekend?"]
+)
+def test_place_and_weekend_qualifiers_bind_nothing(question: str) -> None:
+    text = f"Doctor: {question}\nPatient: No."
+    assert _bind(text) == ()
+    assert _affirm(text.replace("No.", "Yes.")) == ()

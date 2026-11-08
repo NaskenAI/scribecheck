@@ -18,12 +18,18 @@ in the question's sentence. In v1 a binding needs all of:
 
 Questions about several targets go to the model. As in rules/context.py, the caller
 supplies the target spans.
+
+Affirmations mirror this: `bind_affirmations` applies the same question rules, only to a
+present-tense question (never "did", "had", "have you had", "was", "were" or "been"),
+and binds only a patient answer that is a bare "yes", "yeah" or "yep" ("Yes.", "Yep!").
+Anything more ("Yes, sometimes", "Yeah but only at night", "Yes, chest pain") does not
+bind.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict
 
@@ -44,10 +50,12 @@ _PRESENCE_QUESTION = re.compile(
 _QUALIFIER = re.compile(
     r"(?<![A-Za-z])(?:if|when|whenever|after|during|while|unless|or|family|relatives?|"
     r"history|before|ago|last|yesterday|previously|ever|past|with|exertion|exercise|"
-    r"night|morning|evening|rest|walking|lying|eating)(?![A-Za-z])",
+    r"night|morning|evening|rest|walking|lying|eating|weekend|house|home)(?![A-Za-z])",
     re.IGNORECASE,
 )
 _NEGATIVE_ANSWER = re.compile(r"^\W*(?P<cue>nope|none|never|nah|no)(?![A-Za-z'’])", re.IGNORECASE)
+_PAST_TENSE = re.compile(r"(?<![A-Za-z])(?:did|had|was|were|been)(?![A-Za-z])", re.IGNORECASE)
+_BARE_YES = re.compile(r"^[^\w?]*(?P<cue>yes|yeah|yep)[^\w?]*$", re.IGNORECASE)
 _ANSWER_WORD = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
 # Words a bare negative answer may contain besides a restatement of the target.
 _ANSWER_WORDS = frozenset(
@@ -60,9 +68,7 @@ _ANSWER_WORDS = frozenset(
 )  # fmt: skip
 
 
-class DialogueNegation(BaseModel):
-    """A target in a clinician's question, negated by the patient's answer."""
-
+class _Binding(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     question_turn: int
@@ -70,7 +76,15 @@ class DialogueNegation(BaseModel):
     target: Match
     """The target, with offsets into the question turn's text."""
     answer: Match
-    """The negative word, with offsets into the answer turn's text."""
+    """The answer word, with offsets into the answer turn's text."""
+
+
+class DialogueAffirmation(_Binding):
+    """A target in a clinician's question, affirmed by the patient's bare "yes"."""
+
+
+class DialogueNegation(_Binding):
+    """A target in a clinician's question, negated by the patient's answer."""
 
 
 def bind_negations(
@@ -82,6 +96,42 @@ def bind_negations(
     `targets` maps turn numbers (from 1) to target spans within that turn's text.
     Raises ValueError for an unknown turn number or a span outside its turn.
     """
+    return tuple(
+        DialogueNegation(
+            question_turn=question.number, answer_turn=answer.number, target=target, answer=word
+        )
+        for question, answer, target, word in _pairs(transcript, targets, _negative)
+    )
+
+
+def bind_affirmations(
+    transcript: Transcript,
+    targets: Mapping[int, Sequence[tuple[int, int]]],
+) -> tuple[DialogueAffirmation, ...]:
+    """Bind single-target questions to the patient's bare "yes" answers.
+
+    Same question rules and arguments as `bind_negations`.
+    """
+    return tuple(
+        DialogueAffirmation(
+            question_turn=question.number, answer_turn=answer.number, target=target, answer=word
+        )
+        for question, answer, target, word in _pairs(
+            transcript, targets, _bare_yes, present_only=True
+        )
+    )
+
+
+_AnswerRule = Callable[[Turn, Sequence[tuple[int, int]], str], "Match | None"]
+
+
+def _pairs(
+    transcript: Transcript,
+    targets: Mapping[int, Sequence[tuple[int, int]]],
+    answer_rule: _AnswerRule,
+    *,
+    present_only: bool = False,
+) -> list[tuple[Turn, Turn, Match, Match]]:
     for number, spans in targets.items():
         if not 1 <= number <= len(transcript.turns):
             raise ValueError(f"turn {number} out of range 1..{len(transcript.turns)}")
@@ -90,25 +140,24 @@ def bind_negations(
             if not 0 <= start < end <= length:
                 raise ValueError(f"target span ({start}, {end}) is not inside turn {number}")
     if not transcript.has_speaker_labels:
-        return ()
+        return []
     results = []
     for question, answer in zip(transcript.turns, transcript.turns[1:], strict=False):
         if question.speaker != "clinician" or answer.speaker != "patient":
             continue
-        found = _bind(
-            question, targets.get(question.number, ()), answer, targets.get(answer.number, ())
-        )
-        if found is not None:
-            results.append(found)
-    return tuple(results)
+        target = _asked(question, targets.get(question.number, ()), present_only=present_only)
+        if target is None:
+            continue
+        word = answer_rule(answer, targets.get(answer.number, ()), target.text)
+        if word is not None:
+            results.append((question, answer, target, word))
+    return results
 
 
-def _bind(
-    question: Turn,
-    question_targets: Sequence[tuple[int, int]],
-    answer: Turn,
-    answer_targets: Sequence[tuple[int, int]],
-) -> DialogueNegation | None:
+def _asked(
+    question: Turn, question_targets: Sequence[tuple[int, int]], *, present_only: bool = False
+) -> Match | None:
+    """The single target of the clinician's closing presence question, or None."""
     sentences = _sentences(question.text)
     if not sentences or not sentences[-1][2]:
         return None
@@ -126,14 +175,20 @@ def _bind(
     asked = question.text[last_start:last_end]
     if not _PRESENCE_QUESTION.match(asked) or _QUALIFIER.search(asked):
         return None
+    if present_only and _PAST_TENSE.search(asked):
+        return None
     (context,) = classify(question.text, [(target_start, target_end)])
     if context.attributes:
         return None
+    return Match(start=target_start, end=target_end, text=context.text)
 
+
+def _negative(answer: Turn, answer_targets: Sequence[tuple[int, int]], target: str) -> Match | None:
+    """A direct negative, saying nothing beyond a restatement of the target."""
     negative = _NEGATIVE_ANSWER.match(answer.text)
     if negative is None or "?" in answer.text:
         return None
-    target_text = _key(context.text)
+    target_text = _key(target)
     if any(_key(answer.text[start:end]) != target_text for start, end in answer_targets):
         return None
     rest = list(answer.text)
@@ -143,12 +198,16 @@ def _bind(
     if any(word.lower().replace("’", "'") not in _ANSWER_WORDS for word in words):
         return None
     cue_start, cue_end = negative.span("cue")
-    return DialogueNegation(
-        question_turn=question.number,
-        answer_turn=answer.number,
-        target=Match(start=target_start, end=target_end, text=context.text),
-        answer=Match(start=cue_start, end=cue_end, text=negative.group("cue")),
-    )
+    return Match(start=cue_start, end=cue_end, text=negative.group("cue"))
+
+
+def _bare_yes(answer: Turn, answer_targets: Sequence[tuple[int, int]], target: str) -> Match | None:
+    """A bare "yes", "yeah" or "yep" and nothing else."""
+    found = _BARE_YES.match(answer.text)
+    if found is None or answer_targets:
+        return None
+    cue_start, cue_end = found.span("cue")
+    return Match(start=cue_start, end=cue_end, text=found.group("cue"))
 
 
 def _sentences(text: str) -> list[tuple[int, int, bool]]:
