@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "consultation_id": "guarded",
+  "mode": "rules",
+  "standard": "clinical",
+  "model": null,
+  "decision": "warn",
+  "counts": {
+    "omission": 0,
+    "changed_fact": 1,
+    "unsupported": 0,
+    "not_verifiable": 0,
+    "unchecked": 1
+  },
+  "flags": [
+    {
+      "id": "F1",
+      "type": "changed_fact",
+      "category": "dose",
+      "verdict": "changed",
+      "severity": "critical",
+      "confidence": "possible",
+      "origin": "rules",
+      "rule_id": "dose.mismatch",
+      "transcript_value": "5 mg",
+      "note_value": "10 mg",
+      "transcript_evidence": {
+        "text": "ramipril 5 mg",
+        "turn": 2,
+        "start": 56,
+        "end": 69
+      },
+      "note_evidence": {
+        "text": "Ramipril 10 mg",
+        "section": "Medications",
+        "start": 59,
+        "end": 73
+      }
+    }
+  ],
+  "unchecked": [
+    {
+      "category": "medicine",
+      "item": "amlodipine",
+      "reasons": [
+        "planned_or_past"
+      ],
+      "transcript_evidence": [
+        {
+          "text": "amlodipine",
+          "turn": 2,
+          "start": 15,
+          "end": 25
+        }
+      ],
+      "note_evidence": []
+    }
+  ]
+}

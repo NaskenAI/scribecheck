@@ -1,0 +1,6 @@
+Doctor: What medicines are you taking at the moment?
+Patient: I used to take amlodipine, but I stopped it. Now I take ramipril 5 mg once a day.
+Doctor: And for your knees?
+Patient: Both knees ache, so I take paracetamol when I need it.
+Doctor: Any allergies?
+Patient: My sister is allergic to latex. I'm not allergic to anything.

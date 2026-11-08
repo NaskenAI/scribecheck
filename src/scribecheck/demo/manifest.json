@@ -1,0 +1,23 @@
+{
+  "_comment": "Synthetic demo consultations for `scribecheck demo`. They were written for this project, describe no real patient, and have not yet been reviewed by a clinician.",
+  "synthetic": true,
+  "reviewed": false,
+  "licence": "CC BY 4.0",
+  "cases": [
+    {
+      "id": "demo-001",
+      "summary": "GP diabetes review: the note leaves out a regular medicine and a dose.",
+      "expected": ["dose.missing", "medicine.missing"]
+    },
+    {
+      "id": "demo-002",
+      "summary": "Telephone call about a chest infection: the note leaves out a penicillin allergy.",
+      "expected": ["allergy.missing"]
+    },
+    {
+      "id": "demo-003",
+      "summary": "Knee injury: the note leaves out the side and changes a frequency.",
+      "expected": ["side.missing", "frequency.mismatch"]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "consultation_id": "demo-002",
+  "modality": "telephone",
+  "synthetic": true,
+  "reviewed": false,
+  "turns": [
+    {
+      "speaker": "Doctor",
+      "text": "Hello, it's the surgery calling you back. How's the cough?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "Still bad. I've had a cough with green phlegm for a week, and a temperature on and off."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Any chest pain or shortness of breath?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "No."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Any allergies to medicines?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "Yes, I'm allergic to penicillin. It gives me a rash."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Okay. I'll prescribe doxycycline 100 mg once a day for five days."
+    },
+    {
+      "speaker": "Patient",
+      "text": "Thank you."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "If you get short of breath or the fever gets worse, call back straight away."
+    }
+  ]
+}

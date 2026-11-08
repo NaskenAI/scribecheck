@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "consultation_id": "demo-003",
+  "mode": "rules",
+  "standard": "clinical",
+  "model": null,
+  "decision": "warn",
+  "counts": {
+    "omission": 1,
+    "changed_fact": 1,
+    "unsupported": 0,
+    "not_verifiable": 0,
+    "unchecked": 0
+  },
+  "flags": [
+    {
+      "id": "F1",
+      "type": "omission",
+      "category": "side",
+      "verdict": "absent",
+      "severity": "supporting",
+      "confidence": "possible",
+      "origin": "rules",
+      "rule_id": "side.missing",
+      "fact": "left knee",
+      "transcript_evidence": {
+        "text": "left knee",
+        "turn": 2,
+        "start": 3,
+        "end": 12
+      },
+      "note_evidence": null,
+      "expected_section": "History"
+    },
+    {
+      "id": "F2",
+      "type": "changed_fact",
+      "category": "frequency",
+      "verdict": "changed",
+      "severity": "critical",
+      "confidence": "possible",
+      "origin": "rules",
+      "rule_id": "frequency.mismatch",
+      "transcript_value": "three times a day",
+      "note_value": "twice daily",
+      "transcript_evidence": {
+        "text": "ibuprofen 400 mg three times a day",
+        "turn": 4,
+        "start": 7,
+        "end": 41
+      },
+      "note_evidence": {
+        "text": "Ibuprofen 400 mg twice daily",
+        "section": "Medications",
+        "start": 138,
+        "end": 166
+      }
+    }
+  ],
+  "unchecked": []
+}

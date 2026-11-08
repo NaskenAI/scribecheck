@@ -1,0 +1,36 @@
+{
+  "consultation_id": "demo-003",
+  "modality": "in-person",
+  "synthetic": true,
+  "reviewed": false,
+  "turns": [
+    {
+      "speaker": "Doctor",
+      "text": "What seems to be the problem?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "My left knee has been swollen and painful for two weeks, since I twisted it playing football."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Are you taking anything for it?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "I take ibuprofen 400 mg three times a day."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Any other medicines?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "No."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "The knee is swollen with a small effusion. I'd like an X-ray and a physiotherapy referral."
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "consultation_id": "demo-001",
+  "modality": "in-person",
+  "synthetic": true,
+  "reviewed": false,
+  "turns": [
+    {
+      "speaker": "Doctor",
+      "text": "Good morning. What brings you in today?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "It's my diabetes review. My sugars have mostly been fine."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Which medicines are you taking at the moment?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "I take metformin 500 mg twice a day, and I'm on atorvastatin 20 mg at night."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Any problems with them?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "No, they're fine."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Any allergies to medicines?"
+    },
+    {
+      "speaker": "Patient",
+      "text": "No, none."
+    },
+    {
+      "speaker": "Doctor",
+      "text": "Your HbA1c is 52, which is good. We'll keep everything the same and review you in six months."
+    }
+  ]
+}

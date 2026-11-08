@@ -1,0 +1,134 @@
+{
+  "schema_version": "1.0",
+  "consultation_id": "demo-002",
+  "mode": "rules",
+  "standard": "clinical",
+  "model": null,
+  "decision": "warn",
+  "counts": {
+    "omission": 1,
+    "changed_fact": 0,
+    "unsupported": 0,
+    "not_verifiable": 0,
+    "unchecked": 4
+  },
+  "flags": [
+    {
+      "id": "F1",
+      "type": "omission",
+      "category": "allergy",
+      "verdict": "absent",
+      "severity": "critical",
+      "confidence": "possible",
+      "origin": "rules",
+      "rule_id": "allergy.missing",
+      "fact": "allergy: penicillin",
+      "transcript_evidence": {
+        "text": "allergic to penicillin",
+        "turn": 6,
+        "start": 9,
+        "end": 31
+      },
+      "note_evidence": null,
+      "expected_section": "Allergies"
+    }
+  ],
+  "unchecked": [
+    {
+      "category": "dose",
+      "item": "doxycycline",
+      "reasons": [
+        "planned_or_past",
+        "certain_disabled_pending_allowlist"
+      ],
+      "transcript_evidence": [
+        {
+          "text": "doxycycline",
+          "turn": 7,
+          "start": 21,
+          "end": 32
+        }
+      ],
+      "note_evidence": [
+        {
+          "text": "Doxycycline",
+          "section": "Plan",
+          "start": 143,
+          "end": 154
+        }
+      ]
+    },
+    {
+      "category": "frequency",
+      "item": "doxycycline",
+      "reasons": [
+        "planned_or_past",
+        "certain_disabled_pending_allowlist"
+      ],
+      "transcript_evidence": [
+        {
+          "text": "doxycycline",
+          "turn": 7,
+          "start": 21,
+          "end": 32
+        }
+      ],
+      "note_evidence": [
+        {
+          "text": "Doxycycline",
+          "section": "Plan",
+          "start": 143,
+          "end": 154
+        }
+      ]
+    },
+    {
+      "category": "symptom",
+      "item": "chest pain",
+      "reasons": [
+        "question_unanswered",
+        "certain_disabled_pending_allowlist"
+      ],
+      "transcript_evidence": [
+        {
+          "text": "chest pain",
+          "turn": 3,
+          "start": 4,
+          "end": 14
+        }
+      ],
+      "note_evidence": [
+        {
+          "text": "chest pain",
+          "section": "History",
+          "start": 101,
+          "end": 111
+        }
+      ]
+    },
+    {
+      "category": "symptom",
+      "item": "dyspnea",
+      "reasons": [
+        "question_unanswered",
+        "certain_disabled_pending_allowlist"
+      ],
+      "transcript_evidence": [
+        {
+          "text": "shortness of breath",
+          "turn": 3,
+          "start": 18,
+          "end": 37
+        }
+      ],
+      "note_evidence": [
+        {
+          "text": "shortness of breath",
+          "section": "History",
+          "start": 115,
+          "end": 134
+        }
+      ]
+    }
+  ]
+}
