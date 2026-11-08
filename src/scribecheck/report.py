@@ -55,8 +55,28 @@ class ModelInfo(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
+    """The model requested."""
     version: str | None = None
+    """The model id the provider reported."""
     endpoint_host: str | None = None
+    provider: str | None = None
+    effort: str | None = None
+    temperature: float | None = None
+    """None where none was sent (the Anthropic API accepts none)."""
+    seed: int | None = None
+
+
+class UsageInfo(BaseModel):
+    """Token usage for a report's model calls, and their cost when prices are configured."""
+
+    model_config = ConfigDict(frozen=True)
+
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_write_tokens: int = 0
+    cache_read_tokens: int = 0
+    cost_usd: float | None = None
 
 
 class Counts(BaseModel):
@@ -85,10 +105,12 @@ class Report(BaseModel):
     counts: Counts
     flags: tuple[Flag, ...] = ()
     unchecked: tuple[UncheckedItem, ...] = ()
+    usage: UsageInfo | None = None
+    """Full mode only."""
 
     def to_dict(self) -> dict[str, Any]:
         """The report as JSON-ready data, keys in the spec's order."""
-        return {
+        data = {
             "schema_version": self.schema_version,
             "consultation_id": self.consultation_id,
             "mode": self.mode,
@@ -99,6 +121,9 @@ class Report(BaseModel):
             "flags": [_flag_dict(f) for f in self.flags],
             "unchecked": [_unchecked_dict(u) for u in self.unchecked],
         }
+        if self.usage is not None:
+            data["usage"] = self.usage.model_dump()
+        return data
 
     def to_json(self) -> str:
         return _dumps(self.to_dict())

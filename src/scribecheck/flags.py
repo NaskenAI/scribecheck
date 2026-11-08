@@ -43,6 +43,10 @@ UncheckedReason = Literal[
     "clinician_only",
     "no_speaker_labels",
     "question_unanswered",
+    "model_parse_failure",
+    "cost_cap_reached",
+    "model_refusal",
+    "model_error",
 ]
 """Why an item got no certain flag; see rules/changed.py for each."""
 
