@@ -1,0 +1,784 @@
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-bin-k1 criterion=F format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.500 | r1 0.500 (n 293, wins 10, ties 273) | r2 0.486 (n 293, wins 6, ties 273) | r3 0.514 (n 293, wins 18, ties 265)
+  add/change discrimination: mean 0.875 | r1 0.886 (n 202, wins 157, ties 44) | r2 0.859 (n 202, wins 146, ties 55) | r3 0.879 (n 202, wins 154, ties 47)
+  detection: r1 24/293 0.082 | r2 27/293 0.092 | r3 33/293 0.113 | majority 28/293 0.096 | known-only majority 28/293 0.096
+  clean flag rate: r1 8/112 0.071 | r2 13/112 0.116 | r3 9/112 0.080 | majority 8/112 0.071 | known-only majority 8/112 0.071
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 24/293 fa 8/112 | r2 det 27/293 fa 13/112 | r3 det 33/293 fa 9/112 | majority det 28/293 fa 8/112 | known-only majority det 28/293 fa 8/112
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-bin-k1 criterion=FC format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.539 | r1 0.526 (n 293, wins 36, ties 236) | r2 0.560 (n 293, wins 52, ties 224) | r3 0.532 (n 293, wins 45, ties 222)
+  add/change discrimination: mean 0.792 | r1 0.792 (n 202, wins 119, ties 82) | r2 0.797 (n 202, wins 123, ties 76) | r3 0.787 (n 202, wins 119, ties 80)
+  detection: r1 119/293 0.406 | r2 120/293 0.410 | r3 115/293 0.392 | majority 111/293 0.379 | known-only majority 111/293 0.379
+  clean flag rate: r1 37/112 0.330 | r2 34/112 0.304 | r3 36/112 0.321 | majority 35/112 0.312 | known-only majority 35/112 0.312
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 119/293 fa 37/112 | r2 det 120/293 fa 34/112 | r3 det 115/293 fa 36/112 | majority det 111/293 fa 35/112 | known-only majority det 111/293 fa 35/112
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-score-k1 criterion=F format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.549 | r1 0.534 (n 293, wins 54, ties 205) | r2 0.536 (n 293, wins 56, ties 202) | r3 0.577 (n 293, wins 64, ties 210)
+  add/change discrimination: mean 0.911 | r1 0.903 (n 202, wins 167, ties 31) | r2 0.911 (n 202, wins 169, ties 30) | r3 0.918 (n 202, wins 170, ties 31)
+  detection: r1 2/293 0.007 | r2 3/293 0.010 | r3 4/293 0.014 | majority 1/293 0.003 | known-only majority 1/293 0.003
+  clean flag rate: r1 2/112 0.018 | r2 1/112 0.009 | r3 2/112 0.018 | majority 1/112 0.009 | known-only majority 1/112 0.009
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 0/293 fa 0/112 (t 7) | r2 det 3/293 fa 1/112 (t 8) | r3 det 0/293 fa 0/112 (t 7) | majority det 0/293 fa 0/112
+  matched false alarms k2: r1 det 2/293 fa 2/112 (t 8) | r2 det 3/293 fa 1/112 (t 8) | r3 det 4/293 fa 2/112 (t 8) | majority det 1/293 fa 1/112
+  matched false alarms k3: r1 det 2/293 fa 2/112 (t 8) | r2 det 3/293 fa 1/112 (t 8) | r3 det 4/293 fa 2/112 (t 8) | majority det 1/293 fa 1/112
+  rule route-two-below-10: r1 det 240/293 fa 83/112 | r2 det 241/293 fa 85/112 | r3 det 241/293 fa 83/112 | majority det 238/293 fa 82/112 | known-only majority det 238/293 fa 82/112
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-score-k1 criterion=FC format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.585 | r1 0.618 (n 293, wins 86, ties 190) | r2 0.594 (n 293, wins 89, ties 170) | r3 0.543 (n 293, wins 62, ties 194)
+  add/change discrimination: mean 0.895 | r1 0.901 (n 202, wins 167, ties 30) | r2 0.886 (n 202, wins 163, ties 32) | r3 0.899 (n 202, wins 166, ties 31)
+  detection: r1 14/293 0.048 | r2 14/293 0.048 | r3 13/293 0.044 | majority 12/293 0.041 | known-only majority 12/293 0.041
+  clean flag rate: r1 7/112 0.062 | r2 6/112 0.054 | r3 6/112 0.054 | majority 5/112 0.045 | known-only majority 5/112 0.045
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 2/293 fa 0/112 (t 7) | r2 det 1/293 fa 1/112 (t 7) | r3 det 0/293 fa 0/112 (t 6) | majority det 0/293 fa 0/112
+  matched false alarms k2: r1 det 2/293 fa 0/112 (t 7) | r2 det 1/293 fa 1/112 (t 7) | r3 det 0/293 fa 0/112 (t 6) | majority det 0/293 fa 0/112
+  matched false alarms k3: r1 det 2/293 fa 0/112 (t 7) | r2 det 1/293 fa 1/112 (t 7) | r3 det 0/293 fa 0/112 (t 6) | majority det 0/293 fa 0/112
+  rule route-two-below-10: r1 det 252/293 fa 84/112 | r2 det 254/293 fa 84/112 | r3 det 253/293 fa 88/112 | majority det 254/293 fa 86/112 | known-only majority det 254/293 fa 86/112
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-bin-k8 criterion=F format=bin k=8 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.509 | r1 0.510 (n 293, wins 23, ties 253) | r2 0.519 (n 293, wins 24, ties 256) | r3 0.497 (n 293, wins 18, ties 255)
+  add/change discrimination: mean 0.904 | r1 0.903 (n 202, wins 164, ties 37) | r2 0.911 (n 202, wins 168, ties 32) | r3 0.899 (n 202, wins 164, ties 35)
+  detection: r1 29/293 0.099 | r2 28/293 0.096 | r3 27/293 0.092 | majority 30/293 0.102 | known-only majority 30/293 0.102
+  clean flag rate: r1 9/112 0.080 | r2 7/112 0.062 | r3 9/112 0.080 | majority 9/112 0.080 | known-only majority 9/112 0.080
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 0/293 fa 0/112 (t 0) | r2 det 0/293 fa 0/112 (t 0) | r3 det 0/293 fa 0/112 (t 0) | majority det 0/293 fa 0/112
+  matched false alarms k2: r1 det 0/293 fa 0/112 (t 0) | r2 det 0/293 fa 0/112 (t 0) | r3 det 0/293 fa 0/112 (t 0) | majority det 0/293 fa 0/112
+  matched false alarms k3: r1 det 0/293 fa 0/112 (t 0) | r2 det 0/293 fa 0/112 (t 0) | r3 det 0/293 fa 0/112 (t 0) | majority det 0/293 fa 0/112
+  rule route-two-below-10: r1 det 42/293 fa 13/112 | r2 det 42/293 fa 13/112 | r3 det 39/293 fa 13/112 | majority det 39/293 fa 12/112 | known-only majority det 39/293 fa 12/112
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-score-k8 criterion=F format=score k=8 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.582 | r1 0.582 (n 293, wins 95, ties 151) | r2 0.580 (n 293, wins 97, ties 146) | r3 0.584 (n 293, wins 101, ties 140)
+  add/change discrimination: mean 0.944 | r1 0.946 (n 202, wins 186, ties 10) | r2 0.948 (n 202, wins 188, ties 7) | r3 0.938 (n 202, wins 182, ties 15)
+  detection: r1 6/293 0.020 | r2 9/293 0.031 | r3 6/293 0.020 | majority 7/293 0.024 | known-only majority 7/293 0.024
+  clean flag rate: r1 2/112 0.018 | r2 3/112 0.027 | r3 2/112 0.018 | majority 1/112 0.009 | known-only majority 1/112 0.009
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 2/293 fa 1/112 (t 7.625) | r2 det 7/293 fa 1/112 (t 7.75) | r3 det 2/293 fa 1/112 (t 7.75) | majority det 3/293 fa 1/112
+  matched false alarms k2: r1 det 6/293 fa 2/112 (t 8) | r2 det 7/293 fa 1/112 (t 7.75) | r3 det 6/293 fa 2/112 (t 8) | majority det 7/293 fa 1/112
+  matched false alarms k3: r1 det 6/293 fa 2/112 (t 8) | r2 det 9/293 fa 3/112 (t 8) | r3 det 6/293 fa 2/112 (t 8) | majority det 7/293 fa 1/112
+  rule route-two-below-10: r1 det 257/293 fa 90/112 | r2 det 259/293 fa 88/112 | r3 det 257/293 fa 90/112 | majority det 256/293 fa 89/112 | known-only majority det 256/293 fa 89/112
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-bin-k8 criterion=FC format=bin k=8 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.591 | r1 0.573 (n 293, wins 80, ties 176) | r2 0.604 (n 293, wins 93, ties 168) | r3 0.596 (n 293, wins 93, ties 163)
+  add/change discrimination: mean 0.869 | r1 0.864 (n 202, wins 150, ties 49) | r2 0.874 (n 202, wins 155, ties 43) | r3 0.869 (n 202, wins 154, ties 43)
+  detection: r1 128/293 0.437 | r2 127/293 0.433 | r3 117/293 0.399 | majority 123/293 0.420 | known-only majority 123/293 0.420
+  clean flag rate: r1 35/112 0.312 | r2 37/112 0.330 | r3 36/112 0.321 | majority 37/112 0.330 | known-only majority 37/112 0.330
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 0/293 fa 0/112 (t 0) | r2 det 0/293 fa 0/112 (t 0) | r3 det 0/293 fa 0/112 (t 0) | majority det 0/293 fa 0/112
+  matched false alarms k2: r1 det 0/293 fa 0/112 (t 0) | r2 det 0/293 fa 0/112 (t 0) | r3 det 0/293 fa 0/112 (t 0) | majority det 0/293 fa 0/112
+  matched false alarms k3: r1 det 0/293 fa 0/112 (t 0) | r2 det 0/293 fa 0/112 (t 0) | r3 det 0/293 fa 0/112 (t 0) | majority det 0/293 fa 0/112
+  rule route-two-below-10: r1 det 165/293 fa 53/112 | r2 det 165/293 fa 50/112 | r3 det 166/293 fa 50/112 | majority det 167/293 fa 51/112 | known-only majority det 167/293 fa 51/112
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-score-k8 criterion=FC format=score k=8 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 16, replaced by later shards 4, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1821, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 1485 / from rows 0
+  omission discrimination: mean 0.634 | r1 0.655 (n 293, wins 132, ties 120) | r2 0.645 (n 293, wins 128, ties 122) | r3 0.601 (n 293, wins 115, ties 122)
+  add/change discrimination: mean 0.939 | r1 0.955 (n 202, wins 187, ties 12) | r2 0.938 (n 202, wins 183, ties 13) | r3 0.923 (n 202, wins 179, ties 15)
+  detection: r1 28/293 0.096 | r2 24/293 0.082 | r3 21/293 0.072 | majority 22/293 0.075 | known-only majority 22/293 0.075
+  clean flag rate: r1 6/112 0.054 | r2 7/112 0.062 | r3 9/112 0.080 | majority 7/112 0.062 | known-only majority 7/112 0.062
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 0/293 fa 0/112 (t 6.625) | r2 det 5/293 fa 1/112 (t 7.125) | r3 det 0/293 fa 0/112 (t 6.625) | majority det 0/293 fa 0/112
+  matched false alarms k2: r1 det 5/293 fa 2/112 (t 7.25) | r2 det 5/293 fa 1/112 (t 7.125) | r3 det 3/293 fa 2/112 (t 7.25) | majority det 3/293 fa 2/112
+  matched false alarms k3: r1 det 6/293 fa 3/112 (t 7.375) | r2 det 8/293 fa 3/112 (t 7.375) | r3 det 3/293 fa 2/112 (t 7.25) | majority det 4/293 fa 3/112
+  rule route-two-below-10: r1 det 264/293 fa 89/112 | r2 det 260/293 fa 89/112 | r3 det 260/293 fa 88/112 | majority det 262/293 fa 87/112 | known-only majority det 262/293 fa 87/112
+
+[w2-baselines] model=openai/gpt-5.4 arm=checklist cell=checklist criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — partial coverage
+  files 10, replaced by later shards 0, coverage: r1 errored 479 clean 108 | r2 errored 495 clean 112
+  rows 1194, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 974 / from rows 0
+  omission discrimination: mean 0.645 | r1 0.646 (n 285, wins 104, ties 160) | r2 0.645 (n 293, wins 107, ties 164)
+  add/change discrimination: mean 0.744 | r1 0.737 (n 194, wins 108, ties 70) | r2 0.750 (n 202, wins 117, ties 69)
+  detection: r1 196/285 0.688 | r2 196/293 0.669 | majority 180/293 0.614 | known-only majority 185/293 0.631
+  clean flag rate: r1 56/108 0.519 | r2 57/112 0.509 | majority 51/112 0.455 | known-only majority 52/112 0.464
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 16/285 fa 1/108 (t 0.875) | r2 det 7/293 fa 0/112 (t 0.833333) | majority det 6/293 fa 0/112
+  matched false alarms k2: r1 det 16/285 fa 1/108 (t 0.875) | r2 det 13/293 fa 2/112 (t 0.84) | majority det 9/293 fa 0/112
+  matched false alarms k3: r1 det 16/285 fa 1/108 (t 0.875) | r2 det 17/293 fa 3/112 (t 0.875) | majority det 11/293 fa 0/112
+
+[w2-baselines] model=openai/gpt-5.4 arm=geval cell=geval criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — partial coverage
+  files 10, replaced by later shards 0, coverage: r1 errored 479 clean 108 | r2 errored 495 clean 112
+  rows 1194, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 974 / from rows 0
+  omission discrimination: mean 0.569 | r1 0.567 (n 285, wins 47, ties 229) | r2 0.572 (n 293, wins 50, ties 235)
+  add/change discrimination: mean 0.889 | r1 0.881 (n 194, wins 154, ties 34) | r2 0.896 (n 202, wins 163, ties 36)
+  detection: r1 79/285 0.277 | r2 78/293 0.266 | majority 64/293 0.218 | known-only majority 64/293 0.218
+  clean flag rate: r1 15/108 0.139 | r2 13/112 0.116 | majority 10/112 0.089 | known-only majority 10/112 0.089
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | majority –
+  matched false alarms k2: r1 – | r2 – | majority –
+  matched false alarms k3: r1 – | r2 – | majority –
+
+[w2-baselines] model=openai/gpt-5.4 arm=ragas cell=ragas criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — partial coverage
+  files 10, replaced by later shards 0, coverage: r1 errored 478 clean 107 | r2 errored 489 clean 111
+  rows 1185, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 967 / from rows 0
+  omission discrimination: mean 0.808 | r1 0.824 (n 284, wins 210, ties 48) | r2 0.792 (n 289, wins 205, ties 48)
+  add/change discrimination: mean 0.717 | r1 0.740 (n 192, wins 118, ties 48) | r2 0.695 (n 200, wins 113, ties 52)
+  detection: r1 286/286 1.000 | r2 289/289 1.000 | majority 284/291 0.976 | known-only majority 291/291 1.000
+  clean flag rate: r1 107/107 1.000 | r2 111/111 1.000 | majority 107/111 0.964 | known-only majority 111/111 1.000
+  not scored: no twin 2, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 27/286 fa 1/107 (t 0.793479) | r2 det 24/289 fa 1/111 (t 0.79661) | majority det 22/291 fa 1/111
+  matched false alarms k2: r1 det 29/286 fa 2/107 (t 0.79661) | r2 det 32/289 fa 2/111 (t 0.803572) | majority det 25/291 fa 1/111
+  matched false alarms k3: r1 det 35/286 fa 3/107 (t 0.807693) | r2 det 32/289 fa 2/111 (t 0.803572) | majority det 28/291 fa 2/111
+
+[w2-baselines] model=(null) arm=ragas cell=ragas criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 5 clean 2 | r2 errored 6 clean 1
+  rows 0, parse failures excluded 14, replicates  (of 2), types from --pairs 0 / from rows 0
+  omission discrimination: mean –
+  add/change discrimination: mean –
+  detection: majority 0/4 0.000 | known-only majority 0/0 –
+  clean flag rate: majority 0/2 0.000 | known-only majority 0/0 –
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | majority –
+  matched false alarms k2: r1 – | r2 – | majority –
+  matched false alarms k3: r1 – | r2 – | majority –
+
+[w2-factlist] model=openai/gpt-5.4 arm=factlist-FC-score-k1 cell=factlist-FC-score-k1 criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armconfirm — complete
+  files 3, replaced by later shards 3, coverage: r1 errored 151 clean 47
+  rows 198, parse failures excluded 0, replicates 1 (of 1), types from --pairs 151 / from rows 0
+  omission discrimination: mean 0.634 | r1 0.634 (n 131, wins 39, ties 88)
+  add/change discrimination: mean 0.875 | r1 0.875 (n 20, wins 16, ties 3)
+  detection: r1 1/131 0.008 | majority 1/131 0.008 | known-only majority 1/131 0.008
+  clean flag rate: r1 0/47 0.000 | majority 0/47 0.000 | known-only majority 0/47 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 1/131 fa 0/47 (t 8) | majority det 1/131 fa 0/47
+  matched false alarms k2: r1 det 1/131 fa 0/47 (t 8) | majority det 1/131 fa 0/47
+  matched false alarms k3: r1 det 1/131 fa 0/47 (t 8) | majority det 1/131 fa 0/47
+  rule route-two-below-10: r1 det 121/131 fa 36/47 | majority det 121/131 fa 36/47 | known-only majority det 121/131 fa 36/47
+
+[w2-pipeline] model=openai/gpt-5.4 arm=B2 cell=B2 criterion=(missing) format=score k=1 tier=B2 effort=(missing) dataset=factorial-v1-armconfirm — complete
+  files 20, replaced by later shards 0, coverage: r1 errored 151 clean 47 | r2 errored 151 clean 47 | r3 errored 151 clean 47
+  rows 594, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 453 / from rows 0
+  omission discrimination: mean 0.786 | r1 0.802 (n 131, wins 84, ties 42) | r2 0.771 (n 131, wins 82, ties 38) | r3 0.786 (n 131, wins 82, ties 42)
+  add/change discrimination: mean 0.650 | r1 0.650 (n 20, wins 8, ties 10) | r2 0.600 (n 20, wins 8, ties 8) | r3 0.700 (n 20, wins 9, ties 10)
+  detection: r1 0/0 – | r2 0/0 – | r3 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/0 – | r2 0/0 – | r3 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 16/131 fa 1/47 (t 0.864865) | r2 det 18/131 fa 1/47 (t 0.868421) | r3 det 15/131 fa 1/47 (t 0.863636) | majority det 16/131 fa 1/47
+  matched false alarms k2: r1 det 18/131 fa 2/47 (t 0.871795) | r2 det 18/131 fa 1/47 (t 0.868421) | r3 det 16/131 fa 2/47 (t 0.864865) | majority det 17/131 fa 1/47
+  matched false alarms k3: r1 det 19/131 fa 3/47 (t 0.883721) | r2 det 20/131 fa 3/47 (t 0.883721) | r3 det 17/131 fa 3/47 (t 0.871795) | majority det 18/131 fa 3/47
+  rule pipeline-critical-absent: r1 det 0/131 fa 0/47 | r2 det 0/131 fa 0/47 | r3 det 0/131 fa 0/47 | majority det 0/131 fa 0/47 | known-only majority det 0/131 fa 0/47
+
+[w2-pipeline] model=openai/gpt-5.4 arm=B3 cell=B3 criterion=(missing) format=score k=1 tier=B3 effort=(missing) dataset=factorial-v1-armconfirm — partial coverage
+  files 21, replaced by later shards 0, coverage: r1 errored 129 clean 41 | r2 errored 151 clean 47 | r3 errored 151 clean 47
+  rows 566, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 431 / from rows 0
+  omission discrimination: mean 0.776 | r1 0.793 (n 111, wins 78, ties 20) | r2 0.767 (n 131, wins 86, ties 29) | r3 0.767 (n 131, wins 87, ties 27)
+  add/change discrimination: mean 0.638 | r1 0.562 (n 16, wins 6, ties 6) | r2 0.650 (n 20, wins 9, ties 8) | r3 0.700 (n 20, wins 12, ties 4)
+  detection: r1 0/0 – | r2 0/0 – | r3 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/0 – | r2 0/0 – | r3 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  not scored: no twin 2, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 13/113 fa 1/41 (t 0.865672) | r2 det 15/131 fa 1/47 (t 0.865672) | r3 det 12/131 fa 1/47 (t 0.855556) | majority det 14/131 fa 1/47
+  matched false alarms k2: r1 det 24/113 fa 2/41 (t 0.903509) | r2 det 15/131 fa 1/47 (t 0.865672) | r3 det 15/131 fa 2/47 (t 0.865672) | majority det 15/131 fa 1/47
+  matched false alarms k3: r1 det 29/113 fa 3/41 (t 0.906593) | r2 det 16/131 fa 3/47 (t 0.869919) | r3 det 25/131 fa 3/47 (t 0.885965) | majority det 21/131 fa 3/47
+  rule pipeline-critical-absent: r1 det 22/113 fa 0/41 | r2 det 30/131 fa 1/47 | r3 det 28/131 fa 1/47 | majority det 28/131 fa 1/47 | known-only majority det 28/131 fa 1/47
+
+[w2-pipeline] model=openai/gpt-5.4 arm=B3 cell=B3 criterion=(missing) format=score k=1 tier=B3 effort=(missing) dataset=factorial-v1 — partial coverage
+  files 13, replaced by later shards 0, coverage: r1 errored 344 clean 65
+  rows 409, parse failures excluded 0, replicates 1 (of 1), types from --pairs 344 / from rows 0
+  omission discrimination: mean 0.838 | r1 0.838 (n 148, wins 113, ties 22)
+  add/change discrimination: mean 0.658 | r1 0.658 (n 117, wins 61, ties 32)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  not scored: no twin 79, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 7/162 fa 1/65 (t 0.823864) | majority det 7/162 fa 1/65
+  matched false alarms k2: r1 det 11/162 fa 2/65 (t 0.842697) | majority det 11/162 fa 2/65
+  matched false alarms k3: r1 det 15/162 fa 3/65 (t 0.853448) | majority det 15/162 fa 3/65
+  rule pipeline-critical-absent: r1 det 45/162 fa 2/65 | majority det 45/162 fa 2/65 | known-only majority det 45/162 fa 2/65
+
+[w2-power] model=openai/gpt-5.4 arm=power-FC-med cell=power-FC-med criterion=(missing) format=score k=1 tier=(missing) effort=medium dataset=factorial-v1-armconfirm — complete
+  files 3, replaced by later shards 3, coverage: r1 errored 151 clean 47
+  rows 198, parse failures excluded 0, replicates 1 (of 1), types from --pairs 151 / from rows 0
+  omission discrimination: mean 0.641 | r1 0.641 (n 131, wins 50, ties 68)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 20, wins 20, ties 0)
+  detection: r1 5/131 0.038 | majority 5/131 0.038 | known-only majority 5/131 0.038
+  clean flag rate: r1 0/47 0.000 | majority 0/47 0.000 | known-only majority 0/47 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 5/131 fa 0/47 (t 8) | majority det 5/131 fa 0/47
+  matched false alarms k2: r1 det 5/131 fa 0/47 (t 8) | majority det 5/131 fa 0/47
+  matched false alarms k3: r1 det 5/131 fa 0/47 (t 8) | majority det 5/131 fa 0/47
+  rule route-two-below-10: r1 det 108/131 fa 34/47 | majority det 108/131 fa 34/47 | known-only majority det 108/131 fa 34/47
+
+[w2-power] model=openai/gpt-5.4 arm=power-FC-high cell=power-FC-high criterion=(missing) format=score k=1 tier=(missing) effort=high dataset=factorial-v1-armconfirm — complete
+  files 7, replaced by later shards 3, coverage: r1 errored 151 clean 47 | r2 errored 151 clean 47 | r3 errored 151 clean 47
+  rows 594, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 453 / from rows 0
+  omission discrimination: mean 0.670 | r1 0.687 (n 131, wins 59, ties 62) | r2 0.656 (n 131, wins 55, ties 62) | r3 0.668 (n 131, wins 57, ties 61)
+  add/change discrimination: mean 0.983 | r1 0.975 (n 20, wins 19, ties 1) | r2 0.975 (n 20, wins 19, ties 1) | r3 1.000 (n 20, wins 20, ties 0)
+  detection: r1 5/131 0.038 | r2 5/131 0.038 | r3 6/131 0.046 | majority 4/131 0.031 | known-only majority 4/131 0.031
+  clean flag rate: r1 0/47 0.000 | r2 0/47 0.000 | r3 0/47 0.000 | majority 0/47 0.000 | known-only majority 0/47 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 5/131 fa 0/47 (t 8) | r2 det 5/131 fa 0/47 (t 8) | r3 det 6/131 fa 0/47 (t 8) | majority det 4/131 fa 0/47
+  matched false alarms k2: r1 det 5/131 fa 0/47 (t 8) | r2 det 5/131 fa 0/47 (t 8) | r3 det 6/131 fa 0/47 (t 8) | majority det 4/131 fa 0/47
+  matched false alarms k3: r1 det 5/131 fa 0/47 (t 8) | r2 det 5/131 fa 0/47 (t 8) | r3 det 6/131 fa 0/47 (t 8) | majority det 4/131 fa 0/47
+  rule route-two-below-10: r1 det 104/131 fa 28/47 | r2 det 110/131 fa 32/47 | r3 det 106/131 fa 30/47 | majority det 108/131 fa 31/47 | known-only majority det 108/131 fa 31/47
+
+[w2-power] model=openai/gpt-5.4 arm=power-factlist-high cell=power-factlist-high criterion=(missing) format=score k=1 tier=(missing) effort=high dataset=factorial-v1-armconfirm — complete
+  files 3, replaced by later shards 3, coverage: r1 errored 151 clean 47
+  rows 198, parse failures excluded 0, replicates 1 (of 1), types from --pairs 151 / from rows 0
+  omission discrimination: mean 0.698 | r1 0.698 (n 131, wins 61, ties 61)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 20, wins 20, ties 0)
+  detection: r1 4/131 0.031 | majority 4/131 0.031 | known-only majority 4/131 0.031
+  clean flag rate: r1 0/47 0.000 | majority 0/47 0.000 | known-only majority 0/47 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 4/131 fa 0/47 (t 8) | majority det 4/131 fa 0/47
+  matched false alarms k2: r1 det 4/131 fa 0/47 (t 8) | majority det 4/131 fa 0/47
+  matched false alarms k3: r1 det 4/131 fa 0/47 (t 8) | majority det 4/131 fa 0/47
+  rule route-two-below-10: r1 det 112/131 fa 30/47 | majority det 112/131 fa 30/47 | known-only majority det 112/131 fa 30/47
+
+[w2-power] model=openai/gpt-5.4 arm=power-gepa-high cell=power-gepa-high criterion=(missing) format=score k=1 tier=(missing) effort=high dataset=factorial-v1-armconfirm — complete
+  files 7, replaced by later shards 3, coverage: r1 errored 151 clean 47 | r2 errored 151 clean 47 | r3 errored 151 clean 47
+  rows 594, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 453 / from rows 0
+  omission discrimination: mean 0.669 | r1 0.668 (n 131, wins 48, ties 79) | r2 0.664 (n 131, wins 44, ties 86) | r3 0.676 (n 131, wins 48, ties 81)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 20, wins 20, ties 0) | r2 1.000 (n 20, wins 20, ties 0) | r3 1.000 (n 20, wins 20, ties 0)
+  detection: r1 8/131 0.061 | r2 9/131 0.069 | r3 8/131 0.061 | majority 8/131 0.061 | known-only majority 8/131 0.061
+  clean flag rate: r1 0/47 0.000 | r2 0/47 0.000 | r3 0/47 0.000 | majority 0/47 0.000 | known-only majority 0/47 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 11/131 fa 1/47 (t 9) | r2 det 45/131 fa 1/47 (t 10) | r3 det 16/131 fa 0/47 (t 9) | majority det 18/131 fa 0/47
+  matched false alarms k2: r1 det 52/131 fa 2/47 (t 10) | r2 det 45/131 fa 1/47 (t 10) | r3 det 50/131 fa 2/47 (t 10) | majority det 42/131 fa 1/47
+  matched false alarms k3: r1 det 52/131 fa 2/47 (t 10) | r2 det 45/131 fa 1/47 (t 10) | r3 det 50/131 fa 2/47 (t 10) | majority det 42/131 fa 1/47
+  rule route-two-below-10: r1 det 52/131 fa 2/47 | r2 det 45/131 fa 1/47 | r3 det 50/131 fa 2/47 | majority det 42/131 fa 1/47 | known-only majority det 42/131 fa 1/47
+
+[w2-power] model=openai/gpt-5.4 arm=power-engineered-high cell=power-engineered-high criterion=(missing) format=score k=1 tier=(missing) effort=high dataset=factorial-v1-armconfirm — complete
+  files 2, replaced by later shards 0, coverage: r1 errored 151 clean 47
+  rows 198, parse failures excluded 0, replicates 1 (of 1), types from --pairs 151 / from rows 0
+  omission discrimination: mean 0.649 | r1 0.649 (n 131, wins 44, ties 82)
+  add/change discrimination: mean 0.725 | r1 0.725 (n 20, wins 9, ties 11)
+  detection: r1 12/131 0.092 | majority 12/131 0.092 | known-only majority 12/131 0.092
+  clean flag rate: r1 0/47 0.000 | majority 0/47 0.000 | known-only majority 0/47 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 14/131 fa 0/47 (t 9) | majority det 14/131 fa 0/47
+  matched false alarms k2: r1 det 14/131 fa 0/47 (t 9) | majority det 14/131 fa 0/47
+  matched false alarms k3: r1 det 46/131 fa 3/47 (t 10) | majority det 46/131 fa 3/47
+  rule route-two-below-10: r1 det 46/131 fa 3/47 | majority det 46/131 fa 3/47 | known-only majority det 46/131 fa 3/47
+
+[w2-power] model=openai/gpt-5.4 arm=power-gepa-high cell=power-gepa-high criterion=(missing) format=score k=1 tier=(missing) effort=high dataset=factorial-v1 — partial coverage
+  files 13, replaced by later shards 0, coverage: r1 errored 344 clean 65 | r2 errored 212 clean 37 | r3 errored 342 clean 65
+  rows 1065, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 898 / from rows 0
+  omission discrimination: mean 0.658 | r1 0.682 (n 148, wins 56, ties 90) | r2 0.616 (n 86, wins 26, ties 54) | r3 0.676 (n 148, wins 57, ties 86)
+  add/change discrimination: mean 0.975 | r1 0.983 (n 117, wins 113, ties 4) | r2 0.971 (n 68, wins 65, ties 2) | r3 0.970 (n 117, wins 110, ties 7)
+  detection: r1 28/162 0.173 | r2 10/95 0.105 | r3 26/162 0.160 | majority 25/162 0.154 | known-only majority 25/162 0.154
+  clean flag rate: r1 1/65 0.015 | r2 1/37 0.027 | r3 1/65 0.015 | majority 1/65 0.015 | known-only majority 1/65 0.015
+  not scored: no twin 214, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 32/162 fa 1/65 (t 9) | r2 det 10/95 fa 1/37 (t 9) | r3 det 26/162 fa 1/65 (t 8) | majority det 25/162 fa 1/65
+  matched false alarms k2: r1 det 32/162 fa 1/65 (t 9) | r2 det 10/95 fa 1/37 (t 9) | r3 det 30/162 fa 2/65 (t 9) | majority det 28/162 fa 1/65
+  matched false alarms k3: r1 det 32/162 fa 1/65 (t 9) | r2 det 10/95 fa 1/37 (t 9) | r3 det 30/162 fa 2/65 (t 9) | majority det 28/162 fa 1/65
+  rule route-two-below-10: r1 det 68/162 fa 7/65 | r2 det 34/95 fa 5/37 | r3 det 68/162 fa 5/65 | majority det 63/162 fa 4/65 | known-only majority det 63/162 fa 4/65
+
+[w2-power] model=google/gemini-3.1-pro-preview arm=power-gepa-high cell=power-gepa-high criterion=(missing) format=score k=1 tier=(missing) effort=high dataset=factorial-v1-armconfirm — complete
+  files 6, replaced by later shards 0, coverage: r1 errored 151 clean 47 | r2 errored 151 clean 47 | r3 errored 151 clean 47
+  rows 594, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 453 / from rows 0
+  omission discrimination: mean 0.659 | r1 0.656 (n 131, wins 43, ties 86) | r2 0.664 (n 131, wins 48, ties 78) | r3 0.656 (n 131, wins 44, ties 84)
+  add/change discrimination: mean 0.975 | r1 0.975 (n 20, wins 19, ties 1) | r2 0.975 (n 20, wins 19, ties 1) | r3 0.975 (n 20, wins 19, ties 1)
+  detection: r1 23/131 0.176 | r2 22/131 0.168 | r3 23/131 0.176 | majority 21/131 0.160 | known-only majority 21/131 0.160
+  clean flag rate: r1 0/47 0.000 | r2 0/47 0.000 | r3 1/47 0.021 | majority 0/47 0.000 | known-only majority 0/47 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 33/131 fa 1/47 (t 9) | r2 det 33/131 fa 1/47 (t 9) | r3 det 34/131 fa 1/47 (t 9) | majority det 33/131 fa 1/47
+  matched false alarms k2: r1 det 45/131 fa 2/47 (t 10) | r2 det 48/131 fa 2/47 (t 10) | r3 det 34/131 fa 1/47 (t 9) | majority det 42/131 fa 1/47
+  matched false alarms k3: r1 det 45/131 fa 2/47 (t 10) | r2 det 48/131 fa 2/47 (t 10) | r3 det 34/131 fa 1/47 (t 9) | majority det 42/131 fa 1/47
+  rule route-two-below-10: r1 det 45/131 fa 2/47 | r2 det 48/131 fa 2/47 | r3 det 45/131 fa 4/47 | majority det 45/131 fa 3/47 | known-only majority det 45/131 fa 3/47
+
+[w2-secondfamily] model=google/gemini-3.1-pro-preview arm=sf-FC-score-k1 cell=sf-FC-score-k1 criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — partial coverage
+  files 15, replaced by later shards 0, coverage: r1 errored 484 clean 109 | r2 errored 495 clean 112 | r3 errored 495 clean 112
+  rows 1805, parse failures excluded 2, replicates 1 2 3 (of 3), types from --pairs 1473 / from rows 0
+  omission discrimination: mean 0.685 | r1 0.707 (n 280, wins 123, ties 150) | r2 0.675 (n 292, wins 118, ties 158) | r3 0.674 (n 293, wins 120, ties 155)
+  add/change discrimination: mean 0.963 | r1 0.966 (n 194, wins 182, ties 11) | r2 0.965 (n 202, wins 189, ties 12) | r3 0.958 (n 202, wins 187, ties 13)
+  detection: r1 57/286 0.199 | r2 56/292 0.192 | r3 60/293 0.205 | majority 53/293 0.181 | known-only majority 53/293 0.181
+  clean flag rate: r1 1/108 0.009 | r2 1/112 0.009 | r3 4/112 0.036 | majority 1/112 0.009 | known-only majority 1/112 0.009
+  not scored: no twin 10, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 57/286 fa 1/108 (t 8) | r2 det 56/292 fa 1/112 (t 8) | r3 det 13/293 fa 1/112 (t 6) | majority det 49/293 fa 1/112
+  matched false alarms k2: r1 det 57/286 fa 1/108 (t 8) | r2 det 56/292 fa 1/112 (t 8) | r3 det 13/293 fa 1/112 (t 6) | majority det 49/293 fa 1/112
+  matched false alarms k3: r1 det 96/286 fa 3/108 (t 9) | r2 det 56/292 fa 1/112 (t 8) | r3 det 25/293 fa 3/112 (t 7) | majority det 55/293 fa 2/112
+  rule route-two-below-10: r1 det 127/286 fa 6/109 | r2 det 128/293 fa 11/112 | r3 det 134/293 fa 14/112 | majority det 130/293 fa 9/112 | known-only majority det 130/293 fa 9/112
+
+[w2-secondfamily] model=google/gemini-3.1-pro-preview arm=sf-F-bin-k1 cell=sf-F-bin-k1 criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — partial coverage
+  files 5, replaced by later shards 0, coverage: r1 errored 483 clean 109
+  rows 592, parse failures excluded 0, replicates 1 (of 1), types from --pairs 483 / from rows 0
+  omission discrimination: mean 0.553 | r1 0.553 (n 283, wins 34, ties 245)
+  add/change discrimination: mean 0.954 | r1 0.954 (n 196, wins 178, ties 18)
+  detection: r1 35/286 0.122 | majority 35/286 0.122 | known-only majority 35/286 0.122
+  clean flag rate: r1 2/109 0.018 | majority 2/109 0.018 | known-only majority 2/109 0.018
+  not scored: no twin 4, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+  rule route-two-below-10: r1 det 35/286 fa 2/109 | majority det 35/286 fa 2/109 | known-only majority det 35/286 fa 2/109
+
+[w2-sf-pipeline] model=google/gemini-3.1-pro-preview arm=B3 cell=B3 criterion=(missing) format=score k=1 tier=B3 effort=(missing) dataset=factorial-v1-armconfirm — complete
+  files 8, replaced by later shards 18, coverage: r1 errored 151 clean 47
+  rows 198, parse failures excluded 0, replicates 1 (of 1), types from --pairs 151 / from rows 0
+  omission discrimination: mean 0.824 | r1 0.824 (n 131, wins 95, ties 26)
+  add/change discrimination: mean 0.700 | r1 0.700 (n 20, wins 10, ties 8)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 16/131 fa 1/47 (t 0.865672) | majority det 16/131 fa 1/47
+  matched false alarms k2: r1 det 19/131 fa 2/47 (t 0.875) | majority det 19/131 fa 2/47
+  matched false alarms k3: r1 det 19/131 fa 2/47 (t 0.875) | majority det 19/131 fa 2/47
+  rule pipeline-critical-absent: r1 det 29/131 fa 1/47 | majority det 29/131 fa 1/47 | known-only majority det 29/131 fa 1/47
+
+[w2-sf-pipeline] model=google/gemini-3.1-pro-preview arm=B2 cell=B2 criterion=(missing) format=score k=1 tier=B2 effort=(missing) dataset=factorial-v1-armconfirm — complete
+  files 8, replaced by later shards 18, coverage: r1 errored 151 clean 47
+  rows 198, parse failures excluded 0, replicates 1 (of 1), types from --pairs 151 / from rows 0
+  omission discrimination: mean 0.798 | r1 0.798 (n 131, wins 89, ties 31)
+  add/change discrimination: mean 0.575 | r1 0.575 (n 20, wins 7, ties 9)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 22/131 fa 0/47 (t 0.836735) | majority det 22/131 fa 0/47
+  matched false alarms k2: r1 det 22/131 fa 0/47 (t 0.836735) | majority det 22/131 fa 0/47
+  matched false alarms k3: r1 det 22/131 fa 0/47 (t 0.836735) | majority det 22/131 fa 0/47
+  rule pipeline-critical-absent: r1 det 0/131 fa 0/47 | majority det 0/131 fa 0/47 | known-only majority det 0/131 fa 0/47
+
+[w2-strong] model=openai/gpt-5.4 arm=engineered-completeness cell=engineered-completeness criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 10, replaced by later shards 0, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112
+  rows 1214, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 990 / from rows 0
+  omission discrimination: mean 0.639 | r1 0.642 (n 293, wins 109, ties 158) | r2 0.637 (n 293, wins 104, ties 165)
+  add/change discrimination: mean 0.754 | r1 0.775 (n 202, wins 121, ties 71) | r2 0.733 (n 202, wins 107, ties 82)
+  detection: r1 22/293 0.075 | r2 27/293 0.092 | majority 16/293 0.055 | known-only majority 16/293 0.055
+  clean flag rate: r1 4/112 0.036 | r2 2/112 0.018 | majority 1/112 0.009 | known-only majority 1/112 0.009
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 6/293 fa 0/112 (t 7) | r2 det 7/293 fa 0/112 (t 7) | majority det 6/293 fa 0/112
+  matched false alarms k2: r1 det 6/293 fa 0/112 (t 7) | r2 det 27/293 fa 2/112 (t 8) | majority det 6/293 fa 0/112
+  matched false alarms k3: r1 det 6/293 fa 0/112 (t 7) | r2 det 27/293 fa 2/112 (t 8) | majority det 6/293 fa 0/112
+  rule route-two-below-10: r1 det 168/293 fa 35/112 | r2 det 166/293 fa 43/112 | majority det 139/293 fa 29/112 | known-only majority det 139/293 fa 29/112
+
+[w2-strong] model=openai/gpt-5.4 arm=gepa-optimized cell=gepa-optimized criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 10, replaced by later shards 0, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112
+  rows 1214, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 990 / from rows 0
+  omission discrimination: mean 0.549 | r1 0.567 (n 293, wins 86, ties 160) | r2 0.532 (n 293, wins 72, ties 168)
+  add/change discrimination: mean 0.861 | r1 0.854 (n 202, wins 159, ties 27) | r2 0.869 (n 202, wins 162, ties 27)
+  detection: r1 73/293 0.249 | r2 62/293 0.212 | majority 52/293 0.177 | known-only majority 52/293 0.177
+  clean flag rate: r1 24/112 0.214 | r2 25/112 0.223 | majority 19/112 0.170 | known-only majority 19/112 0.170
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 4/293 fa 1/112 (t 3) | r2 det 2/293 fa 0/112 (t 3) | majority det 2/293 fa 0/112
+  matched false alarms k2: r1 det 4/293 fa 1/112 (t 3) | r2 det 2/293 fa 0/112 (t 3) | majority det 2/293 fa 0/112
+  matched false alarms k3: r1 det 4/293 fa 1/112 (t 3) | r2 det 8/293 fa 3/112 (t 4) | majority det 4/293 fa 1/112
+  rule route-two-below-10: r1 det 234/293 fa 78/112 | r2 det 232/293 fa 80/112 | majority det 227/293 fa 76/112 | known-only majority det 227/293 fa 76/112
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-asis cell=v14-asis criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 10, replaced by later shards 0, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112
+  rows 1214, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 990 / from rows 0
+  omission discrimination: mean 0.518 | r1 0.520 (n 293, wins 21, ties 263) | r2 0.515 (n 293, wins 21, ties 260)
+  add/change discrimination: mean 0.886 | r1 0.889 (n 202, wins 158, ties 43) | r2 0.884 (n 202, wins 156, ties 45)
+  detection: r1 47/293 0.160 | r2 49/293 0.167 | majority 36/293 0.123 | known-only majority 36/293 0.123
+  clean flag rate: r1 13/112 0.116 | r2 14/112 0.125 | majority 11/112 0.098 | known-only majority 11/112 0.098
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | majority –
+  matched false alarms k2: r1 – | r2 – | majority –
+  matched false alarms k3: r1 – | r2 – | majority –
+  rule route-two-below-10: r1 det 47/293 fa 13/112 | r2 det 49/293 fa 14/112 | majority det 36/293 fa 11/112 | known-only majority det 36/293 fa 11/112
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-incl cell=v14-incl criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 10, replaced by later shards 0, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112
+  rows 1214, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 990 / from rows 0
+  omission discrimination: mean 0.556 | r1 0.556 (n 293, wins 39, ties 248) | r2 0.556 (n 293, wins 39, ties 248)
+  add/change discrimination: mean 0.887 | r1 0.886 (n 202, wins 157, ties 44) | r2 0.889 (n 202, wins 157, ties 45)
+  detection: r1 75/293 0.256 | r2 75/293 0.256 | majority 59/293 0.201 | known-only majority 59/293 0.201
+  clean flag rate: r1 14/112 0.125 | r2 13/112 0.116 | majority 10/112 0.089 | known-only majority 10/112 0.089
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | majority –
+  matched false alarms k2: r1 – | r2 – | majority –
+  matched false alarms k3: r1 – | r2 – | majority –
+  rule route-two-below-10: r1 det 75/293 fa 14/112 | r2 det 75/293 fa 13/112 | majority det 59/293 fa 10/112 | known-only majority det 59/293 fa 10/112
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-noexcl cell=v14-noexcl criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1 — complete
+  files 10, replaced by later shards 0, coverage: r1 errored 495 clean 112 | r2 errored 495 clean 112
+  rows 1214, parse failures excluded 0, replicates 1 2 (of 2), types from --pairs 990 / from rows 0
+  omission discrimination: mean 0.505 | r1 0.505 (n 293, wins 13, ties 270) | r2 0.505 (n 293, wins 19, ties 258)
+  add/change discrimination: mean 0.890 | r1 0.894 (n 202, wins 160, ties 41) | r2 0.886 (n 202, wins 157, ties 44)
+  detection: r1 33/293 0.113 | r2 44/293 0.150 | majority 29/293 0.099 | known-only majority 29/293 0.099
+  clean flag rate: r1 12/112 0.107 | r2 15/112 0.134 | majority 10/112 0.089 | known-only majority 10/112 0.089
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | majority –
+  matched false alarms k2: r1 – | r2 – | majority –
+  matched false alarms k3: r1 – | r2 – | majority –
+  rule route-two-below-10: r1 det 33/293 fa 12/112 | r2 det 44/293 fa 15/112 | majority det 29/293 fa 10/112 | known-only majority det 29/293 fa 10/112
+
+== Not comparable to published figures (no dataset version, smoke runs or the frozen master list) ==
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-bin-k1 criterion=F format=bin k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 5, replaced by later shards 3, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 0/2 | r2 det 0/1 fa 0/2 | r3 det 0/1 fa 0/2 | majority det 0/1 fa 0/2 | known-only majority det 0/1 fa 0/2
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-score-k1 criterion=F format=score k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 5, replaced by later shards 3, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 0.833 | r1 0.500 (n 1, wins 0, ties 1) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 0/2 | r2 det 1/1 fa 1/2 | r3 det 1/1 fa 1/2 | majority det 1/1 fa 1/2 | known-only majority det 1/1 fa 1/2
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-score-k1 criterion=FC format=score k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 5, replaced by later shards 3, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-bin-k1 criterion=FC format=bin k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 5, replaced by later shards 3, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 0/2 | r2 det 0/1 fa 0/2 | r3 det 0/1 fa 0/2 | majority det 0/1 fa 0/2 | known-only majority det 0/1 fa 0/2
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-score-k8 criterion=F format=score k=8 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 6, replaced by later shards 5, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 1.000 | r1 1.000 (n 1, wins 1, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 1/1 fa 1/2 (t 9.625) | r2 – | r3 – | majority det 0/1 fa 0/2
+  matched false alarms k2: r1 det 1/1 fa 1/2 (t 9.625) | r2 – | r3 – | majority det 0/1 fa 0/2
+  matched false alarms k3: r1 det 1/1 fa 1/2 (t 9.625) | r2 – | r3 – | majority det 0/1 fa 0/2
+  rule route-two-below-10: r1 det 1/1 fa 2/2 | r2 det 1/1 fa 0/2 | r3 det 1/1 fa 2/2 | majority det 1/1 fa 2/2 | known-only majority det 1/1 fa 2/2
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=F-bin-k8 criterion=F format=bin k=8 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 6, replaced by later shards 4, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 0/2 | r2 det 0/1 fa 0/2 | r3 det 0/1 fa 0/2 | majority det 0/1 fa 0/2 | known-only majority det 0/1 fa 0/2
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-bin-k8 criterion=FC format=bin k=8 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 6, replaced by later shards 4, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 0/2 | r2 det 0/1 fa 0/2 | r3 det 0/1 fa 0/2 | majority det 0/1 fa 0/2 | known-only majority det 0/1 fa 0/2
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-score-k8 criterion=FC format=score k=8 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 6, replaced by later shards 4, coverage: r1 errored 4 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 14, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 5 / from rows 3
+  omission discrimination: mean 0.333 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.000 (n 1, wins 0, ties 0) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 3, wins 3, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 det 1/1 fa 1/2 (t 9.5) | r3 – | majority det 0/1 fa 0/2
+  matched false alarms k2: r1 – | r2 det 1/1 fa 1/2 (t 9.5) | r3 – | majority det 0/1 fa 0/2
+  matched false alarms k3: r1 – | r2 det 1/1 fa 1/2 (t 9.5) | r3 – | majority det 0/1 fa 0/2
+
+[w2-ablation] model=openai/gpt-5.4 arm=(missing) cell=FC-bin-k1 criterion=FC format=bin k=1 tier=(missing) effort=(missing) dataset=pairs_master_frozen.json@974a3cf9 — partial coverage
+  files 1, replaced by later shards 0, coverage: r1 errored 1 clean 1
+  rows 2, parse failures excluded 0, replicates 1 (of 1), types from --pairs 1 / from rows 0
+  omission discrimination: mean – | r1 – (n 0, wins 0, ties 0)
+  add/change discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+  rule route-two-below-10: r1 det 0/0 fa 0/1 | majority det 0/0 fa 0/1 | known-only majority det 0/0 fa 0/1
+
+[w2-baselines] model=openai/gpt-5.4 arm=checklist cell=checklist criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 3, replaced by later shards 0, coverage: r1 errored 2 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 12, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 3 / from rows 3
+  omission discrimination: mean 0.833 | r1 1.000 (n 1, wins 1, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  detection: r1 1/1 1.000 | r2 1/1 1.000 | r3 1/1 1.000 | majority 1/1 1.000 | known-only majority 1/1 1.000
+  clean flag rate: r1 1/2 0.500 | r2 2/2 1.000 | r3 2/2 1.000 | majority 2/2 1.000 | known-only majority 2/2 1.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 1/1 fa 0/2 (t 0.92) | r2 det 1/1 fa 0/2 (t 0.92) | r3 – | majority det 1/1 fa 0/2
+  matched false alarms k2: r1 det 1/1 fa 0/2 (t 0.92) | r2 det 1/1 fa 0/2 (t 0.92) | r3 – | majority det 1/1 fa 0/2
+  matched false alarms k3: r1 det 1/1 fa 0/2 (t 0.92) | r2 det 1/1 fa 0/2 (t 0.92) | r3 – | majority det 1/1 fa 0/2
+
+[w2-baselines] model=openai/gpt-5.4 arm=geval cell=geval criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 3, replaced by later shards 0, coverage: r1 errored 2 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 12, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 3 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 1, wins 1, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+
+[w2-baselines] model=openai/gpt-5.4 arm=ragas cell=ragas criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 3, replaced by later shards 0, coverage: r1 errored 2 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 0, parse failures excluded 12, replicates  (of 3), types from --pairs 0 / from rows 0
+  omission discrimination: mean –
+  add/change discrimination: mean –
+  detection: majority 0/1 0.000 | known-only majority 0/0 –
+  clean flag rate: majority 0/2 0.000 | known-only majority 0/0 –
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+
+[w2-baselines] model=openai/gpt-5.4 arm=ragas cell=ragas criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=pairs_master_frozen.json@974a3cf9 — partial coverage
+  files 3, replaced by later shards 11, coverage: r1 errored 6 clean 3
+  rows 9, parse failures excluded 0, replicates 1 (of 1), types from --pairs 6 / from rows 0
+  omission discrimination: mean 1.000 | r1 1.000 (n 1, wins 1, ties 0)
+  add/change discrimination: mean 0.500 | r1 0.500 (n 5, wins 1, ties 3)
+  detection: r1 1/1 1.000 | majority 1/1 1.000 | known-only majority 1/1 1.000
+  clean flag rate: r1 3/3 1.000 | majority 3/3 1.000 | known-only majority 3/3 1.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 1/1 fa 0/3 (t 0.833334) | majority det 1/1 fa 0/3
+  matched false alarms k2: r1 det 1/1 fa 0/3 (t 0.833334) | majority det 1/1 fa 0/3
+  matched false alarms k3: r1 det 1/1 fa 0/3 (t 0.833334) | majority det 1/1 fa 0/3
+
+[w2-baselines] model=openai/gpt-5.4 arm=checklist cell=checklist criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.641 | r1 0.641 (n 32, wins 11, ties 19)
+  add/change discrimination: mean 0.667 | r1 0.667 (n 6, wins 3, ties 2)
+  detection: r1 21/32 0.656 | majority 21/32 0.656 | known-only majority 21/32 0.656
+  clean flag rate: r1 14/32 0.438 | majority 14/32 0.438 | known-only majority 14/32 0.438
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 1/32 fa 0/32 (t 0.84) | majority det 1/32 fa 0/32
+  matched false alarms k2: r1 det 3/32 fa 2/32 (t 0.880001) | majority det 3/32 fa 2/32
+  matched false alarms k3: r1 det 4/32 fa 3/32 (t 0.913044) | majority det 4/32 fa 3/32
+
+[w2-baselines] model=openai/gpt-5.4 arm=geval cell=geval criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.578 | r1 0.578 (n 32, wins 5, ties 27)
+  add/change discrimination: mean 0.833 | r1 0.833 (n 6, wins 4, ties 2)
+  detection: r1 7/32 0.219 | majority 7/32 0.219 | known-only majority 7/32 0.219
+  clean flag rate: r1 2/32 0.062 | majority 2/32 0.062 | known-only majority 2/32 0.062
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+
+[w2-baselines] model=openai/gpt-5.4 arm=ragas cell=ragas criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.859 | r1 0.859 (n 32, wins 25, ties 5)
+  add/change discrimination: mean 0.500 | r1 0.500 (n 6, wins 1, ties 4)
+  detection: r1 32/32 1.000 | majority 32/32 1.000 | known-only majority 32/32 1.000
+  clean flag rate: r1 31/32 0.969 | majority 31/32 0.969 | known-only majority 31/32 0.969
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 3/32 fa 0/32 (t 0.804348) | majority det 3/32 fa 1/32
+  matched false alarms k2: r1 det 4/32 fa 2/32 (t 0.818183) | majority det 4/32 fa 2/32
+  matched false alarms k3: r1 det 4/32 fa 2/32 (t 0.818183) | majority det 4/32 fa 2/32
+
+[w2-pipeline] model=openai/gpt-5.4 arm=B2 cell=B2 criterion=(missing) format=score k=1 tier=B2 effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 14, replaced by later shards 74, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.828 | r1 0.828 (n 32, wins 22, ties 9)
+  add/change discrimination: mean 0.667 | r1 0.667 (n 6, wins 3, ties 2)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 7/32 fa 1/32 (t 0.886792) | majority det 7/32 fa 1/32
+  matched false alarms k2: r1 det 8/32 fa 2/32 (t 0.894737) | majority det 8/32 fa 2/32
+  matched false alarms k3: r1 det 10/32 fa 3/32 (t 0.909091) | majority det 10/32 fa 3/32
+  rule pipeline-critical-absent: r1 det 0/32 fa 0/32 | majority det 0/32 fa 0/32 | known-only majority det 0/32 fa 0/32
+
+[w2-pipeline] model=openai/gpt-5.4 arm=B3 cell=B3 criterion=(missing) format=score k=1 tier=B3 effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 12, replaced by later shards 4, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.781 | r1 0.781 (n 32, wins 22, ties 6)
+  add/change discrimination: mean 0.750 | r1 0.750 (n 6, wins 4, ties 1)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 2/32 fa 1/32 (t 0.818966) | majority det 2/32 fa 1/32
+  matched false alarms k2: r1 det 3/32 fa 2/32 (t 0.84375) | majority det 3/32 fa 2/32
+  matched false alarms k3: r1 det 5/32 fa 3/32 (t 0.865672) | majority det 5/32 fa 3/32
+  rule pipeline-critical-absent: r1 det 8/32 fa 2/32 | majority det 8/32 fa 2/32 | known-only majority det 8/32 fa 2/32
+
+[w2-strong] model=openai/gpt-5.4 arm=engineered-completeness cell=engineered-completeness criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=pairs_master_frozen.json@974a3cf9 — partial coverage
+  files 1, replaced by later shards 0, coverage: r1 errored 1 clean 1
+  rows 2, parse failures excluded 0, replicates 1 (of 1), types from --pairs 1 / from rows 0
+  omission discrimination: mean – | r1 – (n 0, wins 0, ties 0)
+  add/change discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+  rule route-two-below-10: r1 det 0/0 fa 0/1 | majority det 0/0 fa 0/1 | known-only majority det 0/0 fa 0/1
+
+[w2-strong] model=openai/gpt-5.4 arm=engineered-completeness cell=engineered-completeness criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.656 | r1 0.656 (n 32, wins 12, ties 18)
+  add/change discrimination: mean 0.750 | r1 0.750 (n 6, wins 4, ties 1)
+  detection: r1 0/32 0.000 | majority 0/32 0.000 | known-only majority 0/32 0.000
+  clean flag rate: r1 0/32 0.000 | majority 0/32 0.000 | known-only majority 0/32 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 0/32 fa 0/32 (t 8) | majority det 0/32 fa 0/32
+  matched false alarms k2: r1 det 0/32 fa 0/32 (t 8) | majority det 0/32 fa 0/32
+  matched false alarms k3: r1 det 0/32 fa 0/32 (t 8) | majority det 0/32 fa 0/32
+  rule route-two-below-10: r1 det 19/32 fa 12/32 | majority det 19/32 fa 12/32 | known-only majority det 19/32 fa 12/32
+
+[w2-strong] model=openai/gpt-5.4 arm=engineered-completeness-k8 cell=engineered-completeness-k8 criterion=(missing) format=score k=8 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.781 | r1 0.781 (n 32, wins 18, ties 14)
+  add/change discrimination: mean 0.667 | r1 0.667 (n 6, wins 3, ties 2)
+  detection: r1 0/32 0.000 | majority 0/32 0.000 | known-only majority 0/32 0.000
+  clean flag rate: r1 0/32 0.000 | majority 0/32 0.000 | known-only majority 0/32 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 7/32 fa 1/32 (t 9) | majority det 7/32 fa 1/32
+  matched false alarms k2: r1 det 7/32 fa 1/32 (t 9) | majority det 7/32 fa 1/32
+  matched false alarms k3: r1 det 7/32 fa 1/32 (t 9) | majority det 7/32 fa 1/32
+  rule route-two-below-10: r1 det 21/32 fa 18/32 | majority det 21/32 fa 18/32 | known-only majority det 21/32 fa 18/32
+
+[w2-strong] model=openai/gpt-5.4 arm=gepa-optimized cell=gepa-optimized criterion=(missing) format=score k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.469 | r1 0.469 (n 32, wins 7, ties 16)
+  add/change discrimination: mean 0.917 | r1 0.917 (n 6, wins 5, ties 1)
+  detection: r1 10/32 0.312 | majority 10/32 0.312 | known-only majority 10/32 0.312
+  clean flag rate: r1 9/32 0.281 | majority 9/32 0.281 | known-only majority 9/32 0.281
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 det 2/32 fa 0/32 (t 4) | majority det 2/32 fa 0/32
+  matched false alarms k2: r1 det 2/32 fa 0/32 (t 4) | majority det 2/32 fa 0/32
+  matched false alarms k3: r1 det 2/32 fa 0/32 (t 4) | majority det 2/32 fa 0/32
+  rule route-two-below-10: r1 det 28/32 fa 24/32 | majority det 28/32 fa 24/32 | known-only majority det 28/32 fa 24/32
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-asis cell=v14-asis criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 3, replaced by later shards 0, coverage: r1 errored 2 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 12, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 3 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 0.667 | r1 0.500 (n 1, wins 0, ties 1) | r2 1.000 (n 1, wins 1, ties 0) | r3 0.500 (n 1, wins 0, ties 1)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 1/2 0.500 | r2 0/2 0.000 | r3 1/2 0.500 | majority 1/2 0.500 | known-only majority 1/2 0.500
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 1/2 | r2 det 0/1 fa 0/2 | r3 det 0/1 fa 1/2 | majority det 0/1 fa 1/2 | known-only majority det 0/1 fa 1/2
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-noexcl cell=v14-noexcl criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 3, replaced by later shards 0, coverage: r1 errored 2 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 12, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 3 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 1, wins 1, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 0/2 | r2 det 0/1 fa 0/2 | r3 det 0/1 fa 0/2 | majority det 0/1 fa 0/2 | known-only majority det 0/1 fa 0/2
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-incl cell=v14-incl criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=(missing) — partial coverage
+  files 3, replaced by later shards 0, coverage: r1 errored 2 clean 2 | r2 errored 2 clean 2 | r3 errored 2 clean 2
+  rows 12, parse failures excluded 0, replicates 1 2 3 (of 3), types from --pairs 3 / from rows 3
+  omission discrimination: mean 0.500 | r1 0.500 (n 1, wins 0, ties 1) | r2 0.500 (n 1, wins 0, ties 1) | r3 0.500 (n 1, wins 0, ties 1)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 1, wins 1, ties 0) | r2 1.000 (n 1, wins 1, ties 0) | r3 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/1 0.000 | r2 0/1 0.000 | r3 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  clean flag rate: r1 0/2 0.000 | r2 0/2 0.000 | r3 0/2 0.000 | majority 0/2 0.000 | known-only majority 0/2 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | r2 – | r3 – | majority –
+  matched false alarms k2: r1 – | r2 – | r3 – | majority –
+  matched false alarms k3: r1 – | r2 – | r3 – | majority –
+  rule route-two-below-10: r1 det 0/1 fa 0/2 | r2 det 0/1 fa 0/2 | r3 det 0/1 fa 0/2 | majority det 0/1 fa 0/2 | known-only majority det 0/1 fa 0/2
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-incl cell=v14-incl criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=pairs_master_frozen.json@974a3cf9 — partial coverage
+  files 1, replaced by later shards 0, coverage: r1 errored 1 clean 1
+  rows 2, parse failures excluded 0, replicates 1 (of 1), types from --pairs 1 / from rows 0
+  omission discrimination: mean – | r1 – (n 0, wins 0, ties 0)
+  add/change discrimination: mean 1.000 | r1 1.000 (n 1, wins 1, ties 0)
+  detection: r1 0/0 – | majority 0/0 – | known-only majority 0/0 –
+  clean flag rate: r1 0/1 0.000 | majority 0/1 0.000 | known-only majority 0/1 0.000
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+  rule route-two-below-10: r1 det 0/0 fa 0/1 | majority det 0/0 fa 0/1 | known-only majority det 0/0 fa 0/1
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-asis cell=v14-asis criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.453 | r1 0.453 (n 32, wins 1, ties 27)
+  add/change discrimination: mean 0.833 | r1 0.833 (n 6, wins 4, ties 2)
+  detection: r1 5/32 0.156 | majority 5/32 0.156 | known-only majority 5/32 0.156
+  clean flag rate: r1 7/32 0.219 | majority 7/32 0.219 | known-only majority 7/32 0.219
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+  rule route-two-below-10: r1 det 5/32 fa 7/32 | majority det 5/32 fa 7/32 | known-only majority det 5/32 fa 7/32
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-noexcl cell=v14-noexcl criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.500 | r1 0.500 (n 32, wins 2, ties 28)
+  add/change discrimination: mean 0.917 | r1 0.917 (n 6, wins 5, ties 1)
+  detection: r1 5/32 0.156 | majority 5/32 0.156 | known-only majority 5/32 0.156
+  clean flag rate: r1 4/32 0.125 | majority 4/32 0.125 | known-only majority 4/32 0.125
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+  rule route-two-below-10: r1 det 5/32 fa 4/32 | majority det 5/32 fa 4/32 | known-only majority det 5/32 fa 4/32
+
+[w2-v14] model=openai/gpt-5.4 arm=v14-incl cell=v14-incl criterion=(missing) format=bin k=1 tier=(missing) effort=(missing) dataset=factorial-v1-armsmoke — partial coverage
+  files 2, replaced by later shards 0, coverage: r1 errored 38 clean 32
+  rows 70, parse failures excluded 0, replicates 1 (of 1), types from --pairs 38 / from rows 0
+  omission discrimination: mean 0.547 | r1 0.547 (n 32, wins 3, ties 29)
+  add/change discrimination: mean 0.917 | r1 0.917 (n 6, wins 5, ties 1)
+  detection: r1 7/32 0.219 | majority 7/32 0.219 | known-only majority 7/32 0.219
+  clean flag rate: r1 4/32 0.125 | majority 4/32 0.125 | known-only majority 4/32 0.125
+  not scored: no twin 0, missing score 0, unknown type 0, conflicts 0
+  matched false alarms k1: r1 – | majority –
+  matched false alarms k2: r1 – | majority –
+  matched false alarms k3: r1 – | majority –
+  rule route-two-below-10: r1 det 7/32 fa 4/32 | majority det 7/32 fa 4/32 | known-only majority det 7/32 fa 4/32
+
+205 file(s) scored, skipped 557 file(s) with no scored records; 32 comparable group(s), 29 not comparable
+parse failures excluded in total: 28
