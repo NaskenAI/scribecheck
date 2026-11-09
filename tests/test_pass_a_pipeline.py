@@ -16,6 +16,7 @@ from scribecheck.model.endpoint import Secret
 from scribecheck.note import parse_note
 from scribecheck.pass_a import Case, run_pass_a
 from scribecheck.pass_a.blind import BlindnessError, assert_blind
+from scribecheck.pass_a.pipeline import is_logistics
 from scribecheck.transcript import parse_transcript
 
 TRANSCRIPT = (
@@ -581,6 +582,57 @@ def test_medicines_and_allergies_are_always_core() -> None:
         assert (steps[fact]["core"], steps[fact]["checked"]) == (True, True), fact
     for fact in ("Cough for two weeks", "Working impression: viral cough"):
         assert (steps[fact]["core"], steps[fact]["checked"]) == (False, False), fact
+
+
+LOGISTICS_TRANSCRIPT = (
+    "Doctor: You don't need to come in, we can do this on the phone.\n"
+    "Doctor: If the cough gets worse, ring us straight away.\n"
+)
+
+
+def test_attendance_logistics_are_never_core() -> None:
+    rows = (
+        ("Does not need to attend in person", "plan", "You don't need to come in"),
+        ("If the cough gets worse, ring the practice", "follow_up", "If the cough gets worse"),
+    )
+
+    def audit(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {"id": fid, "keep": True, "core": True, "severity": "supporting"}
+                for fid, _ in listed
+            ]
+        }
+
+    mock = MockClaude(scripts(extract=_facts(*rows), audit=audit, check=_verdicts))
+    outcome, _ = run(mock, transcript=LOGISTICS_TRANSCRIPT, note=NKDA_NOTE, candidates=False)
+    steps = {s["fact"]: s for s in outcome.trace.values()}
+    # The audit called both core; the logistics fact is not, the safety-net still is.
+    assert (steps[rows[0][0]]["core"], steps[rows[0][0]]["checked"]) == (False, False)
+    assert (steps[rows[1][0]]["core"], steps[rows[1][0]]["checked"]) == (True, True)
+
+
+@pytest.mark.parametrize(
+    ("category", "text", "expected"),
+    [
+        ("plan", "Does not need to attend in person", True),
+        ("plan", "Consultation by phone; no need to come in person", True),
+        ("plan", "Partner will take them by taxi", True),
+        ("plan", "Book fasting blood tests", False),
+        ("plan", "Patient should attend face-to-face for review of the mole", False),
+        ("plan", "Must not drive; arrange transport to the clinic", False),
+        ("plan", "Practice nurse will phone to arrange the INR check", False),
+        ("plan", "Referred to cardiology; hospital will call with an appointment", False),
+        ("plan", "Come in person at 3pm on Tuesday", False),
+        ("follow_up", "If symptoms recur, contact the practice for phone assessment", False),
+        ("follow_up", "Review booked in 2 weeks", False),
+        ("plan", "Not to drive for one month", False),
+        ("plan", "Avoid heavy lifting", False),
+        ("history", "Does not need to attend in person", False),
+    ],
+)
+def test_is_logistics(category: str, text: str, expected: bool) -> None:
+    assert is_logistics(category, text) is expected
 
 
 SPECIFIC_TRANSCRIPT = (

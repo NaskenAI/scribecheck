@@ -46,7 +46,7 @@ def test_route_one_attribution_and_licence_ship() -> None:
     ],
 )
 def test_scribecheck_prompts_render_every_slot(name: str, slots: dict[str, str]) -> None:
-    text = prompts.render(prompts.load("scribecheck_v4", name), **slots)
+    text = prompts.render(prompts.load("scribecheck_v5", name), **slots)
     assert "{" not in text.replace('{"', "").replace("{}", "")
 
 
@@ -59,7 +59,7 @@ def test_render_is_literal_and_strict() -> None:
 
 
 def test_audit_prompt_attributes_the_rubric() -> None:
-    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v4", "audit")
+    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v5", "audit")
 
 
 def test_v2_changes_only_the_candidate_prompt() -> None:
@@ -136,3 +136,14 @@ def test_v4_second_look_rescues_more_specific_never_vaguer() -> None:
     # ... and a different item of the same kind never does.
     assert "a different item of the same kind" in look
     assert '"found" is never true on these grounds' in look
+
+
+def test_v5_leaves_attendance_logistics_out_of_the_plan_rule() -> None:
+    assert _changed("scribecheck_v4", "scribecheck_v5") == {"audit.txt"}
+    audit = " ".join(prompts.load("scribecheck_v5", "audit").split())
+    rule = audit.split("Attendance and appointment logistics")[1].split('- "severity"')[0]
+    assert "are not plan decisions and follow the ordinary rule" in rule
+    for kind in ("attend in person", "appointment is booked", "transport"):
+        assert kind in rule, kind
+    # The always-core kinds are unchanged.
+    assert "decisions not to treat, test or refer; safety-net instructions" in audit

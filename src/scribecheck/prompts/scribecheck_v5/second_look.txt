@@ -1,0 +1,27 @@
+TASK: SECOND LOOK AT FACTS JUDGED ABSENT
+
+A first reviewer judged each fact below, taken from the TRANSCRIPT above, to be ABSENT from the
+NOTE above. Such judgements are often wrong: the note may say the same thing in other words, as an
+abbreviation, as a number in a list, as a denial, or in another section. Search the whole note
+for each fact.
+
+For each id:
+- "found": true if the note does carry this statement in any wording: other words, an
+  abbreviation, another section, or a more specific or more concrete version of the same
+  statement ("relentless for more than 30 minutes" carries "severe"; "pain comes on 20 minutes
+  into a run" carries "cannot run far without pain"). Then give "note_quote", the exact note
+  text that carries it. "found" is never true on these grounds:
+  - a vaguer or less specific note statement, when the fact gives a number, threshold, dose,
+    drug, side or specific instruction: "contact us if the temperature persists" does not
+    carry "above 37.5-38";
+  - a different item of the same kind: another medicine, another denied symptom, another
+    safety-net trigger or another part of the plan.
+- "found": false if, after searching, the note genuinely does not carry it; leave "note_quote"
+  empty.
+- "transcript_quote": in every case, the exact words from ONE transcript turn that establish the
+  fact.
+
+Do not strain to rescue a fact: if the note is silent, the honest answer is false.
+
+FACTS:
+{facts_block}

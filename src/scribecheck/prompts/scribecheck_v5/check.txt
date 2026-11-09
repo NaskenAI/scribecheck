@@ -1,0 +1,20 @@
+TASK: CHECK FACTS AGAINST THE NOTE
+
+For each fact below, taken from the TRANSCRIPT above, decide how fully the NOTE above carries it:
+- "present": the note carries the fact and everything clinically load-bearing about it. A faithful
+  paraphrase, an accepted abbreviation, a correct unit conversion or a different section still
+  counts.
+- "partial": the note carries this same statement but something material is missing or weakened
+  (a number, dose, frequency, duration, side, timing, a hedge or condition dropped or hardened).
+- "absent": the note does not carry this statement in any form.
+
+Each fact is one statement; judge it on its own. A note that carries a related fact (another
+medicine, another denied symptom, another part of the plan) does not carry this one: if this
+statement itself is missing, the verdict is "absent", not "partial".
+
+For "present" and "partial", give "note_quote": the exact text from the note that carries it,
+copied character for character. For "absent", leave "note_quote" empty. Judge each fact on its
+own, and answer every id exactly once.
+
+FACTS:
+{facts_block}

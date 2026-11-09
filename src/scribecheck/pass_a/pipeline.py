@@ -48,7 +48,7 @@ from scribecheck.pass_a.quotes_stage import QuoteFixer
 from scribecheck.rules.omission import STATUS_RULE, is_allergy_status, structured_omissions
 from scribecheck.transcript import Transcript
 
-PROMPTS = "scribecheck_v4"
+PROMPTS = "scribecheck_v5"
 Category = Literal[
     "presenting_complaint",
     "symptom",
@@ -77,7 +77,32 @@ SECTION: dict[str, str] = {
 }
 ALWAYS_CORE = frozenset({"medicine", "allergy"})
 """Categories the audit can never mark contextual (the prompt also makes plan decisions,
-safety-net instructions and numeric thresholds core)."""
+safety-net instructions and numeric thresholds core, but not attendance and appointment
+logistics, which `is_logistics` keeps from ever being core)."""
+_LOGISTICS = re.compile(
+    r"\b(?:in person|face[- ]to[- ]face|transport|taxi|parking)\b", re.IGNORECASE
+)
+_NOT_LOGISTICS = re.compile(
+    r"\b(?:if|unless|worse|worsen\w*|urgent\w*|999|111|a&e|emergency|seek|red[- ]flag\w*|"
+    r"symptoms?|drive|driving|test\w*|bloods?|scan\w*|ecg|echo\w*|x-?ray|smear|referr\w*|"
+    r"review\w*|results?|exam\w*|check\w*|inr|days?|weeks?|months?|tomorrow)\b|\d",
+    re.IGNORECASE,
+)
+
+
+def is_logistics(category: str, text: str) -> bool:
+    """Whether a plan or follow-up fact is only attendance logistics (whether to attend in
+    person or face to face, transport, parking), which is never core. Kept narrow on
+    purpose: a fact that also names a safety-net trigger, a driving restriction, a test,
+    a referral, a review, results, a check or an interval is a plan decision, not
+    logistics ("attend face to face for review of the mole")."""
+    return (
+        category in ("plan", "follow_up")
+        and _LOGISTICS.search(text) is not None
+        and _NOT_LOGISTICS.search(text) is None
+    )
+
+
 MAX_TOKENS = {
     "extract": 16000,
     "audit": 16000,
@@ -426,8 +451,10 @@ def _audit(
                 continue
             if not entry.keep:
                 continue
-            # A medicine or allergy is always core, whatever the audit says.
-            fact.core = entry.core or fact.category in ALWAYS_CORE
+            # A medicine or allergy is always core, whatever the audit says; attendance and
+            # appointment logistics never are.
+            logistics = is_logistics(fact.category, fact.text)
+            fact.core = (entry.core and not logistics) or fact.category in ALWAYS_CORE
             fact.severity = entry.severity
             kept.append(fact)
         out[key] = kept
