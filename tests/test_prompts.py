@@ -46,7 +46,7 @@ def test_route_one_attribution_and_licence_ship() -> None:
     ],
 )
 def test_scribecheck_prompts_render_every_slot(name: str, slots: dict[str, str]) -> None:
-    text = prompts.render(prompts.load("scribecheck_v2", name), **slots)
+    text = prompts.render(prompts.load("scribecheck_v3", name), **slots)
     assert "{" not in text.replace('{"', "").replace("{}", "")
 
 
@@ -59,7 +59,7 @@ def test_render_is_literal_and_strict() -> None:
 
 
 def test_audit_prompt_attributes_the_rubric() -> None:
-    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v2", "audit")
+    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v3", "audit")
 
 
 def test_v2_changes_only_the_candidate_prompt() -> None:
@@ -74,3 +74,34 @@ def test_v2_changes_only_the_candidate_prompt() -> None:
     }
     assert changed == {"candidate.txt"}
     assert "recounts a past episode" in prompts.load("scribecheck_v2", "candidate")
+
+
+def _changed(old: prompts.PromptSet, new: prompts.PromptSet) -> set[str]:
+    folder = resources.files(prompts)
+    names = {p.name for p in (folder / old).iterdir() if p.name.endswith(".txt")}
+    assert names == {p.name for p in (folder / new).iterdir() if p.name.endswith(".txt")}
+    return {n for n in names if prompts.load(old, n[:-4]) != prompts.load(new, n[:-4])}
+
+
+def test_v3_makes_facts_atomic() -> None:
+    assert _changed("scribecheck_v2", "scribecheck_v3") == {
+        "extract.txt",
+        "audit.txt",
+        "check.txt",
+        "second_look.txt",
+    }
+    extract = " ".join(prompts.load("scribecheck_v3", "extract").split())
+    for rule in (
+        "one clinical statement",
+        "each medicine",
+        "each denied symptom",
+        "decisions not to treat",
+        "each safety-net instruction",
+        "each numeric threshold",
+        "no known allergies",
+    ):
+        assert rule in extract, rule
+    check = " ".join(prompts.load("scribecheck_v3", "check").split())
+    assert "does not carry this one" in check
+    look = " ".join(prompts.load("scribecheck_v3", "second_look").split())
+    assert "in part" not in look and "only gestures at" in look

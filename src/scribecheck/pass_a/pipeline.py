@@ -45,10 +45,10 @@ from scribecheck.pass_a.base import (
 )
 from scribecheck.pass_a.blind import assert_blind
 from scribecheck.pass_a.quotes_stage import QuoteFixer
-from scribecheck.rules.omission import structured_omissions
+from scribecheck.rules.omission import STATUS_RULE, is_allergy_status, structured_omissions
 from scribecheck.transcript import Transcript
 
-PROMPTS = "scribecheck_v2"
+PROMPTS = "scribecheck_v3"
 Category = Literal[
     "presenting_complaint",
     "symptom",
@@ -345,12 +345,19 @@ def _rules_facts(case: Case, facts: list[Fact], config: Config) -> list[Fact]:
     for candidate in screen.candidates:
         if candidate.category not in ("medicine", "allergy") or candidate.fact is None:
             continue
-        name = _item_name(candidate.fact)
-        if any(_names(name, f.text) for f in facts):
-            continue
-        text = (
-            f"Allergic to {name}" if candidate.category == "allergy" else f"Takes {candidate.fact}"
-        )
+        if candidate.rule_id == STATUS_RULE:
+            if any(is_allergy_status(f.text) for f in facts):
+                continue  # the model already has the allergy status
+            text = candidate.fact[0].upper() + candidate.fact[1:]
+        else:
+            name = _item_name(candidate.fact)
+            if any(_names(name, f.text) for f in facts):
+                continue
+            text = (
+                f"Allergic to {name}"
+                if candidate.category == "allergy"
+                else f"Takes {candidate.fact}"
+            )
         added.append(
             Fact(
                 "r",
@@ -601,6 +608,7 @@ def _second_look_and_candidates(
                 outcome.flags.append(_flag(fact, "absent", "confirmed", None))
                 step["second_look"] = "confirmed"
         confirmed_names: list[str] = []
+        status_confirmed = False
         from_candidates: set[int] = set()
         for i, flag in enumerate(case.candidates):
             if ("candidate", case.id) in failed:
@@ -635,15 +643,21 @@ def _second_look_and_candidates(
             )
             outcome.flags.append(confirmed)
             from_candidates.add(id(confirmed))
-            if flag.type == "omission" and flag.fact:
+            if flag.rule_id == STATUS_RULE:
+                status_confirmed = True
+            elif flag.type == "omission" and flag.fact:
                 confirmed_names.append(_item_name(flag.fact))
-        if confirmed_names:  # one discrepancy, one flag: the rules candidate wins
+        if confirmed_names or status_confirmed:  # one discrepancy, one flag: the rules wins
             outcome.flags = [
                 f
                 for f in outcome.flags
                 if id(f) in from_candidates
                 or f.category not in ("medicine", "allergy")
-                or not any(_names(n, f.fact or "") for n in confirmed_names)
+                or not (
+                    any(_names(n, f.fact or "") for n in confirmed_names)
+                    # only a model allergy-status fact, never an allergen's
+                    or (status_confirmed and is_allergy_status(f.fact or ""))
+                )
             ]
 
 

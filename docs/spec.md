@@ -197,6 +197,7 @@ The checker acts on per-fact verdicts and severity, not on a single note score, 
 | Rules-mode finding | Severity |
 | --- | --- |
 | Allergy lost or changed | Critical |
+| Allergy status ("no known allergies") stated but not recorded | Critical |
 | Dose, frequency or side changed | Critical |
 | Negation reversed for a lexicon symptom | Critical |
 | Examination finding in a telephone consultation | Critical |

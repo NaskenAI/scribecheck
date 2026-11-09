@@ -1,8 +1,8 @@
 """Versioned prompt files, shipped as package data.
 
 `route_one/` holds Fox et al.'s route-one prompts, unmodified, from the MIT-licensed
-OmissionBench harness (see its README and LICENSE); `scribecheck_v2/` holds scribecheck's
-own (`scribecheck_v1/`, the set the first development run used, is kept unchanged).
+OmissionBench harness (see its README and LICENSE); `scribecheck_v3/` holds scribecheck's
+own (`scribecheck_v1/` and `scribecheck_v2/`, which measured runs used, are kept unchanged).
 Prompts are filled by literal slot replacement, never `str.format`, because the route-one
 prompts end with literal JSON that `str.format` would misread.
 """
@@ -14,7 +14,7 @@ from functools import cache
 from importlib import resources
 from typing import Literal
 
-PromptSet = Literal["route_one", "scribecheck_v1", "scribecheck_v2"]
+PromptSet = Literal["route_one", "scribecheck_v1", "scribecheck_v2", "scribecheck_v3"]
 
 
 @cache

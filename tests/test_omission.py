@@ -533,3 +533,63 @@ def test_a_drug_in_a_recounted_past_episode_is_past_use(transcript: str) -> None
 )
 def test_current_use_still_raises_a_candidate(transcript: str) -> None:
     assert [c.category for c in run(transcript, NOTE).candidates] == ["medicine"]
+
+
+# An explicit "no allergies" the note does not record
+
+
+@pytest.mark.parametrize(
+    ("said", "fact"),
+    [
+        ("Patient: NKDA.", "no known drug allergies"),
+        ("Patient: No known drug allergies.", "no known drug allergies"),
+        ("Patient: I don't have any allergies.", "no known allergies"),
+        ("Doctor: Any allergies?\nPatient: Not allergic to anything.", "no known allergies"),
+        ("Doctor: So no known allergies, OK.", "no known allergies"),
+    ],
+)
+def test_no_allergy_status_missing(said: str, fact: str) -> None:
+    candidate = only(run(said, NOTE))
+    assert (candidate.category, candidate.rule_id, candidate.fact) == (
+        "allergy",
+        "allergy.status_missing",
+        fact,
+    )
+    assert (candidate.severity, candidate.expected_section) == ("critical", "Allergies")
+
+
+@pytest.mark.parametrize(
+    "note",
+    [
+        "History:\nFeeling well.\nNKDA.\n",
+        "History:\nFeeling well.\n\nAllergies:\nNo allergies.\n",
+        "History:\nFeeling well.\n\nAllergies:\nNone known.\n",
+        "History:\nFeeling well.\n\nAllergies:\nNil.\n",
+        "History:\nAllergic to latex.\n",  # a named allergen: Pass B's business
+        "History:\nNot allergic to penicillin.\n",
+        "PMH:\nAllergy status unknown.\n",  # any allergy word records the status
+        "History:\nFeeling well. NKA.\n",
+    ],
+)
+def test_no_allergy_status_recorded_in_the_note(note: str) -> None:
+    assert run("Patient: No known drug allergies.", note).candidates == ()
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Doctor: Any allergies?",  # a question
+        "Doctor: Do you have any allergies?\nPatient: Um.",
+        "Patient: My son has no allergies.",  # someone else's
+        "Patient: Maybe no allergies, I'm not sure.",  # possible
+        # contradicted, even by a hedged, past or person-word allergen
+        "Patient: No allergies.\nPatient: Oh, actually I'm allergic to penicillin.",
+        "Patient: No known allergies. I might be allergic to penicillin though.",
+        "Patient: No allergies. I was allergic to penicillin as a child.",
+        "Patient: NKDA. But I'm allergic to my mum's dog.",
+    ],
+)
+def test_no_allergy_status_candidate_guards(said: str) -> None:
+    assert [
+        c.fact for c in run(said, NOTE).candidates if c.rule_id == "allergy.status_missing"
+    ] == []

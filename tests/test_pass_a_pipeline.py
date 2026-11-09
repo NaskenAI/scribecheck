@@ -478,3 +478,89 @@ def test_trace_marks_an_unverified_present_quote() -> None:
     step = next(s for s in outcome.trace.values() if s["fact"] == "No fever")
     assert (step["verdict"], step["note_quote_verified"]) == ("present", False)
     assert "note_quote" not in step
+
+
+NKDA_TRANSCRIPT = (
+    "Doctor: What brings you in today?\n"
+    "Patient: I've had a cough for two weeks.\n"
+    "Doctor: Any allergies?\n"
+    "Patient: No known drug allergies.\n"
+)
+NKDA_NOTE = "History:\nCough for 2 weeks.\n"
+
+
+def _facts(*rows: tuple[str, str, str]) -> Callable[[Any, dict[str, Any]], Any]:
+    def extract(_: Any, __: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {"fact": f, "category": c, "attributes": [], "evidence": e} for f, c, e in rows
+            ]
+        }
+
+    return extract
+
+
+def _verdicts(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+    return {
+        "verdicts": [
+            {"id": fid, "verdict": "present", "note_quote": "Cough for 2 weeks"}
+            if "cough" in t.lower()
+            else {"id": fid, "verdict": "absent"}
+            for fid, t in listed
+        ]
+    }
+
+
+def _confirm_status(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+    return {
+        "findings": [
+            {
+                "id": fid,
+                "confirmed": True,
+                "transcript_quote": "No known drug allergies",
+                "severity": "critical",
+            }
+            for fid, _ in listed
+        ]
+    }
+
+
+def test_the_no_allergy_status_becomes_a_rules_fact() -> None:
+    cough = ("Cough for two weeks", "symptom", "I've had a cough for two weeks")
+    mock = MockClaude(scripts(extract=_facts(cough), check=_verdicts))
+    outcome, _ = run(mock, transcript=NKDA_TRANSCRIPT, note=NKDA_NOTE, candidates=False)
+    rules = [f for f in outcome.facts if f.origin == "rules"]
+    assert [(f.text, f.category) for f in rules] == [("No known drug allergies", "allergy")]
+
+
+def test_a_model_allergy_fact_stands_in_for_the_rules_fact() -> None:
+    rows = (
+        ("Cough for two weeks", "symptom", "I've had a cough for two weeks"),
+        ("No known drug allergies", "allergy", "No known drug allergies"),
+    )
+    mock = MockClaude(scripts(extract=_facts(*rows), check=_verdicts, candidate=_confirm_status))
+    outcome, case = run(mock, transcript=NKDA_TRANSCRIPT, note=NKDA_NOTE)
+    assert not [f for f in outcome.facts if f.origin == "rules"]
+    assert [c.rule_id for c in case.candidates] == ["allergy.status_missing"]
+    # One discrepancy, one flag: the confirmed rules candidate replaces the model's absence.
+    assert [(f.fact, f.origin, f.confidence) for f in outcome.flags] == [
+        ("no known drug allergies", "rules", "confirmed")
+    ]
+
+
+def test_a_confirmed_status_never_removes_an_allergen_flag() -> None:
+    rows = (
+        ("Cough for two weeks", "symptom", "I've had a cough for two weeks"),
+        ("Takes cetirizine for allergic rhinitis", "medicine", "No known drug allergies"),
+        ("Possible shellfish allergy", "allergy", "No known drug allergies"),
+    )
+    mock = MockClaude(scripts(extract=_facts(*rows), check=_verdicts, candidate=_confirm_status))
+    outcome, _ = run(mock, transcript=NKDA_TRANSCRIPT, note=NKDA_NOTE)
+    # Neither model fact is an allergy status: the rules fact is added, and confirming the
+    # status candidate leaves both model flags standing.
+    assert [f.text for f in outcome.facts if f.origin == "rules"] == ["No known drug allergies"]
+    assert sorted(f.fact or "" for f in outcome.flags) == [
+        "Possible shellfish allergy",
+        "Takes cetirizine for allergic rhinitis",
+        "no known drug allergies",
+    ]

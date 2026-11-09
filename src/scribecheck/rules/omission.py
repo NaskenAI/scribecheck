@@ -19,7 +19,13 @@ mention outranks it, and planned values never give dose or frequency candidates.
 frequency must be consistent across the transcript, with no ambiguous value, range or
 maximum, mixed tablet count, or orphan value elsewhere. Allergies need the patient's own
 current statement (not outgrown, not about someone else), and a person is never an
-allergen. An item a guard stops is reported as unchecked with its reason code.
+allergen. An explicit statement that the patient has no allergies ("NKDA", "no known drug
+allergies"), by anyone and not in a question, gives an allergy-status candidate ("no known
+allergies", or "no known drug allergies" for a drug-only denial; rule
+`allergy.status_missing`) when the transcript names no allergen of the patient's at all
+(even a possible or past one) and the note says nothing about allergies (no allergy word,
+no allergy statement and no Allergies section with text). An item a guard stops is
+reported as unchecked with its reason code.
 
 What counts as present in the note: a medicine under any name and in any context
 ("metformin stopped"); a dose or frequency when the drug's own lines (up to the next drug
@@ -50,7 +56,7 @@ from scribecheck.flags import (
     UncheckedReason,
     transcript_evidence,
 )
-from scribecheck.note import Note
+from scribecheck.note import CanonicalSection, Note
 from scribecheck.rules._context import sentence_span
 from scribecheck.rules._match import Comparison
 from scribecheck.rules.align import (
@@ -76,6 +82,11 @@ SEVERITY: Mapping[str, Severity] = {
     "side": "supporting",
     "allergy": "critical",
 }
+STATUS_RULE = "allergy.status_missing"
+"""The rule of an allergy-status candidate: the transcript says the patient has no
+allergies ("no known allergies", or "no known drug allergies" for a drug-only denial), and
+the note says nothing about allergies."""
+_ALLERGY_WORD = re.compile(r"(?<![A-Za-z])(?:allerg\w*|nkda|nka|nkfa)(?![A-Za-z])", re.I)
 SECTION = {
     "medicine": "Medications",
     "dose": "Medications",
@@ -110,7 +121,13 @@ class _Out:
         return transcript_evidence(self.transcript, span.turn, span.start, span.end)
 
     def candidate(
-        self, category: str, fact: str, span: Span, *, section: str | None = None
+        self,
+        category: str,
+        fact: str,
+        span: Span,
+        *,
+        section: str | None = None,
+        rule_id: str | None = None,
     ) -> None:
         self.candidates.append(
             Flag(
@@ -121,7 +138,7 @@ class _Out:
                 severity=SEVERITY[category],
                 confidence="possible",
                 origin="rules",
-                rule_id=f"{category}.missing",
+                rule_id=rule_id or f"{category}.missing",
                 fact=fact,
                 transcript_evidence=self.quote(span),
                 expected_section=section or SECTION[category],
@@ -440,8 +457,18 @@ def _allergies(
     note_stems = _stems(note.text)
     note_compact = re.sub(r"\W+", "", note.text.casefold())
     seen: list[frozenset[str]] = []
+    no_allergies: tuple[Span, str] | None = None
+    any_allergen = False
     for turn in transcript.turns:
         for allergy in find_allergies(turn.text):
+            if no_allergies is None and _no_allergies(turn, allergy):
+                drugs_only = _DRUG_DENIAL.search(allergy.text) is not None
+                no_allergies = (
+                    Span(turn.number, allergy.start, allergy.end),
+                    "no known drug allergies" if drugs_only else "no known allergies",
+                )
+            # Any allergen of the patient's, however hedged, qualifies a "no allergies".
+            any_allergen |= allergy.status == "allergic" and allergy.experiencer == "patient"
             if not _patient_allergy(turn, allergy):
                 continue
             for allergen in allergy.allergens:
@@ -464,6 +491,38 @@ def _allergies(
                     continue
                 span = Span(turn.number, allergy.start, allergy.end)
                 out.candidate("allergy", f"allergy: {allergen.text.casefold()}", span)
+    if no_allergies is not None and not any_allergen and not _records_allergy_status(note):
+        span, fact = no_allergies
+        out.candidate("allergy", fact, span, rule_id=STATUS_RULE)
+
+
+def _no_allergies(turn: Turn, allergy: AllergyMatch) -> bool:
+    """An explicit statement that the patient has no allergies, by anyone, not asked."""
+    if allergy.status != "none" or allergy.experiencer != "patient":
+        return False
+    if allergy.possible or allergy.hypothetical or allergy.historical:
+        return False
+    start, end = sentence_span(turn.text, allergy.start, allergy.end)
+    return not is_question(turn.text, start, end)
+
+
+def _records_allergy_status(note: Note) -> bool:
+    """The note says anything about allergies: an allergy word ("allergies", "allergic",
+    "NKDA", "NKA"), an allergy statement, or an Allergies section with text."""
+    return (
+        _ALLERGY_WORD.search(note.text) is not None
+        or bool(find_allergies(note.text))
+        or any(s.body for s in note.sections_for(CanonicalSection.ALLERGIES))
+    )
+
+
+def is_allergy_status(text: str) -> bool:
+    """`text` states that the patient has no allergies ("No known drug allergies", "NKDA",
+    "NKA"), as opposed to naming an allergen."""
+    if re.search(r"(?<![A-Za-z])(?:nkda|nka)(?![A-Za-z])", text, re.I):
+        return True
+    found = find_allergies(text)
+    return bool(found) and all(a.status == "none" for a in found)
 
 
 def _denied(denials: Sequence[AllergyMatch], is_drug: bool) -> bool:

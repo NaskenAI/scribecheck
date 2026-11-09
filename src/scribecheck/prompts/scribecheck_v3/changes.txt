@@ -1,0 +1,30 @@
+TASK: FIND CHANGED FACTS
+
+Compare the NOTE above with the TRANSCRIPT above and find facts the note records DIFFERENTLY from
+what the transcript establishes for this patient now. Do not report facts the note leaves out (a
+separate check covers omissions) or statements with no basis at all (another check covers those).
+
+Look in particular at:
+- certainty: a tentative transcript statement ("possibly", "might be", "likely", "query",
+  "could be") written as definite in the note, or a definite one written as tentative;
+- a drug written in the note in place of the one discussed (a substitution);
+- dose, frequency, route, side, negation (present written as absent or the reverse) and allergy
+  details that differ;
+- the items listed below, which a rule-based screen could not settle; give a verdict for each.
+
+ITEMS TO JUDGE:
+{facts_block}
+
+HEDGED TRANSCRIPT SENTENCES (hints for certainty changes):
+{hints}
+
+Return one entry per listed item (with its id) and one entry per other change you find (with
+id "new1", "new2", ...). For each:
+- "verdict": "changed" if the note differs from the transcript, otherwise "consistent";
+- "kind": certainty, drug_substituted, dose, frequency, route, side, negation, allergy or other;
+- "item": what the fact is about, in a few words;
+- "transcript_value" and "note_value": the two versions, briefly;
+- "transcript_quote": the exact words from ONE transcript turn; "note_quote": the exact note text;
+- "severity": the consequence of the change, graded as an audit grades an omission: "critical"
+  if it would plausibly change clinical action or remove a safety net, "supporting" if it
+  weakens the record without changing what happens next, otherwise "peripheral".
