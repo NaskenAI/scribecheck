@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -90,6 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return EXIT_OK
     try:
+        _prepare_output(getattr(args, "output", None))
         if args.command == "init":
             return _init(args.path, force=args.force)
         if args.command == "demo":
@@ -108,16 +110,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             _emit(text, args.output)
             _usage_summary([report])
             return _exit_code([report])
+        started = time.monotonic()
         result = check_folder(args.folder, config, live=args.live)
+        elapsed = time.monotonic() - started
         if not result.cases and not result.problems:
             raise InputError(f"{args.folder}: no transcript-note pairs found")
         text = (
-            batch_json(result.cases, result.problems)
+            batch_json(result.cases, result.problems, elapsed_seconds=elapsed)
             if args.format == "json"
             else render_batch_markdown(result.cases, result.problems)
         )
         _emit(text, args.output)
-        _usage_summary(result.reports)
+        _usage_summary(result.reports, elapsed)
         for problem in result.problems:
             print(f"scribecheck: {problem}", file=sys.stderr)
         # Any problem (an unmatched, duplicate or unreadable file, or a pair that could not
@@ -174,9 +178,24 @@ def _init(path: Path, *, force: bool) -> int:
     return EXIT_OK
 
 
+def _prepare_output(output: Path | None) -> None:
+    """Create the output's folder and check it is writable before any work (a paid model
+    run must not be lost at the end for want of a folder)."""
+    if output is None:
+        return
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        probe = output.parent / f".{output.name}.write-check"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        raise InputError(f"{output}: cannot write ({exc.strerror or exc})") from exc
+
+
 def _emit(text: str, output: Path | None) -> None:
     if output is not None:
         try:
+            output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(text, encoding="utf-8", newline="\n")
         except OSError as exc:
             raise InputError(f"{output}: cannot write ({exc.strerror or exc})") from exc
@@ -193,7 +212,7 @@ def _emit(text: str, output: Path | None) -> None:
     sys.stdout.flush()
 
 
-def _usage_summary(reports: Sequence[Report]) -> None:
+def _usage_summary(reports: Sequence[Report], elapsed: float | None = None) -> None:
     """One stderr line with full mode's model calls and cost."""
     used = [r.usage for r in reports if r.usage is not None]
     if not used:
@@ -208,7 +227,7 @@ def _usage_summary(reports: Sequence[Report]) -> None:
     )
     print(
         f"scribecheck: {calls} model calls for single notes, {shared} shared between notes "
-        f"of one transcript; {cost}",
+        f"of one transcript; {cost}" + ("" if elapsed is None else f"; {elapsed:.0f} s wall clock"),
         file=sys.stderr,
     )
 

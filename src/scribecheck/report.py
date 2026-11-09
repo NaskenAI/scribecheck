@@ -189,23 +189,27 @@ def count(
     )
 
 
-def batch_json(cases: Sequence[Case], problems: Sequence[str]) -> str:
-    """Several reports with their files, and the problems met pairing or reading files."""
-    return _dumps(
-        {
-            "schema_version": SCHEMA_VERSION,
-            "cases": [
-                {
-                    "id": c.id,
-                    "transcript": c.transcript,
-                    "note": c.note,
-                    "report": c.report.to_dict(),
-                }
-                for c in cases
-            ],
-            "problems": list(problems),
-        }
-    )
+def batch_json(
+    cases: Sequence[Case], problems: Sequence[str], *, elapsed_seconds: float | None = None
+) -> str:
+    """Several reports with their files, the problems met pairing or reading files, and
+    (for a checked folder) the run's wall-clock time."""
+    data: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "cases": [
+            {
+                "id": c.id,
+                "transcript": c.transcript,
+                "note": c.note,
+                "report": c.report.to_dict(),
+            }
+            for c in cases
+        ],
+        "problems": list(problems),
+    }
+    if elapsed_seconds is not None:
+        data["elapsed_seconds"] = round(elapsed_seconds, 3)
+    return _dumps(data)
 
 
 def _dumps(data: dict[str, Any]) -> str:

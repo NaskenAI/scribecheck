@@ -298,3 +298,59 @@ def test_httpx_request_logging_is_quiet(caplog: pytest.LogCaptureFixture) -> Non
     complete(client, _request(), Budget())
     assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
     assert "HTTP Request" not in caplog.text and KEY not in caplog.text
+
+
+def test_extra_body_is_merged_for_openai_compatible_requests() -> None:
+    recorder = Recorder(json_response(openai_completion('{"present": true}')))
+    pin = {"provider": {"order": ["GoodFP8"], "allow_fallbacks": False}}
+    client = OpenAICompatClient(
+        "m",
+        base_url="https://openrouter.ai/api/v1",
+        api_key=Secret(KEY),
+        extra_body=pin,
+        transport=recorder.transport,
+    )
+    complete(client, _request(), Budget())
+    body = recorder.body()
+    assert body["provider"] == pin["provider"] and body["model"] == "m"
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ({"model": "other"}, "may not set 'model'"),
+        ({"temperature": 1}, "may not set 'temperature'"),
+        ({"provider": {"api_key": "abc"}}, "never put an API key"),
+        ({"headers": [{"token": "abc"}]}, "never put an API key"),
+    ],
+)
+def test_extra_body_rejects_overrides_and_keys(extra: dict[str, Any], message: str) -> None:
+    with pytest.raises(InputError, match=message) as raised:
+        config_from_mapping({"model": {"extra_body": extra}})
+    assert "abc" not in str(raised.value)
+
+
+def test_extra_body_is_refused_for_anthropic() -> None:
+    with pytest.raises(InputError, match="OpenAI-compatible endpoints only"):
+        config_from_mapping(
+            {"model": {"provider": "anthropic", "extra_body": {"provider": {"order": ["x"]}}}}
+        )
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"stream": True},
+        {"models": ["a", "b"]},
+        {"route": "fallback"},
+        {"max_completion_tokens": 5},
+        {"provider": {"model": "other"}},
+        {"headers": {"Authorization": "x"}},
+        {"provider": {"api_token": "x"}},
+        {"note": "sk-or-v1-abc"},
+    ],
+)
+def test_extra_body_rejects_bypasses(extra: dict[str, Any]) -> None:
+    with pytest.raises(InputError) as raised:
+        config_from_mapping({"model": {"extra_body": extra}})
+    assert "sk-or-v1-abc" not in str(raised.value)

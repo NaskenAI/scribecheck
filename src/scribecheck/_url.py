@@ -7,14 +7,29 @@ rules mode stays free of both. Error messages never repeat the URL or value they
 from __future__ import annotations
 
 import re
+from typing import Any
 from urllib.parse import urlsplit
 
 from scribecheck.errors import InputError
 
 ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 KEY_LIKE = frozenset(
-    {"api_key", "apikey", "api-key", "key", "token", "access_token", "secret", "password", "sig"}
+    {
+        "api_key",
+        "apikey",
+        "api-key",
+        "api_token",
+        "key",
+        "token",
+        "access_token",
+        "secret",
+        "password",
+        "sig",
+        "authorization",
+        "headers",
+    }
 )
+_KEY_VALUE = re.compile(r"^(?:sk-|sk_|Bearer\s)", re.IGNORECASE)
 
 
 def check_base_url(base_url: str) -> str:
@@ -52,6 +67,56 @@ def check_env_name(name: str) -> str:
             "underscores), not hold the key itself"
         )
     return name
+
+
+RESERVED_BODY = frozenset(
+    {
+        "model",
+        "models",
+        "route",
+        "messages",
+        "response_format",
+        "temperature",
+        "seed",
+        "max_tokens",
+        "max_completion_tokens",
+        "stream",
+        "n",
+    }
+)
+"""Fields the client sets, or that would change which model answers or how replies come
+back (OpenRouter's `models` and `route` fallbacks would defeat a provider pin)."""
+
+
+def check_extra_body(body: dict[str, Any]) -> dict[str, Any]:
+    """Extra request-body fields (an OpenRouter provider pin): no credentials anywhere in
+    them, and none of the fields the client sets itself."""
+    clash = sorted(RESERVED_BODY & set(body))
+    if clash:
+        raise InputError(f"[model] extra_body may not set {clash[0]!r}; the client sets it")
+
+    def walk(node: Any) -> None:
+        if isinstance(node, str) and _KEY_VALUE.match(node):
+            raise InputError(
+                "never put an API key in [model] extra_body; set it in an environment variable"
+            )
+        if isinstance(node, dict):
+            for name, value in node.items():
+                label = str(name).casefold()
+                if label in KEY_LIKE:
+                    raise InputError(
+                        "never put an API key in [model] extra_body; set it in an "
+                        "environment variable"
+                    )
+                if label in ("model", "models"):
+                    raise InputError(f"[model] extra_body may not set {label!r} at any depth")
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(body)
+    return body
 
 
 def check_query(query: dict[str, str]) -> dict[str, str]:

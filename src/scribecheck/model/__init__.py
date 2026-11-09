@@ -81,6 +81,7 @@ def create_client(config: Config) -> AnthropicClient | OpenAICompatClient:
             max_tokens=config.max_tokens,
             auth_header=config.auth_header,
             query=config.query,
+            extra_body=config.extra_body,
             timeout=config.timeout_s,
         )
     warning = privacy_warning(client.endpoint)

@@ -47,6 +47,7 @@ class OpenAICompatClient:
         max_tokens: int = 16000,
         auth_header: str = "authorization",
         query: Mapping[str, str] | None = None,
+        extra_body: Mapping[str, Any] | None = None,
         timeout: float = 120.0,
         transport: httpx.BaseTransport | None = None,
         sleep: Sleep = time.sleep,
@@ -60,6 +61,7 @@ class OpenAICompatClient:
         self.max_tokens = max_tokens
         self._auth_header = auth_header.lower()
         self._query = dict(query or {})
+        self._extra = dict(extra_body or {})
         self._sleep = sleep
         self._http = httpx.Client(timeout=timeout, transport=transport)
 
@@ -115,6 +117,8 @@ class OpenAICompatClient:
             "messages": messages,
             "max_tokens": request.max_tokens or self.max_tokens,
         }
+        for name, value in self._extra.items():  # e.g. OpenRouter's provider pin
+            body.setdefault(name, value)
         temperature = request.temperature if request.temperature is not None else self.temperature
         if temperature is not None:
             body["temperature"] = temperature

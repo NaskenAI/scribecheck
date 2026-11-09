@@ -14,7 +14,7 @@ from __future__ import annotations
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -25,9 +25,10 @@ from pydantic import (
     StrictInt,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
-from scribecheck._url import check_base_url, check_env_name, check_query
+from scribecheck._url import check_base_url, check_env_name, check_extra_body, check_query
 from scribecheck.errors import InputError
 from scribecheck.flags import Confidence, Severity
 from scribecheck.note import CanonicalSection, build_heading_map
@@ -141,6 +142,8 @@ class Config(BaseModel):
     """"authorization" sends a Bearer token; Azure uses "api-key"."""
     query: dict[str, str] = Field(default_factory=dict)
     """Extra URL query parameters, such as Azure's api-version."""
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+    """Extra fields for OpenAI-compatible request bodies, such as an OpenRouter provider pin."""
     prices: PriceTable | None = None
     cost_cap_usd: float | None = Field(default=None, ge=0)
     """Stop making model calls once the estimated spend reaches this."""
@@ -206,6 +209,19 @@ class Config(BaseModel):
     def _no_key_in_query(cls, value: dict[str, str]) -> dict[str, str]:
         return check_query(value)
 
+    @field_validator("extra_body")
+    @classmethod
+    def _safe_extra_body(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return check_extra_body(value)
+
+    @model_validator(mode="after")
+    def _extra_body_needs_openai(self) -> Config:
+        if self.extra_body and self.provider == "anthropic":
+            raise ValueError(
+                "[model] extra_body applies to OpenAI-compatible endpoints only, not anthropic"
+            )
+        return self
+
     def speaker_map(self) -> dict[str, str]:
         """The built-in speaker map with the user's labels added (theirs win)."""
         merged = dict(DEFAULT_SPEAKER_MAP)
@@ -240,6 +256,7 @@ class _Model(BaseModel):
     json_mode: JsonMode = "json_schema"
     auth_header: str = "authorization"
     query: dict[str, str] = {}
+    extra_body: dict[str, Any] = {}
     prices: PriceTable | None = None
 
 
@@ -364,6 +381,7 @@ def config_from_mapping(data: Mapping[str, object], *, source: str = "config") -
             json_mode=m.json_mode,
             auth_header=m.auth_header,
             query=m.query,
+            extra_body=m.extra_body,
             prices=m.prices,
             cost_cap_usd=parsed.budget.cost_cap_usd,
             pipeline=parsed.pass_a.pipeline,
@@ -448,6 +466,7 @@ fail_confidence = ["certain", "confirmed"]
 # json_mode = "json_schema"               # or "json_object", or "none"
 # auth_header = "api-key"                 # Azure; the default sends a Bearer token
 # query = { "api-version" = "<version>" } # Azure
+# extra_body = { provider = { order = ["<Provider>"], allow_fallbacks = false } }  # OpenRouter pin
 
 # [model.prices]
 # USD per million tokens, from your provider's price list; nothing is built in.

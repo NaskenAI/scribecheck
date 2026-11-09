@@ -247,3 +247,17 @@ def test_stdout_is_utf8_whatever_the_console_encoding(tmp_path: Path) -> None:
     out = tmp_path / "out.json"
     assert main([*args, "--output", str(out)]) == 0
     assert out.read_bytes() == piped.stdout
+
+
+def test_batch_json_records_elapsed_seconds(case: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["batch", ".", "--format", "json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert isinstance(data["elapsed_seconds"], float) and data["elapsed_seconds"] >= 0
+    assert main(["demo", "--format", "json"]) == 0
+    assert "elapsed_seconds" not in json.loads(capsys.readouterr().out)
+
+
+def test_output_folder_is_created_before_the_run(case: Path) -> None:
+    out = case / "new" / "deeper" / "batch.json"
+    assert main(["batch", ".", "--format", "json", "--output", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["cases"]
