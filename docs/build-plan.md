@@ -97,7 +97,7 @@ Week 2:
 
 - [x] Alignment with the one-consistent-value rule, the Pass B guards and reason codes, and the deterministic negation check. Rules-mode certain flags are disabled: a deny-list could not rule out false ones, and the measured allow-list ceiling on the development data is zero ([docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md))
 - [x] Rules-mode Pass A structured omission candidates (medicines, doses, frequencies, allergies, sides) at possible confidence, for the model's second check in full mode and as warnings in rules mode (`rules/omission.py`). Measured on 2026-11-09: recall 6 of the 15 development structured omissions; 6 candidates on the 65 clean notes, held as a ratchet by `tests/test_dev_clean_notes.py`. Follow-ups: lexicon gaps (ASA, HCTZ, PCN, sulfa, plain "insulin"), dotted frequencies ("b.i.d.", "2x/day"), "OD" written alone for the right eye, and values after a comma, which are dropped
-- [ ] The examination rule, reporting at possible confidence
+- [x] The examination rule, reporting at possible confidence (`rules/examination.py`; telephone: every examination finding, video: hands-on findings only, in-person or no modality: off; critical warnings)
 - [x] Severity table, confidence levels, both standards and the decision rule (`decision.py`). Rules mode never fails; in full mode failing needs both a `fail_on` severity and a `fail_confidence` level. Follow-up: user overrides of the rules-mode severity table
 - [x] JSON report, Markdown renderer, exit codes, and the `demo`, `check` and `batch` commands (`report.py`, `checker.py`, `cli.py`), with three synthetic demo consultations in `src/scribecheck/demo/`, marked `"reviewed": false` for the clinician. In rules mode a Pass B item that would have been a certain flag is reported as a changed-fact warning at possible confidence. Follow-ups: HTML output; the GitHub Action's job summary; values after a comma are dropped ("5 mg once a day, sometimes 10 mg" warns of a dose change), which now shows as a warning; in Pass A, an answer naming two allergens where one is in the drug lexicon ("Penicillin and codeine.") reports that one as a missing medicine rather than an allergy; a `.txt` transcript containing JSON is read as plain text
 - [x] Golden-file tests for the JSON and Markdown reports (`tests/golden/`, regenerated with `SCRIBECHECK_UPDATE_GOLDEN=1`)
@@ -129,9 +129,9 @@ Week 3:
 
 - [x] Merge rules facts into Pass A, and send rules "absent" verdicts for structured facts to the second check (a confirmed candidate takes the model's severity grade; a rejected one is dropped)
 - [x] Send rules-mode changed-value warnings (Pass B items that would have been certain flags, reported at possible confidence by `checker.py`) to the model's quote-verified second check, like the omission candidates
-- [ ] Pass B model path, certainty changes and its second check
-- [ ] Pass C: statement splitting, checking, the second check and the default exemptions
-- [ ] Deduplication across the three passes
+- [x] Pass B model path, certainty changes and its second check (`pass_b.py`; scribecheck pipeline only; a verdict the second check does not uphold is unchecked `second_check_rejected` unless `[report] show_rejected_as_possible`)
+- [x] Pass C: statement splitting, checking, the second check and the default exemptions (`pass_c.py`; record history is exempt only where the note marks it as from the record)
+- [x] Deduplication across the three passes (`dedupe.py`: Pass B over Pass C, Pass A gives way to Pass B; `--passes` chooses the passes, default all)
 - [x] Fox et al.'s route-one prompts as a selectable configuration inside scribecheck, so Gate 2's fallback is a config switch (`[pass_a] pipeline = "route_one"`, `src/scribecheck/pass_a/route_one.py`; the five prompts copied byte for byte from the MIT harness and hash-checked; prompt-only JSON and the harness's parsers, as published; per-stage model and effort in config, defaulting to the harness's efforts). Quote checks never change route one's verdicts: a flag whose transcript quote cannot be found stays, at possible confidence, with `evidence_verified: false`, counted in the report; scoring of route one must use its verdicts unchanged (for the M1 scoring harness)
 - [x] Severity rubric: Fox et al.'s if the harness licence covers it, otherwise our own, reviewed by the clinician. It ships in the harness's audit prompt (MIT), and scribecheck_v1's audit prompt reuses it with attribution; the clinician review is still to do
 - [ ] M3 session 4: choose the open-weight model from OpenRouter's current list against the criteria above (open weights with a commercial-use licence; fits one 24–48 GB GPU; reliable structured output; at least 32k context), then run it through OpenRouter with the OpenAI-compatible adapter, provider pinned and quantisation recorded, and record calls, cost and time per note for both models
@@ -153,6 +153,7 @@ The goal is to tune on development data only and freeze the settings before the 
 - [ ] Run Claude Sonnet 5.5 twice on development data: once mid-way through tuning and once on the frozen settings
 - [ ] Measure the rules layer's effect by running with and without it
 - [ ] Score Pass B and Pass C on the 117 development pairs that add or change a fact
+- Scoring note: OmissionBench detection and false alarms use Pass A runs only (`--passes a`); Pass B and Pass C are evaluated separately, on the 117 development pairs that add or change a fact
 - [ ] Measure severity agreement with OmissionBench's per-fact grades (Cohen's kappa) for each model
 - [ ] Stability: run each model 3 times on a fixed 100-note development subset
 - [ ] Publish minimum model guidance, including the minimum context length

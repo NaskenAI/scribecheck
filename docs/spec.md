@@ -123,17 +123,29 @@ Structured facts from the transcript and note are aligned by drug, body site or 
 
 Pairs the rules cannot align go to the model. Certainty changes are always judged by the model, with the ConText "possible" attribute as a hint. Every model verdict in Pass B gets a second, quote-verified check before it can be marked confirmed.
 
+In full mode (scribecheck pipeline only), one call per note gives the model the rules' changed-value warnings, the Pass B items the rules left unchecked because they could not align or compare them (a drug found in the note only is a possible substitution; one found in the transcript only is Pass A's), and the transcript's hedged sentences as hints for certainty changes; it may also report other changes. Each "changed" verdict with both quotes verified goes to a skeptical second check: upheld gives a changed-fact flag at confirmed confidence with the model's severity; not upheld gives an unchecked item ("second_check_rejected"). A warning the model finds consistent is dropped.
+
 ### Pass C: unsupported statements (note to transcript)
 
 1. Split the note into atomic statements.
 2. Check each against the transcript as supported, contradicted, unsupported or not verifiable, with the transcript quote where one exists.
 3. **Second check.** Each contradicted or unsupported verdict is re-checked against the transcript, with a quote requirement, before it can be marked confirmed.
-4. **Default exemptions.** Content clinicians normally add without saying it aloud is reported as "not verifiable" and never fails a note: examination findings in face-to-face visits, vitals, test results, history taken from the record, and prefilled demographics. Users can change this list.
-5. **Examination rule.** When the modality is telephone, any examination finding is flagged as unsupported. For video, only hands-on findings such as palpation, auscultation and reflexes are flagged. Without a modality, the rule does not run. Findings are detected in the note's Examination section and after phrases such as "O/E" and "on examination". A finding inside an Examination section, and one detected only by phrase, are reported at possible confidence, because rules-mode certain flags are disabled (see the deterministic rules layer).
+4. **Default exemptions.** Content clinicians normally add without saying it aloud is reported as "not verifiable" and never fails a note: examination findings in face-to-face visits (or with no modality), vitals, test results, prefilled demographics, and history taken from the record. History counts as from the record only where the note itself marks it so ("per records", "per chart", "previously documented", "from EHR", or a statement in an imported or prefilled section); any other history, such as an unmarked "history of type 2 diabetes", is checked like any clinical statement. Users can change the list (`[pass_c] exempt`). Full-mode reports list the not-verifiable statements and count them.
+5. **Examination rule.** When the modality is telephone, any examination finding is flagged as unsupported. For video, only hands-on findings such as palpation, auscultation and reflexes are flagged. Without a modality, or for an in-person visit, the rule does not run. Findings are the sentences of the note's Examination section (a vitals section excepted) and the text after "O/E", "on examination" or "examination" at the start of a line, never mid-sentence. Not findings: a statement that no examination was done (or was deferred or declined), a plan or advice sentence, a vital sign, and a reading the patient reported. For video, findings seen rather than touched (a red throat) are reported as not verifiable instead. Its flags are critical warnings at possible confidence, because rules-mode certain flags are disabled (see the deterministic rules layer), and in full mode Pass C leaves remote examination findings to it.
 6. Grade each flag for severity, as in Pass A.
 7. In rules mode only the examination rule runs.
 
-In full mode the pipeline makes roughly 10 model calls per note, with presence checks batched about 10 facts per call. This is an estimate to confirm in milestone 1.
+In full mode (scribecheck pipeline only) the note is split into statements by a call that sees the note only; each statement must be found in the note. Statements are checked about ten per call; a contradiction needs a verified transcript quote. The second check either upholds a verdict (a flag at confirmed confidence, with the model's severity), finds the statement supported with a verified quote (no flag), or rejects it without one (an unchecked item, "second_check_rejected").
+
+### One discrepancy, one flag
+
+Flags are deduplicated across passes before the decision rule. Drugs are compared as the lexicon's ingredient sets named in a flag's fact or values (its quotes only as a fallback), never as free-text words. A Pass C statement flag whose note span lies mostly within a Pass B flag's note span is dropped (Pass B wins; the examination rule's flags are never dropped this way), and a Pass A omission whose transcript span overlaps a Pass B flag, or that names the same drug, is dropped. Within Pass B, two flags of the same kind about the same drug (or, without a drug, on overlapping spans), and within Pass C, two flags on overlapping note spans (an examination-rule warning and a model verdict), keep the higher confidence. Omissions are never merged with each other. An unchecked item about a note span a flag already reports is not listed again.
+
+### Which passes run
+
+`--passes` (or `passes` in the config) chooses any of a, b and c; the default is all three, and a report run with fewer says which passes were off, so a skipped pass never reads as a clean one. Route one runs Pass A only, exactly as published: Pass B's model path and Pass C never run in it, and its report carries the rules layer's warnings for the other passes. Benchmark (OmissionBench) runs use Pass A only. Passes run one after another; in a folder run each stage is one Message Batch.
+
+In full mode the pipeline makes roughly 10 model calls per note with Pass A alone (presence checks batched about 10 facts per call), plus about four for Pass B and Pass C. This is an estimate to confirm in milestone 3.
 
 ## Deterministic rules layer
 
@@ -176,7 +188,8 @@ The checker acts on per-fact verdicts and severity, not on a single note score, 
 
 - *Certain:* reserved for a deterministic mismatch the rules layer can prove. It is not emitted in v1, because rules-mode certain flags are disabled ([docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md)).
 - *Confirmed:* a model verdict in any pass upheld by its quote-verified second check.
-- *Possible:* everything else, including rules-based omissions in rules mode, where no model can confirm them (a medicine may have been stopped, declined or a relative's), partial verdicts, and model verdicts the second check did not uphold.
+- *Possible:* everything else that is reported as a flag, including rules-based findings in rules mode, where no model can confirm them (a medicine may have been stopped, declined or a relative's), partial verdicts, and route one's flags whose transcript quote could not be verified.
+- *Not upheld:* a Pass B or Pass C model verdict that its second check does not uphold produces no flag; it is listed as an unchecked item with reason `second_check_rejected`. Setting `[report] show_rejected_as_possible = true` reports them as possible flags instead. (In Pass A, an absence the second look rescues with a verified note quote is not reported, and a rules candidate the model rejects is dropped.)
 
 **Severity** is critical, supporting or peripheral, the same three grades as OmissionBench. In full mode the model grades it against a written rubric, reusing Fox et al.'s rubric if their MIT-licensed harness includes it. Rules mode has no grader, so it uses this default table, which users can change:
 
