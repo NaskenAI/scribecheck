@@ -109,6 +109,12 @@ Note templates name their sections differently, so users map their own headings 
 4. **Check each fact against the note,** with the whole note in every call, as a closed question: present, partial or absent. A "present" verdict must quote the note; if the quote is not found, the fact is re-checked. Structured facts are checked by the rules layer on normalised values. In full mode, a structured fact the rules find absent also goes to the model's quote-verified second check, which can confirm the omission.
 5. **Second look** at facts judged absent, asking for a supporting quote before the flag is raised.
 
+**Two configurations.** `[pass_a] pipeline` selects scribecheck's own pipeline above (the default) or `route_one`, Fox et al.'s per-fact pipeline reproduced from their MIT-licensed harness: its five prompts copied unmodified (`src/scribecheck/prompts/route_one/`), prompt-only JSON parsed as the harness parses it, one targeted retry for unanswered fact ids, and a refute stage whose rescues count only if their quote is in the note. Route one is the Gate 2 fallback and the base for M4's single-model Claude baseline; it does not use the rules layer, its present verdicts carry no quote, and quote checks never change its verdicts (a flag whose transcript quote cannot be found stays, at possible confidence, marked `evidence_verified: false`).
+
+**Quote verification.** A quote counts when it matches the source after normalising case, punctuation and whitespace (decimal points kept): an exact match of whole tokens at least 4 characters long or a single clinical abbreviation ("NKDA", "BD"), or a fuzzy match over whole tokens (difflib ratio at least 0.90, quotes of at least 8 characters). Every match must have the same numbers (number words included), units, negation words (contractions with or without the apostrophe), side words and drug names as the quote, and must not be directly preceded by a negation the quote leaves out; so matching never turns "chest pain" into "no chest pain", "1.5 mg" into "15 mg", "two" into "ten" or "left" into "right". A quote with ellipses matches only if every part matches, in order. A transcript quote must sit within one turn. An unverified quote is re-asked once; in scribecheck's pipeline an item still unverified is reported as unchecked (`quote_unverified`).
+
+**Calls and cost.** A single check runs live; `batch` runs each stage as one Message Batch (Anthropic) unless `--live` is given. Each full-mode report records its calls, the calls it shared with other notes of the same transcript (extraction and audit, run once per transcript, with their tokens and cost split evenly), tokens and cost. Cost uses the one `[model.prices]` table, so it is only an estimate when a Pass A stage is configured with a different model.
+
 Fox et al.'s evolved single prompt is not in v1. It judges the note as a whole without naming the missing fact, so it cannot meet the evidence requirement, and it only became a working detector with a reasoning budget that most local models lack. It may return in v1.1 as a clearly labelled note-level screen. The section-aware check for restated facts also moves to v1.1.
 
 ### Pass B: changed facts
@@ -523,7 +529,7 @@ Open questions:
 - [x] Route one's published 95% interval: no longer needed, because Gate 1 compares per-note flags with the released scored records
 - [ ] Which local open-weight model to standardise on for published results
 - [x] The benchmark's pinned model: gpt-5.4, the dataset card's baseline judge (API access still to check)
-- [ ] Whether Fox et al.'s severity rubric ships in their MIT-licensed harness or only in the paper
+- [x] Whether Fox et al.'s severity rubric ships in their MIT-licensed harness or only in the paper: it ships in the harness's `pipeline_audit` prompt, and scribecheck's audit prompt reuses it with attribution
 - [ ] Whether to publish under the Nasken AI GitHub organisation or a personal account
 - [ ] Which clinician reviews the synthetic demo set, the rules-mode severity table and the calibration guidance
 

@@ -40,7 +40,10 @@ The omission-checking method follows Fox S, Markham L, Lail R, Karotsieris M,
 [*LLM Judges Verify Presence, Not Absence: Omission Blindness in AI Clinical Notes and What
 Recovers It*](https://arxiv.org/abs/2608.31016), arXiv:2608.31016 (2026), which builds on
 MED-OMIT (Schumacher et al., 2023). Evaluation uses OmissionBench by Composo (data CC BY 4.0,
-harness MIT), which is built partly on PriMock57 and ACI-Bench.
+harness MIT), which is built partly on PriMock57 and ACI-Bench. The prompts in
+`src/scribecheck/prompts/route_one/` are copied unmodified from that harness (MIT, Copyright (c)
+2026 Composo Limited; see the folder's `LICENSE` and `README.md`), and the severity rubric in
+scribecheck's own audit prompt is theirs.
 
 Drug names come from RxNorm Current Prescribable Content (release of 5 October 2026). This
 product uses publicly available data from the U.S. National Library of Medicine (NLM),

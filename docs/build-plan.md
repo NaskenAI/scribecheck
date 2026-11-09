@@ -123,17 +123,17 @@ Week 2:
 - [x] Cost tracking and the per-run cost cap: usage is always recorded; cost comes only from `[model.prices]` in config; once spend reaches `[budget] cost_cap_usd` no further call is made and the remaining items are unchecked with `cost_cap_reached` (a batch is checked before submission against a worst-case estimate)
 - [ ] Transcript chunking with overlap, and merging of facts across chunks
 - [ ] Batch mode extracts facts once per transcript and reuses them across that transcript's notes
-- [ ] Pass A: extraction from the transcript only, audit with severity grading, per-fact presence check with the whole note, and the second look
+- [x] Pass A: extraction from the transcript only, audit with severity grading, per-fact presence check with the whole note, and the second look (`src/scribecheck/pass_a/pipeline.py`, prompts in `src/scribecheck/prompts/scribecheck_v1/`; extraction once per distinct transcript, chunked with overlap when long; about 10 facts per check call; quotes verified by `quotes.py`, re-asked once, else unchecked `quote_unverified`). Tested on mocked HTTP only; no real run yet
 
 Week 3:
 
-- [ ] Merge rules facts into Pass A, and send rules "absent" verdicts for structured facts to the second check
-- [ ] Send rules-mode changed-value warnings (Pass B items that would have been certain flags, reported at possible confidence by `checker.py`) to the model's quote-verified second check, like the omission candidates
+- [x] Merge rules facts into Pass A, and send rules "absent" verdicts for structured facts to the second check (a confirmed candidate takes the model's severity grade; a rejected one is dropped)
+- [x] Send rules-mode changed-value warnings (Pass B items that would have been certain flags, reported at possible confidence by `checker.py`) to the model's quote-verified second check, like the omission candidates
 - [ ] Pass B model path, certainty changes and its second check
 - [ ] Pass C: statement splitting, checking, the second check and the default exemptions
 - [ ] Deduplication across the three passes
-- [ ] Fox et al.'s route-one prompts as a selectable configuration inside scribecheck, so Gate 2's fallback is a config switch
-- [ ] Severity rubric: Fox et al.'s if the harness licence covers it, otherwise our own, reviewed by the clinician
+- [x] Fox et al.'s route-one prompts as a selectable configuration inside scribecheck, so Gate 2's fallback is a config switch (`[pass_a] pipeline = "route_one"`, `src/scribecheck/pass_a/route_one.py`; the five prompts copied byte for byte from the MIT harness and hash-checked; prompt-only JSON and the harness's parsers, as published; per-stage model and effort in config, defaulting to the harness's efforts). Quote checks never change route one's verdicts: a flag whose transcript quote cannot be found stays, at possible confidence, with `evidence_verified: false`, counted in the report; scoring of route one must use its verdicts unchanged (for the M1 scoring harness)
+- [x] Severity rubric: Fox et al.'s if the harness licence covers it, otherwise our own, reviewed by the clinician. It ships in the harness's audit prompt (MIT), and scribecheck_v1's audit prompt reuses it with attribution; the clinician review is still to do
 - [ ] Run with the chosen local model through Ollama, and record calls, cost and time per note for both models, including seconds per note on the GPU
 
 **Exit:** all three passes run end to end on the demo set with both models, every flag carries a verified quote, and the estimates of about 10 calls per note (spec) and about $0.09 per note (budget, scaled from Gate 1(b)) are replaced with measured figures, which feed a revised budget, replacing the estimates, and an estimate of week 4's GPU hours.
