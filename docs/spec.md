@@ -11,7 +11,7 @@ Users are AI scribe vendors testing model and prompt changes, hospital AI teams 
 Goals for v1:
 
 - A first report within 5 minutes of `pip install`, with no model, API key or account.
-- Omission detection on OmissionBench's held-out subset, compared with both published methods re-run on the same subset, using one local open-weight model and one API model (Claude Sonnet 5.5).
+- Omission detection on OmissionBench's held-out subset, compared with both published methods re-run on the same subset, using one open-weight model run on a single rented GPU and one API model (Claude Sonnet 5.5).
 - Ships as a Python package, a CLI, a GitHub Action, and plugins for promptfoo, DeepEval and Inspect.
 - Patient data never leaves the user's environment except to a model endpoint the user configures.
 
@@ -449,7 +449,13 @@ Headline results come from one run on OmissionBench's held-out subset, compared 
 
 The benchmark is split by consultation, so no development pair shares a transcript or a clean note with a held-out one. Development is 65 consultations and 265 evaluation pairs: 148 omissions (82 complete, 44 partial-weak, 22 partial-strong), 54 additions and 63 changes. Held-out is 47 consultations and 230 evaluation pairs. The headline result uses the official 151-pair held-out subset, whose ID list is stored with the encrypted held-out data, so it stays comparable with the published numbers. The other 79 held-out pairs are a supplementary check, run only if the headline result is borderline, once, with the same frozen settings.
 
-**Models.** The headline API model is Claude Sonnet 5.5, run through the Batch API with prompt caching (transcript first in every prompt) and one fixed effort level used everywhere. The local open-weight model is used for tuning.
+**Models.** The headline API model is Claude Sonnet 5.5, run through the Batch API with prompt caching (transcript first in every prompt) and one fixed effort level used everywhere.
+
+The open-weight model is a mid-size model that fits one 24–48 GB GPU, chosen in M3 session 4 from OpenRouter's current list against four criteria: open weights under a licence that allows commercial use; fits one 24–48 GB GPU; reliable structured output; and a context window of at least 32k tokens. It is used in three ways:
+
+- **Development and tuning** run it through OpenRouter with the OpenAI-compatible adapter, with the provider pinned and the quantisation recorded. These results are indicative only, because a hosted provider's serving stack is not the one the headline uses.
+- **The local-model headline:** the local-model baselines (both published methods) and scribecheck's Gate 2 local run happen together, in one session, on one rented 48 GB GPU (for example RunPod or Vast.ai) running vLLM, with the exact weights and precision recorded. Held-out data is copied to the pod only for that session, and the pod is deleted afterwards. Real patient data is never put on a rented machine. Estimated cost: about 3–6 GPU-hours, roughly $3–6 (an estimate).
+- **The local path on a laptop** is proven on an 8 GB Apple M3 with Ollama and a 3–4B model: the model smoke test plus `scribecheck check` on the demo cases. Small laptop models are for trying the tool, not for accuracy, and the README says so.
 
 | Dataset | Contents | Used for |
 | --- | --- | --- |
@@ -466,8 +472,8 @@ Protocol:
 1. **Validate the setup (Gate 1).** Gate 1 has two parts. (a) Free: recompute the published numbers from the benchmark's released scored records, to validate the scoring code. (b) Per-note check: run Fox et al.'s harness on gpt-5.4 for about 10 development consultations (about 55 notes) and compare each note's flag with the released record for that note. Gate 1 passes if, for each method, at least 90% of notes agree.
 2. **Re-run both methods on Claude Sonnet 5.5** once on the official 151-pair held-out subset (a single run, stated as such). These are the baselines; the released gpt-5.4 results are reported alongside as the reference, not re-run.
 3. **State the minimum detectable gain** before any held-out run. With 131 omission pairs over 47 consultations, a rough estimate is about 10 percentage points; smaller gains are unlikely to be distinguishable.
-4. **Develop** on the 65 development consultations: tune on one local open-weight model that runs on a single consumer GPU, using a fixed 20-consultation development subset, and run Claude Sonnet 5.5 twice on development data, once mid-way and once on the frozen settings; then add the rules layer and measure its effect separately. Develop Pass B and Pass C on the 117 development pairs that add or change a fact.
-5. **Confirm once** with settings fixed beforehand: Claude Sonnet 5.5 and the local model on the official 151-pair subset give the headline result. The other 79 held-out pairs run only if the headline result is borderline. Fox et al. found that gains chosen on a small validation set did not survive a held-out test.
+4. **Develop** on the 65 development consultations: tune on the open-weight model through OpenRouter (provider pinned, quantisation recorded; indicative only), using a fixed 20-consultation development subset, and run Claude Sonnet 5.5 twice on development data, once mid-way and once on the frozen settings; then add the rules layer and measure its effect separately. Develop Pass B and Pass C on the 117 development pairs that add or change a fact.
+5. **Confirm once** with settings fixed beforehand: Claude Sonnet 5.5 and the open-weight model, run locally on the rented GPU with vLLM, on the official 151-pair subset give the headline result. The other 79 held-out pairs run only if the headline result is borderline. Fox et al. found that gains chosen on a small validation set did not survive a held-out test.
 6. **Score and report.** Benchmark runs use the strict standard. Detection and false alarms count only Pass A omission flags: a note counts as flagged when it has at least *k* omission flags at confidence *c* or higher. Sweeping *k* from 1 to 5 and *c* across possible and confirmed gives the detection curve. Report the points nearest 1, 2 and 3 false alarms on the 47 clean notes (steps of about 2.1 points), broken down by severity and by trace (complete, fragment, restatement). In the data these traces are the `residual_level` values: complete = `complete`, fragment = `partial-weak`, restatement = `partial-strong`. Pass B and Pass C are scored separately on the pairs that add or change a fact. Also report the correct-fact rate: the share of detected notes where a flag names the removed fact. The outcome is one of three: a clear gain, no detectable difference, or worse.
 7. **Measure severity agreement.** Compare each model's severity grades with OmissionBench's per-fact grades and report Cohen's kappa. For reference, two frontier models agreed at 0.177 without a rubric and 0.662 with one.
 8. **Measure stability.** Run each supported model 3 times on a fixed 100-note development subset and publish the share of notes whose decision does not change.
@@ -477,7 +483,7 @@ Statistics follow the benchmark paper: confidence intervals by bootstrap over co
 
 **Data handling.** The held-out data and the raw OmissionBench download are encrypted at rest. Every run that touches them (recomputing the published numbers from the released records, the Claude and local-model baselines, and Gate 2) is run by a person in a normal terminal, never by Claude Code.
 
-**Compute budget.** Gate 1(b) measured the published methods' cost on gpt-5.4 through OpenRouter: route two about $0.046 per note and route one about $0.13 per note including fresh extraction, $9.12 in all for 51 notes (`docs/evidence/gate1b.md`). Scaled from those measured costs, and labelled as estimates until M3 measures scribecheck itself: scribecheck's Claude Sonnet 5.5 runs cost about $0.09 per note, or about $0.04 with the Batch API (route one's measured tokens at Sonnet 5.5 prices plus an allowance for Pass C), about $100 or $50 over the planned runs, from monthly API credits; the Claude baselines cost about $20–40 in OpenRouter credits, through the harness's own transport. The published gpt-5.4 baselines come from the released scored records, so they cost nothing to report. Each run has a cost cap in the config, and work stops for review if a run exceeds it; tuning uses the local model, so the API model is needed only for the Gate 1 per-note check, the Claude baselines, two development runs, the stability runs and the held-out run.
+**Compute budget.** Gate 1(b) measured the published methods' cost on gpt-5.4 through OpenRouter: route two about $0.046 per note and route one about $0.13 per note including fresh extraction, $9.12 in all for 51 notes (`docs/evidence/gate1b.md`). Scaled from those measured costs, and labelled as estimates until M3 measures scribecheck itself: scribecheck's Claude Sonnet 5.5 runs cost about $0.09 per note, or about $0.04 with the Batch API (route one's measured tokens at Sonnet 5.5 prices plus an allowance for Pass C), about $100 or $50 over the planned runs, from monthly API credits; the Claude baselines cost about $20–40 in OpenRouter credits, through the harness's own transport. The published gpt-5.4 baselines come from the released scored records, so they cost nothing to report. The rented GPU session for the local-model baselines and Gate 2 local run is estimated at about 3–6 GPU-hours, roughly $3–6; open-weight tuning runs through OpenRouter at that provider's prices. Each run has a cost cap in the config, and work stops for review if a run exceeds it; tuning uses the open-weight model, so the API model is needed only for the Gate 1 per-note check, the Claude baselines, two development runs, the stability runs and the held-out run.
 
 ## Distribution and adoption
 
@@ -511,7 +517,7 @@ The largest risk is that the additions show no detectable gain over the re-run b
 | --- | --- | --- |
 | No detectable gain over the re-run baselines | Weaker preprint and launch | Ship as an open, local implementation of the published method with open-model results; report the result honestly |
 | Held-out subset too small to show a modest gain | Gate 2 ends inconclusive | State the minimum detectable gain beforehand; report "no detectable difference", not a win |
-| Local open-weight models perform far worse | Full mode unusable on local hardware | Publish per-model results and a minimum model; rules mode still works |
+| Open-weight models perform far worse | Full mode unusable on local hardware | Publish per-model results and a minimum model; rules mode still works; small laptop models are documented as for trying the tool, not for accuracy |
 | Composo's MIT-licensed harness is already open | An alternative exists today | Differentiate as a product: CLI, rules mode, evidence reports, calibration and the GitHub Action; launch within 4 weeks |
 | Flags on good real notes | Vendors remove the tool from CI | Clinical standard by default, calibration on adjudicated flags, Pass C exemptions |
 | Model verdicts change between runs | Builds fail at random | Model-derived flags only warn in the Action by default; `--repeats`; stability published per model; a stability command for users' own test sets |
@@ -519,7 +525,7 @@ The largest risk is that the additions show no detectable gain over the re-run b
 | Hospital security reviews | Slow hospital adoption | Target scribe vendors first; no telemetry, short dependency list, software bill of materials |
 | Used as a live sign-off check on patients' notes | May count as regulated medical software in some markets | Positioned and documented as an evaluation tool; a regulatory adviser should be asked before anyone uses it per patient |
 | Schedule overrun | Late launch | Section-aware check and broader dialogue negation moved to v1.1; a named owner for each item |
-| API costs exceed the budget | Fewer runs and weaker evidence | Cost cap per run; tune on the local model; Batch API with prompt caching; API model only for the Gate 1 check, baselines, two development runs, stability and the held-out run |
+| API costs exceed the budget | Fewer runs and weaker evidence | Cost cap per run; tune on the open-weight model through OpenRouter; Batch API with prompt caching; API model only for the Gate 1 check, baselines, two development runs, stability and the held-out run |
 
 Open questions:
 
@@ -527,7 +533,7 @@ Open questions:
 - [ ] **Blocker, decide before week 1:** source for the common-symptom lexicon and its licence.
 - [ ] Owner and estimate for each milestone item, which decide between 4 and 6 weeks
 - [x] Route one's published 95% interval: no longer needed, because Gate 1 compares per-note flags with the released scored records
-- [ ] Which local open-weight model to standardise on for published results
+- [ ] Which open-weight model to standardise on for published results: a mid-size model that fits one 24–48 GB GPU, chosen in M3 session 4 from OpenRouter's current list (open weights with a commercial-use licence, reliable structured output, at least 32k context)
 - [x] The benchmark's pinned model: gpt-5.4, the dataset card's baseline judge (API access still to check)
 - [x] Whether Fox et al.'s severity rubric ships in their MIT-licensed harness or only in the paper: it ships in the harness's `pipeline_audit` prompt, and scribecheck's audit prompt reuses it with attribution
 - [ ] Whether to publish under the Nasken AI GitHub organisation or a personal account
