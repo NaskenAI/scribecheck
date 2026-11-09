@@ -19,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 
 from scribecheck.model.base import (
     Completion,
+    JsonMode,
     ModelClient,
     ModelFailure,
     ModelRequest,
@@ -128,13 +129,29 @@ class Invalid(NamedTuple):
     detail: str
 
 
-def parse(text: str, output: type[T]) -> T | Invalid:
-    """The validated reply, or what was wrong with it."""
+_BLOB = re.compile(r"(\{.*\}|\[.*\])", re.DOTALL)
+
+
+def parse(text: str, output: type[T], json_mode: JsonMode = "schema") -> T | Invalid:
+    """The validated reply, or what was wrong with it.
+
+    In "prompt" mode (no constrained decoding) the first JSON object or array in the reply
+    is taken, as the OmissionBench harness's `parse_json_blob` does, before validating.
+    """
     match = _FENCE.match(text)
     body = match.group("body") if match else text.strip()
     if not body:
         return Invalid("the reply was empty", "empty reply")
     try:
+        if json_mode == "prompt":
+            blob = _BLOB.search(body)
+            if blob is None:
+                return Invalid("the reply contained no JSON object", "no JSON object")
+            try:
+                data = json.loads(blob.group(1))
+            except json.JSONDecodeError:
+                return Invalid("the reply's JSON could not be parsed", "json_invalid")
+            return output.model_validate(data)
         return output.model_validate_json(body)
     except ValidationError as exc:
         errors = exc.errors()
@@ -153,10 +170,10 @@ def correction(problem: str) -> str:
     )
 
 
-def _problem(reply: RawReply, output: type[T]) -> T | Invalid:
+def _problem(reply: RawReply, request: ModelRequest[T]) -> T | Invalid:
     if reply.stop == "max_tokens":
         return Invalid("the reply was cut off at the token limit", "cut off at the token limit")
-    return parse(reply.text, output)
+    return parse(reply.text, request.output, request.json_mode)
 
 
 def complete(
@@ -166,22 +183,32 @@ def complete(
     usage = Usage()
     note: str | None = None
     detail = ""
+    made = 0
     for attempt in (1, 2):
         if not budget.can_spend():
-            return ModelFailure("cost_cap_reached", "the run's cost cap was reached", usage)
+            return ModelFailure("cost_cap_reached", "the run's cost cap was reached", usage, made)
         try:
             reply = client.send(request, correction=note)
         except ModelTransportError as exc:
-            return ModelFailure("model_error", str(exc), usage)
+            return ModelFailure("model_error", str(exc), usage, made + 1)
+        made += 1
         budget.record(reply.usage)
         usage = usage + reply.usage
         if reply.stop == "refusal":
-            return ModelFailure("model_refusal", "the model declined the request", usage)
-        result = _problem(reply, request.output)
+            return ModelFailure("model_refusal", "the model declined the request", usage, made)
+        result = _problem(reply, request)
         if not isinstance(result, Invalid):
             return Completion(result, usage, reply.model_id, attempt)
-        note, detail = correction(result.feedback), result.detail
-    return ModelFailure("model_parse_failure", f"no valid reply after 2 attempts ({detail})", usage)
+        note, detail = _retry_note(request, result), result.detail
+    return ModelFailure(
+        "model_parse_failure", f"no valid reply after 2 attempts ({detail})", usage, made
+    )
+
+
+def _retry_note(request: ModelRequest[Any], invalid: Invalid) -> str | None:
+    """The retry's correction: the validation error, or none for prompt-only requests,
+    which are re-sent unchanged (the OmissionBench harness's single retry)."""
+    return None if request.json_mode == "prompt" else correction(invalid.feedback)
 
 
 # Batches
@@ -223,7 +250,10 @@ def complete_batch(
                 reserved += estimate
             else:
                 results[request.custom_id] = ModelFailure(
-                    "cost_cap_reached", "the run's cost cap was reached", usage[request.custom_id]
+                    "cost_cap_reached",
+                    "the run's cost cap was reached",
+                    usage[request.custom_id],
+                    attempt - 1,
                 )
         if not sendable:
             break
@@ -232,7 +262,7 @@ def complete_batch(
         except ModelTransportError as exc:
             for request, _ in sendable:
                 results[request.custom_id] = ModelFailure(
-                    "model_error", str(exc), usage[request.custom_id]
+                    "model_error", str(exc), usage[request.custom_id], attempt
                 )
             break
         pending = []
@@ -240,32 +270,35 @@ def complete_batch(
             cid = request.custom_id
             reply = replies.get(cid, "missing")
             if isinstance(reply, str):
-                results[cid] = ModelFailure("model_error", f"batch result {reply}", usage[cid])
+                results[cid] = ModelFailure(
+                    "model_error", f"batch result {reply}", usage[cid], attempt
+                )
                 continue
             budget.record(reply.usage, batch=True)
             usage[cid] = usage[cid] + reply.usage
             if reply.stop == "refusal":
                 results[cid] = ModelFailure(
-                    "model_refusal", "the model declined the request", usage[cid]
+                    "model_refusal", "the model declined the request", usage[cid], attempt
                 )
                 continue
-            result = _problem(reply, request.output)
+            result = _problem(reply, request)
             if not isinstance(result, Invalid):
                 results[cid] = Completion(result, usage[cid], reply.model_id, attempt)
             elif attempt == 1:
-                pending.append((request, correction(result.feedback)))
+                pending.append((request, _retry_note(request, result)))
             else:
                 results[cid] = ModelFailure(
                     "model_parse_failure",
                     f"no valid reply after 2 attempts ({result.detail})",
                     usage[cid],
+                    attempt,
                 )
     return {r.custom_id: results[r.custom_id] for r in requests}
 
 
 def _chars(request: ModelRequest[Any], note: str | None) -> int:
     text = len(request.system) + sum(len(b.text) for m in request.messages for b in m.blocks)
-    schema = len(json.dumps(strict_schema(request.output)))
+    schema = len(json.dumps(strict_schema(request.output))) if request.json_mode == "schema" else 0
     return text + schema + (len(note) if note else 0)
 
 

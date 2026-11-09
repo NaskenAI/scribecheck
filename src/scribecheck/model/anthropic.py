@@ -127,18 +127,25 @@ class AnthropicClient:
                 messages[-1]["content"].append({"type": "text", "text": correction})
             else:
                 messages.append({"role": "user", "content": [{"type": "text", "text": correction}]})
-        output_config: dict[str, Any] = {
-            "format": {"type": "json_schema", "schema": strict_schema(request.output)}
-        }
-        if self.effort is not None:
-            output_config["effort"] = self.effort
-        return {
-            "model": self._model,
+        output_config: dict[str, Any] = {}
+        if request.json_mode == "schema":
+            output_config["format"] = {
+                "type": "json_schema",
+                "schema": strict_schema(request.output),
+            }
+        effort = request.effort or self.effort
+        if effort is not None:
+            output_config["effort"] = effort
+        body: dict[str, Any] = {
+            "model": request.model or self._model,
             "max_tokens": request.max_tokens or self.max_tokens,
-            "system": request.system,
-            "messages": messages,
-            "output_config": output_config,
         }
+        if request.system:
+            body["system"] = request.system
+        body["messages"] = messages
+        if output_config:
+            body["output_config"] = output_config
+        return body
 
     def send(self, request: ModelRequest[T], *, correction: str | None = None) -> RawReply:
         data = request_json(

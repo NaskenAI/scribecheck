@@ -39,6 +39,11 @@ Provider = Literal["anthropic", "openai"]
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 CacheTTL = Literal["5m", "1h"]
 JsonMode = Literal["json_schema", "json_object", "none"]
+Pipeline = Literal["scribecheck", "route_one"]
+ROUTE_ONE_STAGES = frozenset({"extract", "audit", "check", "refute"})
+SCRIBECHECK_STAGES = frozenset(
+    {"extract", "audit", "check", "second_look", "candidate", "quote_recheck"}
+)
 
 CONFIG_FILENAME = "scribecheck.toml"
 ROLES = frozenset({"clinician", "patient", "relative", "carer", "parent", "nurse"})
@@ -57,6 +62,16 @@ class PriceTable(BaseModel):
     cache_read: float | None = Field(default=None, ge=0)
     batch_multiplier: float | None = Field(default=None, gt=0)
     """Batch cost relative to live calls."""
+
+
+class StageSettings(BaseModel):
+    """One Pass A stage's model, effort and token limit; unset values use [model]."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str | None = None
+    effort: Effort | None = None
+    max_tokens: StrictInt | None = Field(default=None, gt=0)
 
 
 class Config(BaseModel):
@@ -107,6 +122,14 @@ class Config(BaseModel):
     prices: PriceTable | None = None
     cost_cap_usd: float | None = Field(default=None, ge=0)
     """Stop making model calls once the estimated spend reaches this."""
+    pipeline: Pipeline = "scribecheck"
+    """Pass A's configuration: scribecheck's own, or Fox et al.'s route one."""
+    check_facts_per_call: int = Field(default=10, gt=0)
+    chunk_chars: int = Field(default=60000, gt=1000)
+    """Transcripts longer than this are extracted in overlapping chunks."""
+    chunk_overlap_turns: int = Field(default=4, ge=0)
+    stages: dict[str, StageSettings] = Field(default_factory=dict)
+    """Per-stage settings, keyed "route_one.<stage>" or "scribecheck.<stage>"."""
 
     @field_validator("speakers")
     @classmethod
@@ -184,6 +207,38 @@ class _Model(BaseModel):
     prices: PriceTable | None = None
 
 
+class _PassA(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline: Pipeline = "scribecheck"
+    check_facts_per_call: StrictInt = Field(default=10, gt=0)
+    chunk_chars: StrictInt = Field(default=60000, gt=1000)
+    chunk_overlap_turns: StrictInt = Field(default=4, ge=0)
+    route_one: dict[str, StageSettings] = {}
+    scribecheck: dict[str, StageSettings] = {}
+
+    @field_validator("route_one")
+    @classmethod
+    def _route_one_stages(cls, value: dict[str, StageSettings]) -> dict[str, StageSettings]:
+        return _known_stages(value, ROUTE_ONE_STAGES)
+
+    @field_validator("scribecheck")
+    @classmethod
+    def _scribecheck_stages(cls, value: dict[str, StageSettings]) -> dict[str, StageSettings]:
+        return _known_stages(value, SCRIBECHECK_STAGES)
+
+
+def _known_stages(
+    value: dict[str, StageSettings], known: frozenset[str]
+) -> dict[str, StageSettings]:
+    unknown = sorted(set(value) - known)
+    if unknown:
+        raise ValueError(
+            f"unknown stage {unknown[0]!r}; expected one of: {', '.join(sorted(known))}"
+        )
+    return value
+
+
 class _Budget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -202,6 +257,7 @@ class _File(BaseModel):
     symptoms: dict[str, str] = {}
     model: _Model = _Model()
     budget: _Budget = _Budget()
+    pass_a: _PassA = _PassA()
 
 
 _KEY_NAMES = frozenset({"api_key", "key", "apikey", "token", "secret", "password"})
@@ -259,6 +315,14 @@ def config_from_mapping(data: Mapping[str, object], *, source: str = "config") -
             query=m.query,
             prices=m.prices,
             cost_cap_usd=parsed.budget.cost_cap_usd,
+            pipeline=parsed.pass_a.pipeline,
+            check_facts_per_call=parsed.pass_a.check_facts_per_call,
+            chunk_chars=parsed.pass_a.chunk_chars,
+            chunk_overlap_turns=parsed.pass_a.chunk_overlap_turns,
+            stages={
+                **{f"route_one.{k}": v for k, v in parsed.pass_a.route_one.items()},
+                **{f"scribecheck.{k}": v for k, v in parsed.pass_a.scribecheck.items()},
+            },
         )
     except ValidationError as exc:
         raise InputError(f"{source}: {_describe(exc)}") from exc
@@ -338,5 +402,21 @@ fail_confidence = ["certain", "confirmed"]
 
 # [budget]
 # cost_cap_usd = 10.0                     # needs [model.prices]
+
+# [pass_a]
+# Full mode's omission check: "scribecheck" (default) or "route_one", Fox et al.'s
+# published per-fact pipeline.
+# pipeline = "scribecheck"
+# check_facts_per_call = 10
+# chunk_chars = 60000                     # longer transcripts are extracted in chunks
+# chunk_overlap_turns = 4
+
+# [pass_a.route_one.audit]               # per-stage model, effort and token limit
+# name = "<model name>"                  # stages: extract, audit, check, refute
+# effort = "high"
+# max_tokens = 24000
+
+# [pass_a.scribecheck.check]             # stages: extract, audit, check, second_look,
+# effort = "low"                         # candidate, quote_recheck
 """
 """Written by `scribecheck init`."""

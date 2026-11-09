@@ -1,3 +1,5 @@
 # Generated review sheets are compared byte for byte with fresh output in tests,
 # so keep LF line endings on every platform (Windows checkouts would add CR).
 docs/review/*.csv text eol=lf
+# Prompt files are hashed (route_one must match the harness byte for byte), so keep LF.
+src/scribecheck/prompts/**/*.txt text eol=lf

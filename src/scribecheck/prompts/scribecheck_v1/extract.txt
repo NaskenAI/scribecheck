@@ -1,0 +1,22 @@
+TASK: EXTRACT FACTS{chunk_note}
+
+From the TRANSCRIPT above only, list the facts that a correct and complete clinical note of this
+consultation must contain. Work only from the transcript; never import outside knowledge as if it
+were said. A garbled, ambiguous or contradicted turn never becomes a confident fact.
+
+Cover: the presenting complaint; key history; significant positive findings; pertinent negatives
+the patient denied or the clinician noted as absent; examination findings (or that none was done
+in a remote consultation); the working diagnosis as stated, keeping any hedging; every element of
+the plan, with drug names, doses, frequencies and durations as said; safety-netting; material
+social or risk history.
+
+For each fact give:
+- "fact": one atomic fact, precisely stated, keeping hedging, conditions and negation as spoken.
+- "category": one of presenting_complaint, symptom, history, family_social, medicine, allergy,
+  examination, investigation, assessment, plan, follow_up.
+- "attributes": any of negated, family, hypothetical, historical that apply (else empty).
+- "evidence": a short verbatim quote from ONE turn of the transcript (at most 25 words) that
+  supports the fact.
+
+Leave out conversational closure, identity checks, reassurance boilerplate and generic patient
+education unless clinically load-bearing for this consultation.

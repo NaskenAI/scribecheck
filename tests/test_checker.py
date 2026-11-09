@@ -90,14 +90,13 @@ def test_report_never_holds_the_full_transcript_or_note() -> None:
         assert KNEE_NOTE not in text
 
 
-@pytest.mark.parametrize("mode", ["full"])
-def test_full_mode_is_not_available_yet(tmp_path: Path, mode: str) -> None:
-    config = Config(mode=mode)  # type: ignore[arg-type]
-    with pytest.raises(InputError, match="full mode"):
+def test_full_mode_needs_a_model(tmp_path: Path) -> None:
+    config = Config(mode="full")
+    with pytest.raises(InputError, match="full mode needs \\[model\\]"):
         check(KNEE, KNEE_NOTE, config)
-    with pytest.raises(InputError, match="full mode"):
-        check_files(tmp_path / "t.txt", tmp_path / "n.md", config)
-    with pytest.raises(InputError, match="full mode"):
+    (tmp_path / "k.transcript.txt").write_text(KNEE, encoding="utf-8")
+    (tmp_path / "k.note.md").write_text(KNEE_NOTE, encoding="utf-8")
+    with pytest.raises(InputError, match="full mode needs"):
         check_folder(tmp_path, config)
 
 

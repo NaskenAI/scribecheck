@@ -47,6 +47,7 @@ UncheckedReason = Literal[
     "cost_cap_reached",
     "model_refusal",
     "model_error",
+    "quote_unverified",
 ]
 """Why an item got no certain flag; see rules/changed.py for each."""
 
@@ -96,6 +97,8 @@ class Flag(BaseModel):
     expected_section: str | None = None
     second_check: str | None = None
     model_version: str | None = None
+    evidence_verified: bool | None = None
+    """False when the transcript quote could not be found (route one keeps such flags)."""
 
 
 class UncheckedItem(BaseModel):

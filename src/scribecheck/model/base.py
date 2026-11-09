@@ -21,6 +21,10 @@ from scribecheck.model.endpoint import Endpoint
 
 T = TypeVar("T", bound=BaseModel)
 
+JsonMode = Literal["schema", "prompt"]
+"""How the reply's JSON is obtained: "schema" asks the provider to constrain the output to
+the output model's schema; "prompt" relies on the prompt alone (as route one ran) and takes
+the first JSON object in the reply."""
 FailureReason = Literal["model_parse_failure", "cost_cap_reached", "model_refusal", "model_error"]
 StopReason = Literal["end", "max_tokens", "refusal", "other"]
 
@@ -44,12 +48,21 @@ class ModelRequest(Generic[T]):
     """One structured call: instructions, messages, and the model the reply must match."""
 
     system: str
+    """Empty for none."""
     messages: tuple[Message, ...]
     output: type[T]
     max_tokens: int | None = None
     """Overrides the client's default."""
     custom_id: str = "request"
     """Names the request in a batch: 1-64 letters, digits, hyphens or underscores."""
+    json_mode: JsonMode = "schema"
+    model: str | None = None
+    """Overrides the client's model, for pipelines that use a different model per stage."""
+    effort: str | None = None
+    """Overrides the client's effort level: Anthropic `output_config.effort`; sent as
+    `reasoning_effort` to an OpenAI-compatible endpoint."""
+    temperature: float | None = None
+    """Overrides an OpenAI-compatible client's temperature (the Anthropic API takes none)."""
 
 
 @dataclass(frozen=True)
@@ -102,6 +115,8 @@ class ModelFailure:
     detail: str
     """Why, without any prompt or response text."""
     usage: Usage = field(default_factory=Usage)
+    attempts: int = 0
+    """Calls made before failing (0 when stopped before any call)."""
 
 
 class ModelConfigError(InputError):

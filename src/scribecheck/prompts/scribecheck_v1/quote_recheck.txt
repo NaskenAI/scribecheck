@@ -1,0 +1,8 @@
+TASK: GIVE THE EXACT QUOTE
+
+For each item below, the quote given earlier could not be found in the {source} above. Give the
+exact words from the {source} that support it, copied character for character from a single
+{unit}, without speaker labels or ellipses. If no such words exist, give an empty "quote".
+
+ITEMS:
+{facts_block}

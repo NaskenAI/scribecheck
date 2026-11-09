@@ -60,6 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="check every transcript-note pair in a folder, matched by file name",
     )
     batch.add_argument("folder", type=Path)
+    batch.add_argument(
+        "--live",
+        action="store_true",
+        help="full mode: make model calls one by one instead of through Message Batches "
+        "(for small development runs)",
+    )
 
     commands.add_parser(
         "demo", parents=[output], help="run the bundled synthetic examples in rules mode"
@@ -94,8 +100,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = check_files(args.transcript, args.note, config)
             text = report.to_json() if args.format == "json" else render_markdown(report)
             _emit(text, args.output)
+            _usage_summary([report])
             return _exit_code([report])
-        result = check_folder(args.folder, config)
+        result = check_folder(args.folder, config, live=args.live)
         if not result.cases and not result.problems:
             raise InputError(f"{args.folder}: no transcript-note pairs found")
         text = (
@@ -104,6 +111,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else render_batch_markdown(result.cases, result.problems)
         )
         _emit(text, args.output)
+        _usage_summary(result.reports)
         for problem in result.problems:
             print(f"scribecheck: {problem}", file=sys.stderr)
         # Any problem (an unmatched, duplicate or unreadable file, or a pair that could not
@@ -168,6 +176,26 @@ def _emit(text: str, output: Path | None) -> None:
         buffer.write(text.encode("utf-8"))
         buffer.flush()
     sys.stdout.flush()
+
+
+def _usage_summary(reports: Sequence[Report]) -> None:
+    """One stderr line with full mode's model calls and cost."""
+    used = [r.usage for r in reports if r.usage is not None]
+    if not used:
+        return
+    calls = sum(u.calls for u in used)
+    shared = sum(u.shared_calls for u in used)
+    costs = [u.cost_usd for u in used]
+    cost = (
+        "cost unknown (set [model.prices])"
+        if any(c is None for c in costs)
+        else f"estimated cost ${sum(c for c in costs if c is not None):.4f}"
+    )
+    print(
+        f"scribecheck: {calls} model calls for single notes, {shared} shared between notes "
+        f"of one transcript; {cost}",
+        file=sys.stderr,
+    )
 
 
 def _exit_code(reports: Sequence[Report]) -> int:

@@ -91,32 +91,38 @@ class OpenAICompatClient:
         return headers
 
     def body(self, request: ModelRequest[Any], *, correction: str | None = None) -> dict[str, Any]:
-        schema = strict_schema(request.output)
+        prompt_only = request.json_mode == "prompt"
+        schema = None if prompt_only else strict_schema(request.output)
         system = request.system
-        if self.json_mode != "json_schema":
+        if schema is not None and self.json_mode != "json_schema":
             system += "\n\nReply with only a JSON object matching this JSON schema:\n" + json.dumps(
                 schema, sort_keys=True
             )
-        messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
         for message in request.messages:
             messages.append(
                 {"role": message.role, "content": "\n\n".join(b.text for b in message.blocks)}
             )
         if correction is not None:
-            if messages[-1]["role"] == "user":
+            if messages and messages[-1]["role"] == "user":
                 messages[-1]["content"] += "\n\n" + correction
             else:
                 messages.append({"role": "user", "content": correction})
         body: dict[str, Any] = {
-            "model": self._model,
+            "model": request.model or self._model,
             "messages": messages,
             "max_tokens": request.max_tokens or self.max_tokens,
         }
-        if self.temperature is not None:
-            body["temperature"] = self.temperature
+        temperature = request.temperature if request.temperature is not None else self.temperature
+        if temperature is not None:
+            body["temperature"] = temperature
+        if request.effort is not None:
+            body["reasoning_effort"] = request.effort
         if self.seed is not None:
             body["seed"] = self.seed
-        if self.json_mode == "json_schema":
+        if schema is not None and self.json_mode == "json_schema":
             body["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
@@ -125,7 +131,7 @@ class OpenAICompatClient:
                     "strict": False,
                 },
             }
-        elif self.json_mode == "json_object":
+        elif schema is not None and self.json_mode == "json_object":
             body["response_format"] = {"type": "json_object"}
         return body
 

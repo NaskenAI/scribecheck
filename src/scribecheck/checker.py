@@ -5,8 +5,13 @@ While rules-mode certain flags are disabled (rules/changed.py), a Pass B item wh
 reason is "certain_disabled_pending_allowlist" (one that would have been a certain flag)
 is reported as a changed-fact flag at possible confidence, with Pass B's rule ID and
 severity. Every other item stays unchecked with its reasons, except an unaligned drug that
-Pass A already reports, as a missing medicine or an unchecked one. In full mode both
-kinds of flag go to the model's quote-verified second check (M3).
+Pass A already reports, as a missing medicine or an unchecked one.
+
+Full mode adds Pass A with the model (`pass_a`): the configured pipeline extracts and checks
+facts, and the scribecheck pipeline sends both kinds of rules flag to the model's
+quote-verified second check, which confirms (with the model's severity) or rejects them.
+A single check runs live; a folder runs through Message Batches unless `live` is set. The
+Pass B model path and Pass C are not built yet.
 
 Flag IDs are numbered after merging, omissions first, each type in transcript order, so
 a report is the same on every run. Every quote is verified against its source before it
@@ -16,18 +21,18 @@ enters a report.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from scribecheck.config import Config
 from scribecheck.decision import apply_standard, decide
 from scribecheck.errors import InputError
 from scribecheck.flags import Flag, UncheckedItem, verify_evidence
 from scribecheck.note import Note, parse_note, parse_note_file
-from scribecheck.report import Case, Report, count
+from scribecheck.report import Case, ModelInfo, PassAInfo, Report, UsageInfo, count
 from scribecheck.rules import changed
 from scribecheck.rules.omission import structured_omissions
 from scribecheck.transcript import Transcript, parse_transcript, parse_transcript_file
@@ -50,7 +55,6 @@ def check(
     Raises `InputError` for malformed input or a mode that is not available.
     """
     config = config or Config()
-    _require_rules_mode(config)
     parsed_t = parse_transcript(
         transcript, speaker_map=config.speaker_map(), consultation_id=consultation_id
     )
@@ -67,19 +71,32 @@ def check_files(
     ".transcript" too (`case1.transcript.txt` is "case1").
     """
     config = config or Config()
-    _require_rules_mode(config)
+    return check_parsed(*_read(transcript_path, note_path, config), config)
+
+
+def _read(
+    transcript_path: str | Path, note_path: str | Path, config: Config
+) -> tuple[Transcript, Note]:
     parsed_t = parse_transcript_file(transcript_path, speaker_map=config.speaker_map())
     stem = parsed_t.consultation_id
     if Path(transcript_path).suffix.lower() != ".json" and stem and _marked(stem, ".transcript"):
         parsed_t = parsed_t.model_copy(update={"consultation_id": stem[: -len(".transcript")]})
-    parsed_n = parse_note_file(note_path, heading_map=config.heading_map())
-    return check_parsed(parsed_t, parsed_n, config)
+    return parsed_t, parse_note_file(note_path, heading_map=config.heading_map())
 
 
 def check_parsed(transcript: Transcript, note: Note, config: Config | None = None) -> Report:
-    """Check an already parsed transcript and note."""
+    """Check an already parsed transcript and note (full mode calls the model live)."""
     config = config or Config()
-    _require_rules_mode(config)
+    if config.mode == "full":
+        return _check_full([(transcript, note)], config, live=True)[0]
+    found, unchecked = _rules(transcript, note, config)
+    return _report(transcript, note, config, found, unchecked)
+
+
+def _rules(
+    transcript: Transcript, note: Note, config: Config
+) -> tuple[list[Flag], list[UncheckedItem]]:
+    """The rules layer's warnings (omission candidates, changed values) and unchecked items."""
     brands = config.brands or None
     omissions = structured_omissions(transcript, note, brands=brands)
     changes = changed.check_changed_facts(
@@ -106,7 +123,17 @@ def check_parsed(transcript: Transcript, note: Note, config: Config | None = Non
             found.append(_possible_change(item))
         else:
             unchecked.append(item)
+    return found, unchecked
 
+
+def _report(
+    transcript: Transcript,
+    note: Note,
+    config: Config,
+    found: Sequence[Flag],
+    unchecked: Sequence[UncheckedItem],
+    **extra: Any,
+) -> Report:
     flags = _numbered(apply_standard(found, config.standard))
     entries: list[Flag | UncheckedItem] = [*flags, *unchecked]
     for entry in entries:
@@ -124,12 +151,73 @@ def check_parsed(transcript: Transcript, note: Note, config: Config | None = Non
         counts=count(flags, unchecked),
         flags=flags,
         unchecked=tuple(unchecked),
+        **extra,
     )
 
 
-def _require_rules_mode(config: Config) -> None:
-    if config.mode != "rules":
-        raise InputError("full mode is not available yet (milestone M3); use --mode rules")
+def _check_full(
+    items: Sequence[tuple[Transcript, Note]], config: Config, *, live: bool
+) -> list[Report]:
+    """Rules plus Pass A with the model, for several consultations at once."""
+    # Imported here so rules mode never loads the model client (or httpx).
+    from scribecheck.model import create_budget, create_client
+    from scribecheck.pass_a import Case as PassCase
+    from scribecheck.pass_a import prompt_set, run_pass_a
+
+    client = create_client(config)
+    budget = create_budget(config)
+    try:
+        rules = [_rules(t, n, config) for t, n in items]
+        use_candidates = config.pipeline == "scribecheck"
+        cases = [
+            PassCase(f"c{i}", t, n, tuple(found) if use_candidates else ())
+            for i, ((t, n), (found, _)) in enumerate(zip(items, rules, strict=True))
+        ]
+        outcomes = run_pass_a(cases, config, client, budget, live=live)
+    finally:
+        client.close()
+    reports = []
+    for case, (found, unchecked) in zip(cases, rules, strict=True):
+        outcome = outcomes[case.id]
+        kept = [f for i, f in enumerate(found) if i not in outcome.resolved_candidates]
+        tally = outcome.tally
+        reports.append(
+            _report(
+                case.transcript,
+                case.note,
+                config,
+                [*kept, *outcome.flags],
+                [*unchecked, *outcome.unchecked],
+                model=ModelInfo(
+                    name=config.model or client.model,
+                    version=", ".join(sorted(tally.model_ids)) or None,
+                    endpoint_host=client.endpoint.host,
+                    provider=client.provider,
+                    effort=config.effort if client.provider == "anthropic" else None,
+                    temperature=config.temperature if client.provider == "openai" else None,
+                    seed=config.seed if client.provider == "openai" else None,
+                ),
+                usage=UsageInfo(
+                    calls=tally.calls,
+                    shared_calls=tally.shared_calls,
+                    input_tokens=tally.usage.input_tokens,
+                    output_tokens=tally.usage.output_tokens,
+                    cache_write_tokens=tally.usage.cache_write_5m_tokens
+                    + tally.usage.cache_write_1h_tokens,
+                    cache_read_tokens=tally.usage.cache_read_tokens,
+                    cost_usd=None if tally.cost_usd is None else round(tally.cost_usd, 6),
+                ),
+                pass_a=PassAInfo(
+                    pipeline=config.pipeline,
+                    prompts=prompt_set(config),
+                    batch=not live and client.provider == "anthropic",
+                    unverified_evidence=sum(
+                        1 for f in outcome.flags if f.evidence_verified is False
+                    ),
+                ),
+            )
+        )
+    return reports
 
 
 def _possible_change(item: UncheckedItem) -> Flag:
@@ -267,12 +355,19 @@ def _rel(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
-def check_folder(folder: str | Path, config: Config | None = None) -> BatchResult:
-    """Check every matched pair in `folder`; a pair that fails is reported, not raised."""
+def check_folder(
+    folder: str | Path, config: Config | None = None, *, live: bool = False
+) -> BatchResult:
+    """Check every matched pair in `folder`; a pair that fails is reported, not raised.
+
+    In full mode every pair goes through Pass A together, one Message Batch per stage
+    (Anthropic), unless `live` is set, which makes the calls one by one.
+    """
     config = config or Config()
-    _require_rules_mode(config)
     folder = Path(folder)
     pairs, problems = find_pairs(folder)
+    if config.mode == "full":
+        return _check_folder_full(folder, pairs, problems, config, live=live)
     cases = []
     for pair in pairs:
         try:
@@ -284,6 +379,23 @@ def check_folder(folder: str | Path, config: Config | None = None) -> BatchResul
             problems.append(f"{pair.id}: internal error: {type(exc).__name__}: {exc}")
             continue
         cases.append(Case(pair.id, _rel(pair.transcript, folder), _rel(pair.note, folder), report))
+    return BatchResult(tuple(cases), tuple(problems))
+
+
+def _check_folder_full(
+    folder: Path, pairs: list[Pair], problems: list[str], config: Config, *, live: bool
+) -> BatchResult:
+    read: list[tuple[Pair, Transcript, Note]] = []
+    for pair in pairs:
+        try:
+            read.append((pair, *_read(pair.transcript, pair.note, config)))
+        except InputError as exc:
+            problems.append(f"{pair.id}: {exc}")
+    reports = _check_full([(t, n) for _, t, n in read], config, live=live) if read else []
+    cases = [
+        Case(pair.id, _rel(pair.transcript, folder), _rel(pair.note, folder), report)
+        for (pair, _, _), report in zip(read, reports, strict=True)
+    ]
     return BatchResult(tuple(cases), tuple(problems))
 
 

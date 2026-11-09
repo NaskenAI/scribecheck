@@ -37,6 +37,7 @@ _FLAG_KEYS = (
     "note_value",
     "transcript_evidence",
     "note_evidence",
+    "evidence_verified",
     "expected_section",
 )
 _ALWAYS = frozenset({"transcript_evidence", "note_evidence"})
@@ -72,6 +73,10 @@ class UsageInfo(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     calls: int = 0
+    """Calls made for this note alone."""
+    shared_calls: int = 0
+    """Calls shared with other notes of the same transcript (extraction, audit); their
+    tokens and cost are split evenly between those notes."""
     input_tokens: int = 0
     output_tokens: int = 0
     cache_write_tokens: int = 0
@@ -91,6 +96,18 @@ class Counts(BaseModel):
     unchecked: int = 0
 
 
+class PassAInfo(BaseModel):
+    """Which Pass A configuration and prompts produced a full-mode report."""
+
+    model_config = ConfigDict(frozen=True)
+
+    pipeline: str
+    prompts: str
+    batch: bool = False
+    unverified_evidence: int = 0
+    """Flags kept although their transcript quote could not be found (route one only)."""
+
+
 class Report(BaseModel):
     """One consultation's report."""
 
@@ -106,6 +123,8 @@ class Report(BaseModel):
     flags: tuple[Flag, ...] = ()
     unchecked: tuple[UncheckedItem, ...] = ()
     usage: UsageInfo | None = None
+    """Full mode only."""
+    pass_a: PassAInfo | None = None
     """Full mode only."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -123,6 +142,8 @@ class Report(BaseModel):
         }
         if self.usage is not None:
             data["usage"] = self.usage.model_dump()
+        if self.pass_a is not None:
+            data["pass_a"] = self.pass_a.model_dump()
         return data
 
     def to_json(self) -> str:
@@ -203,6 +224,8 @@ def render_markdown(report: Report, *, level: int = 1, case: Case | None = None)
     ]
     if report.mode == "rules":
         lines += [f"> {RULES_MODE_NOTE}", ""]
+    else:
+        lines += [f"> {_full_mode_note(report)}", ""]
     c = report.counts
     lines += [
         "| Omissions | Changed facts | Unsupported | Not verifiable | Unchecked |",
@@ -236,6 +259,22 @@ def render_markdown(report: Report, *, level: int = 1, case: Case | None = None)
     else:
         lines.append("No unchecked items.")
     return "\n".join(lines) + "\n"
+
+
+def _full_mode_note(report: Report) -> str:
+    parts = ["Full mode: rules plus Pass A with the model"]
+    if report.pass_a is not None:
+        parts[0] += f" (pipeline {report.pass_a.pipeline}, prompts {report.pass_a.prompts})"
+    if report.model is not None:
+        parts.append(f"model {report.model.version or report.model.name}")
+    if report.usage is not None:
+        u = report.usage
+        cost = "cost unknown" if u.cost_usd is None else f"about ${u.cost_usd:.4f}"
+        parts.append(f"{u.calls} calls ({u.shared_calls} shared), {cost}")
+    if report.pass_a is not None and report.pass_a.unverified_evidence:
+        parts.append(f"{report.pass_a.unverified_evidence} flags without a verified quote")
+    parts.append("the Pass B model path and Pass C are not built yet")
+    return "; ".join(parts) + "."
 
 
 def render_batch_markdown(
