@@ -581,3 +581,42 @@ def test_medicines_and_allergies_are_always_core() -> None:
         assert (steps[fact]["core"], steps[fact]["checked"]) == (True, True), fact
     for fact in ("Cough for two weeks", "Working impression: viral cough"):
         assert (steps[fact]["core"], steps[fact]["checked"]) == (False, False), fact
+
+
+SPECIFIC_TRANSCRIPT = (
+    "Patient: I can't run very far any more without pain in my knee.\n"
+    "Doctor: Come back if your temperature goes above 38.\n"
+)
+SPECIFIC_NOTE = (
+    "History:\nPain comes on 20 min into a run.\n\nPlan:\nContact us if the temperature persists.\n"
+)
+
+
+def test_second_look_rescues_specific_and_keeps_vaguer_as_absent() -> None:
+    """Both directions through the pipeline, with the second look answering as the v4 prompt
+    asks: the more specific running statement carries the fact; the vaguer temperature
+    advice does not carry the threshold."""
+    rows = (
+        ("Cannot run far without knee pain", "symptom", "I can't run very far any more"),
+        ("Return if temperature above 38", "follow_up", "Come back if your temperature"),
+    )
+
+    def look(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {"id": fid, "found": True, "note_quote": "Pain comes on 20 min into a run"}
+                if "run" in text
+                else {"id": fid, "found": False}
+                for fid, text in listed
+            ]
+        }
+
+    def absent(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {"verdicts": [{"id": fid, "verdict": "absent"} for fid, _ in listed]}
+
+    mock = MockClaude(scripts(extract=_facts(*rows), check=absent, second_look=look))
+    outcome, _ = run(mock, transcript=SPECIFIC_TRANSCRIPT, note=SPECIFIC_NOTE, candidates=False)
+    steps = {s["fact"]: s for s in outcome.trace.values()}
+    assert steps["Cannot run far without knee pain"]["second_look"] == "rescued"
+    assert steps["Return if temperature above 38"]["second_look"] == "confirmed"
+    assert [f.fact for f in outcome.flags] == ["Return if temperature above 38"]

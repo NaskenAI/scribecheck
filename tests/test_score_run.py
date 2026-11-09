@@ -636,3 +636,44 @@ def test_comparable_needs_the_same_drug_and_numbers(
     removed: str, candidate: str, same: bool
 ) -> None:
     assert _load().comparable(removed, candidate) is same
+
+
+def test_spec_lists_every_errored_and_clean_note(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = subset["root"] / "full_spec.json"
+    assert _load().main(["spec", "--pairs", str(subset["pairs"]), "--out", str(out)]) == 0
+    spec = json.loads(out.read_text(encoding="utf-8"))
+    assert spec["note_keys"] == sorted(
+        [f"syn|C1|omit|p{n}|err" for n in (1, 2, 3)] + ["syn|C1|change|p4|err", CLEAN_KEY]
+    )
+    assert spec["consultations"] == ["syn|C1"]
+    printed = capsys.readouterr().out
+    assert "5 notes over 1 consultations: 4 errored, 1 clean" in printed
+    assert SECRET_N not in printed
+
+
+def test_reference_methods_detection_and_false_alarms(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    gate = subset["root"] / "gate1b" / "gate1b-power" / "_state"
+    gate.mkdir(parents=True)
+    rows = [
+        {"note_key": "syn|C1|omit|p1|err", "arm": "power-gepa-high", "aggregate": 3},
+        {"note_key": "syn|C1|omit|p2|err", "arm": "power-gepa-high", "aggregate": 50},
+        {"note_key": CLEAN_KEY, "arm": "power-gepa-high", "aggregate": 4},
+    ]
+    (gate / "power-gepa-high-r1.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
+    )
+    out = _score(
+        subset,
+        _run(subset, _standard_reports()),
+        capsys,
+        "--gate1b",
+        str(subset["root"] / "gate1b"),
+    )
+    section = out.split("== Reference methods on the same notes")[1].split("==")[0]
+    # p3 has no row: left out of its denominator and counted
+    assert "Gate 1(b) power-gepa-high: detection 1/2 (50.0%), false alarms 1/1 (100.0%)" in section
+    assert "(1 omission and 0 clean notes without a usable record)" in section

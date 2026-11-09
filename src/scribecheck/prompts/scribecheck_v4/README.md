@@ -25,7 +25,10 @@ Earlier sets are kept unchanged, as measured runs used them:
   partial); `second_look.txt` rescues only a fact the note carries, not one it gestures at.
 - `scribecheck_v4` (from v3): `audit.txt` makes current medicines (including occasional or
   as-needed use), allergies and allergy status, plan decisions (including decisions not to
-  treat), safety-net instructions and numeric thresholds always core, never contextual.
+  treat), safety-net instructions and numeric thresholds always core, never contextual;
+  `second_look.txt` rescues a fact the note carries in any wording, including a more specific
+  restatement, but never by a vaguer statement when the fact gives a number, threshold, dose,
+  drug, side or specific instruction, and never by a different item of the same kind.
 
 Pass B (changed facts) uses `changes.txt` and `changes_second.txt`; Pass C (unsupported
 statements) uses `split.txt`, `statements.txt` and `statements_second.txt`. Their severity

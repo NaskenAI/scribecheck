@@ -108,7 +108,7 @@ def test_v3_makes_facts_atomic() -> None:
 
 
 def test_v4_audit_makes_kinds_always_core() -> None:
-    assert _changed("scribecheck_v3", "scribecheck_v4") == {"audit.txt"}
+    assert _changed("scribecheck_v3", "scribecheck_v4") == {"audit.txt", "second_look.txt"}
     audit = " ".join(prompts.load("scribecheck_v4", "audit").split())
     for kind in (
         "always core",
@@ -119,3 +119,20 @@ def test_v4_audit_makes_kinds_always_core() -> None:
         "numeric thresholds",
     ):
         assert kind in audit, kind
+
+
+def test_v4_second_look_rescues_more_specific_never_vaguer() -> None:
+    look = " ".join(prompts.load("scribecheck_v4", "second_look").split())
+    assert "only gestures at" not in look  # v3's rule, which rejected paraphrases
+    # A more specific or concrete restatement of the same fact rescues it ...
+    assert "more specific or more concrete" in look
+    assert '"relentless for more than 30 minutes" carries "severe"' in look
+    # ... a vaguer one never rescues a fact with a number, threshold, dose, drug, side or
+    # specific instruction ...
+    vaguer = look.split("a vaguer or less specific note statement")[1].split(";")[0]
+    for kind in ("number", "threshold", "dose", "drug", "side", "specific instruction"):
+        assert kind in vaguer, kind
+    assert '"contact us if the temperature persists" does not carry "above 37.5-38"' in look
+    # ... and a different item of the same kind never does.
+    assert "a different item of the same kind" in look
+    assert '"found" is never true on these grounds' in look
