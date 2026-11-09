@@ -1,4 +1,6 @@
 # M3 session 4: Claude Sonnet 5.5 at effort high, Pass A only, strict standard.
+# Kept as the record of the effort comparison; not used for runs. The run effort is fixed
+# at medium (docs/spec.md, "Models"): high gave the same results for about 9% more.
 # Key: ANTHROPIC_API_KEY in the environment (never in this file).
 mode = "full"
 standard = "strict"

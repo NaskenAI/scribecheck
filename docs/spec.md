@@ -396,7 +396,7 @@ fail_confidence = ["certain", "confirmed"]
 [model]          # full mode; keys come from environment variables only
 provider = "anthropic"                    # or "openai" for any OpenAI-compatible endpoint
 name = "claude-sonnet-5-5"
-effort = "low"                            # Anthropic: one fixed level for the run
+effort = "medium"                         # Anthropic: one fixed level for the run
 cache_ttl = "1h"                          # Anthropic prompt caching: "5m" or "1h"
 
 [model.prices]   # USD per million tokens, from the provider's price list
@@ -463,7 +463,7 @@ Headline results come from one run on OmissionBench's held-out subset, compared 
 
 The benchmark is split by consultation, so no development pair shares a transcript or a clean note with a held-out one. Development is 65 consultations and 265 evaluation pairs: 148 omissions (82 complete, 44 partial-weak, 22 partial-strong), 54 additions and 63 changes. Held-out is 47 consultations and 230 evaluation pairs. The headline result uses the official 151-pair held-out subset, whose ID list is stored with the encrypted held-out data, so it stays comparable with the published numbers. The other 79 held-out pairs are a supplementary check, run only if the headline result is borderline, once, with the same frozen settings.
 
-**Models.** The headline API model is Claude Sonnet 5.5, run through the Batch API with prompt caching (transcript first in every prompt) and one fixed effort level used everywhere.
+**Models.** The headline API model is Claude Sonnet 5.5, run through the Batch API with prompt caching (transcript first in every prompt) and one fixed effort level used everywhere: **medium**. On the 51-note development subset (M3 session 4, Pass A only, strict standard), medium and high gave the same detection, correct detection and false alarms, and high cost about 9% more.
 
 The open-weight model is a mid-size model that fits one 24–48 GB GPU, chosen in M3 session 4 from OpenRouter's current list against four criteria: open weights under a licence that allows commercial use; fits one 24–48 GB GPU; reliable structured output; and a context window of at least 32k tokens. It is used in three ways:
 
