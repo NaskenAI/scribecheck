@@ -12,11 +12,15 @@ For every candidate id, return exactly one entry:
   rapport, closure or generic education a note has no duty to carry. Otherwise true. The facts
   are atomic on purpose: never drop a fact because a neighbouring fact covers part of the same
   topic (two medicines, two denied symptoms or two safety-net instructions are two facts).
+  Never drop a plan decision, follow-up arrangement, safety-net instruction or other
+  instruction to the patient, unless it is only attendance or appointment logistics.
 - "core": true if a correct note of this consultation must carry it; false if it is contextual
   detail a concise note may reasonably leave out. These are always core, never contextual:
   current medicines, including occasional or as-needed use; allergies and allergy status
   (including "no known allergies"); plan decisions, including decisions not to treat, test or
-  refer; safety-net instructions; numeric thresholds. Attendance and appointment logistics are
+  refer; safety-net instructions; numeric thresholds; pertinent negatives the clinician asked
+  about (a symptom the patient denied when asked); examination findings, normal or abnormal.
+  Attendance and appointment logistics are
   not plan decisions and follow the ordinary rule: whether the patient needs to attend in
   person, how or when an appointment is booked or a call will come, and transport or travel
   arrangements.

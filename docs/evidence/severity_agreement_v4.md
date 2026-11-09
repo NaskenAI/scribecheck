@@ -16,3 +16,14 @@ Removed facts matched and graded by the audit: 86. Cohen's kappa: 0.60. Exact ag
 | supporting | 9 | 20 | 1 | 30 |
 | peripheral | 3 | 1 | 6 | 10 |
 | total | 53 | 26 | 7 | 86 |
+
+### Model-assisted matcher (fact_judge.py; 0 notes without a valid judgement)
+
+Removed facts matched and graded by the audit: 123. Cohen's kappa: 0.55. Exact agreement: 94/123; we grade higher: 8; we grade lower: 21.
+
+| ours \ benchmark | critical | supporting | peripheral | total |
+|---|---|---|---|---|
+| critical | 61 | 7 | 0 | 68 |
+| supporting | 18 | 27 | 1 | 46 |
+| peripheral | 0 | 3 | 6 | 9 |
+| total | 79 | 37 | 7 | 123 |

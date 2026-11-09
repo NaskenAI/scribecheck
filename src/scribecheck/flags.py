@@ -19,6 +19,7 @@ FlagType = Literal["omission", "changed_fact", "unsupported"]
 Verdict = Literal["absent", "partial", "changed", "contradicted", "unsupported"]
 Severity = Literal["critical", "supporting", "peripheral"]
 Confidence = Literal["certain", "confirmed", "possible"]
+Absence = Literal["clear", "probable"]
 Origin = Literal["rules", "model"]
 UncheckedReason = Literal[
     "certain_disabled_pending_allowlist",
@@ -97,6 +98,10 @@ class Flag(BaseModel):
     fact: str | None = None
     expected_section: str | None = None
     second_check: str | None = None
+    absence: Absence | None = None
+    """Pass A, scribecheck pipeline: how plainly the second look found the fact absent:
+    "clear" (the note is silent on it) or "probable" (the note has a related or vaguer
+    statement a reader might take for it)."""
     model_version: str | None = None
     evidence_verified: bool | None = None
     """False when the transcript quote could not be found (route one keeps such flags)."""

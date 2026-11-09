@@ -16,7 +16,7 @@ from scribecheck.model.endpoint import Secret
 from scribecheck.note import parse_note
 from scribecheck.pass_a import Case, run_pass_a
 from scribecheck.pass_a.blind import BlindnessError, assert_blind
-from scribecheck.pass_a.pipeline import is_logistics
+from scribecheck.pass_a.pipeline import is_core_kind, is_logistics
 from scribecheck.transcript import parse_transcript
 
 TRANSCRIPT = (
@@ -149,7 +149,14 @@ def run(
 def test_end_to_end() -> None:
     mock = MockClaude(scripts())
     outcome, case = run(mock)
-    assert mock.stages() == ["extract", "audit", "check", "second_look", "candidate"]
+    assert mock.stages() == [
+        "extract",
+        "audit",
+        "check",
+        "second_look",
+        "candidate",
+        "partial_look",
+    ]
     flags = {(f.fact, f.verdict, f.confidence, f.severity, f.origin) for f in outcome.flags}
     assert flags == {
         ("Return if short of breath", "partial", "possible", "critical", "model"),
@@ -162,7 +169,7 @@ def test_end_to_end() -> None:
     assert partial.transcript_evidence is not None
     assert partial.expected_section == "Plan"
     assert outcome.resolved_candidates == {0}
-    assert outcome.tally.calls == 5
+    assert outcome.tally.calls == 6  # the partial look runs for the one partial verdict
 
 
 def test_extraction_and_audit_never_contain_note_text() -> None:
@@ -431,7 +438,7 @@ def test_trace_records_every_stage() -> None:
                 {
                     "id": fid,
                     "keep": not text.startswith("Working impression"),
-                    "core": text != "No fever",
+                    "core": text not in ("Cough for two weeks", "No fever"),
                     "severity": "critical" if "penicillin" in text else "supporting",
                 }
                 for fid, text in listed
@@ -452,10 +459,15 @@ def test_trace_records_every_stage() -> None:
     assert steps["Has a cat"]["evidence_verified"] is False and "audit" not in steps["Has a cat"]
     dropped = steps["Working impression: viral cough"]
     assert (dropped["audit"], dropped["core"], dropped["severity"]) == ("dropped", None, None)
-    no_fever = steps["No fever"]
-    assert (no_fever["audit"], no_fever["core"], no_fever["checked"]) == ("kept", False, False)
     cough = steps["Cough for two weeks"]
-    assert (cough["verdict"], cough["note_quote"]) == ("present", "Cough for 2 weeks")
+    assert (cough["audit"], cough["core"], cough["checked"]) == ("kept", False, False)
+    # A pertinent negative the audit called contextual is core all the same, and tagged.
+    no_fever = steps["No fever"]
+    assert (no_fever["core"], no_fever["checked"], no_fever["forced"]) == (
+        True,
+        True,
+        ["core_kind"],
+    )
     penicillin = steps["Allergic to penicillin"]
     assert (penicillin["verdict"], penicillin["second_look"]) == ("absent", "confirmed")
     assert penicillin["severity"] == "critical"
@@ -672,3 +684,178 @@ def test_second_look_rescues_specific_and_keeps_vaguer_as_absent() -> None:
     assert steps["Cannot run far without knee pain"]["second_look"] == "rescued"
     assert steps["Return if temperature above 38"]["second_look"] == "confirmed"
     assert [f.fact for f in outcome.flags] == ["Return if temperature above 38"]
+
+
+def _partial_look(missing: bool, quote: str) -> Callable[[Any, dict[str, Any]], Any]:
+    def look(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {
+                    "id": fid,
+                    "element": "short of breath" if "short of breath" in text else "",
+                    "missing": missing,
+                    "transcript_quote": quote,
+                    "absence": "clear",
+                }
+                for fid, text in listed
+            ]
+        }
+
+    return look
+
+
+def test_a_partial_whose_element_is_missing_becomes_an_omission_flag() -> None:
+    look = _partial_look(True, "Come back if you get short of breath")
+    outcome, _ = run(MockClaude(scripts(partial_look=look)), candidates=False)
+    element = next(f for f in outcome.flags if f.rule_id == "pass_a.partial_element")
+    assert (element.verdict, element.confidence, element.severity, element.absence) == (
+        "absent",
+        "confirmed",
+        "critical",
+        "clear",
+    )
+    assert element.fact == "Return if short of breath: missing short of breath"
+    assert element.transcript_evidence is not None
+    assert element.transcript_evidence.text == "Come back if you get short of breath"
+    assert element.note_evidence is not None  # the vaguer note text it matched
+    assert not [f for f in outcome.flags if f.verdict == "partial"]  # replaced
+    step = next(s for s in outcome.trace.values() if s["fact"] == "Return if short of breath")
+    assert (step["partial_look"], step["partial_element"]) == ("flagged", "short of breath")
+
+
+@pytest.mark.parametrize(
+    ("missing", "quote", "label"),
+    [
+        (False, "Come back if you get short of breath", "carried"),
+        (True, "words the transcript never says", "unverified"),
+    ],
+)
+def test_a_carried_or_unverified_element_leaves_the_partial(
+    missing: bool, quote: str, label: str
+) -> None:
+    look = _partial_look(missing, quote)
+    outcome, _ = run(MockClaude(scripts(partial_look=look)), candidates=False)
+    assert not [f for f in outcome.flags if f.rule_id == "pass_a.partial_element"]
+    assert [f.fact for f in outcome.flags if f.verdict == "partial"] == [
+        "Return if short of breath"
+    ]
+    step = next(s for s in outcome.trace.values() if s["fact"] == "Return if short of breath")
+    assert step["partial_look"] == label
+
+
+def test_the_default_partial_look_finds_no_element() -> None:
+    outcome, _ = run(MockClaude(scripts()), candidates=False)
+    step = next(s for s in outcome.trace.values() if s["fact"] == "Return if short of breath")
+    assert step["partial_look"] == "no_element" and "partial_element" not in step
+
+
+def test_the_audit_never_drops_a_plan_fact_unless_logistics() -> None:
+    rows = (
+        ("If the cough gets worse, ring the practice", "follow_up", "If the cough gets worse"),
+        ("Does not need to attend in person", "plan", "You don't need to come in"),
+        ("Cough for two weeks", "symptom", "If the cough gets worse"),
+    )
+
+    def audit(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {"id": fid, "keep": False, "core": False, "severity": "supporting"}
+                for fid, _ in listed
+            ]
+        }
+
+    mock = MockClaude(scripts(extract=_facts(*rows), audit=audit, check=_verdicts))
+    outcome, _ = run(mock, transcript=LOGISTICS_TRANSCRIPT, note=NKDA_NOTE, candidates=False)
+    steps = {s["fact"]: s for s in outcome.trace.values()}
+    safety = steps[rows[0][0]]
+    assert (safety["audit"], safety["core"], safety["checked"], safety["forced"]) == (
+        "kept",
+        True,
+        True,
+        ["never_drop"],
+    )
+    for dropped in (rows[1][0], rows[2][0]):
+        assert steps[dropped]["audit"] == "dropped" and "forced" not in steps[dropped]
+
+
+def test_the_second_look_grades_each_absence() -> None:
+    def second_look(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {"facts": [{"id": fid, "found": False, "absence": "probable"} for fid, _ in listed]}
+
+    outcome, _ = run(MockClaude(scripts(second_look=second_look)), candidates=False)
+    absent = [f for f in outcome.flags if f.verdict == "absent"]
+    assert absent and all(f.absence == "probable" for f in absent)
+    step = next(s for s in outcome.trace.values() if s["fact"] == "Allergic to penicillin")
+    assert step["absence"] == "probable"
+
+
+@pytest.mark.parametrize(
+    ("category", "text", "expected"),
+    [
+        ("examination", "Chest clear on auscultation", True),
+        ("symptom", "Denies chest pain", True),
+        ("symptom", "No fever", True),
+        ("symptom", "Patient denied fever", True),
+        ("symptom", "Cough for two weeks", False),
+        ("symptom", "Not sleeping well", False),
+        ("symptom", "No longer able to climb stairs", False),
+        ("symptom", "No change in the pain", False),
+        ("symptom", "Nil by mouth", False),
+        ("history", "No previous surgery", False),
+    ],
+)
+def test_is_core_kind(category: str, text: str, expected: bool) -> None:
+    assert is_core_kind(category, text) is expected
+
+
+def test_a_partial_the_rules_candidate_already_flags_is_not_flagged_twice() -> None:
+    # The confirmed metformin candidate removes the partial metformin flag (one
+    # discrepancy, one flag), so the partial look must not bring it back.
+    verdicts = dict(VERDICTS)
+    verdicts["Takes metformin 500 mg twice a day"] = ("partial", "Metformin 500 mg BD.")
+
+    def check(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "verdicts": [
+                {"id": fid, "verdict": verdicts[t][0], "note_quote": verdicts[t][1]}
+                for fid, t in listed
+            ]
+        }
+
+    def look(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {
+                    "id": fid,
+                    "element": "twice a day",
+                    "missing": True,
+                    "transcript_quote": "I take metformin 500 mg twice a day",
+                }
+                for fid, text in listed
+                if "metformin" in text
+            ]
+        }
+
+    def candidate(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "findings": [
+                {
+                    "id": fid,
+                    "confirmed": True,
+                    "transcript_quote": "I take metformin 500 mg twice a day",
+                    "severity": "critical",
+                }
+                for fid, text in listed
+                if "metformin" in text
+            ]
+        }
+
+    note = NOTE.replace("Metformin 500 mg BD.", "Metformin 500 mg.")
+    mock = MockClaude(scripts(check=check, partial_look=look, candidate=candidate))
+    outcome, _ = run(mock, note=note)
+    metformin = [f for f in outcome.flags if "metformin" in (f.fact or "").lower()]
+    assert [(f.rule_id, f.origin) for f in metformin] == [("frequency.missing", "rules")]
+    step = next(
+        s for s in outcome.trace.values() if s["fact"] == "Takes metformin 500 mg twice a day"
+    )
+    assert step["partial_look"] == "superseded"

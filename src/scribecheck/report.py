@@ -32,6 +32,7 @@ _FLAG_KEYS = (
     "origin",
     "rule_id",
     "second_check",
+    "absence",
     "model_version",
     "fact",
     "transcript_value",
@@ -142,6 +143,18 @@ class TraceFact(BaseModel):
     """False when that quote could not be found in the note: the fact went unchecked."""
     second_look: str | None = None
     """For an absent verdict: "confirmed", "rescued", "unverified" or "failed"."""
+    absence: str | None = None
+    """For a confirmed absence: "clear" or "probable" (the flag's `absence`)."""
+    forced: tuple[str, ...] | None = None
+    """Code rules that changed this fact's path against the audit: "core_kind" (an
+    examination finding or a pertinent negative made core) or "never_drop" (a plan or
+    follow-up fact the audit dropped, kept)."""
+    partial_look: str | None = None
+    """For a partial verdict: "flagged" (its specific element is missing), "carried",
+    "no_element", "unverified", "failed", or "superseded" (missing, but a confirmed rules
+    candidate already flags the same discrepancy)."""
+    partial_element: str | None = None
+    """The specific element the partial look named."""
 
 
 class Report(BaseModel):

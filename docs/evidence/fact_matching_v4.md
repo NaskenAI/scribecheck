@@ -27,13 +27,29 @@ Runbook: `docs/runbooks/m3s4/run_judge.sh`. Development data only.
 
 ## Results
 
-_Pending: the user runs `run_judge.sh`._
+From `run_judge.sh` on 2026-11-09 (`runs/m3s4/score_v4_full_judged.txt`); every omission
+note has a valid judgement.
 
 | Correct detection (148 omission notes) | Words | Model |
 |---|---|---|
-| Decision rule | 46/148 | _pending_ |
-| Route one's rule | 37/148 | _pending_ |
-| Detected notes where words and model differ | | _pending_ |
+| Decision rule | 46/148 | 61/148 |
+| Route one's rule | 37/148 | 48/148 |
+
+With the judge, 61 of the 70 notes detected at the decision rule name the removed fact (87%).
+The two matchers disagree on 21 of the 70 detected notes: the judge accepts 18 the words
+reject and rejects 3 the words accept. The spot-check below tests both.
+
+At the released baselines' false-alarm rates (graded note score):
+
+| Matched to | Ours: detection | Ours: correct (words) | Ours: correct (model) | Baseline: detection | Baseline: correct (model) |
+|---|---|---|---|---|---|
+| B3 r1, 2/65 | 32/148 | 18/148 | 28/148 | 45/148 | _pending_ |
+| power-gepa-high r3, 5/65 | 62/148 | 42/148 | 56/148 | 63/148 | _pending_ |
+| power-gepa-high r1, 7/65 | 73/148 | 48/148 | 65/148 | 63/148 | _pending_ |
+
+The baselines' correct detection needs their flagged-fact text, which the development split
+keeps (`baseline_facts`, development rows only) once it is re-run; `run_judge.sh` then judges
+it with the same prompt.
 
 ## Human spot-check (30 pairs)
 

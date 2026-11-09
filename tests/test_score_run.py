@@ -679,7 +679,7 @@ def test_reference_methods_detection_and_false_alarms(
     assert "(1 omission and 0 clean notes without a usable record)" in section
     graded = out.split("== Graded note score")[1].split("== Per-note")[0]
     # The clean note has no Pass A omission flag, so any threshold is within 1/1
-    assert "at Gate 1(b) power-gepa-high's false alarms 1/1: grade >= (0, 0, 1, 0, 0)" in graded
+    assert "at Gate 1(b) power-gepa-high's false alarms 1/1: grade >= (0, 0, 0, 1, 0, 0)" in graded
     # p2's only flag is possible, so its grade is zero and it is never flagged
     assert "detection 2/3 (66.7%), correct (words) 1/3 (33.3%), false alarms 0/1" in graded
 
@@ -700,10 +700,13 @@ def test_grade_orders_confirmed_critical_first() -> None:
     supp_two = _note(module, "omission", _flag("F1", severity="supporting"), _flag("F2"))
     possible = _note(module, "omission", _flag("F1", confidence="possible"))
     partials = _note(module, "omission", info=3)
-    assert module.grade(crit) == (1, 0, 1, 0, 0)
-    assert module.grade(supp_two) == (1, 1, 2, 0, 0)
-    assert module.grade(possible) == (0, 0, 0, 0, 0)  # only confirmed absent flags count
-    assert module.grade(partials) == (0, 0, 0, 3, 3)
+    assert module.grade(crit) == (0, 1, 0, 1, 0, 0)
+    assert module.grade(supp_two) == (0, 1, 1, 2, 0, 0)
+    assert module.grade(possible) == module.NO_GRADE  # only confirmed absent flags count
+    assert module.grade(partials) == (0, 0, 0, 0, 3, 3)
+    # A clearly absent flag ranks first, ahead of any number of others
+    clear = _note(module, "omission", _flag("F1", severity="supporting", absence="clear"))
+    assert module.grade(clear) == (1, 0, 1, 1, 0, 0) > module.grade(supp_two)
     assert module.grade(supp_two) > module.grade(crit) > module.grade(partials)
 
 
@@ -723,11 +726,11 @@ def test_matched_grade_takes_the_most_lenient_threshold_within_the_rate() -> Non
     ]
     # 1 false alarm in 4: down to the supporting omission's (0, 1, 1, 0, 0), which flags only
     # the critical clean note
-    assert module.matched_grade(omissions, cleans, 1, 4) == (0, 1, 1, 0, 0)
+    assert module.matched_grade(omissions, cleans, 1, 4) == (0, 0, 1, 1, 0, 0)
     # 0 in 65: only thresholds above the clean note's critical flag
-    assert module.matched_grade(omissions, cleans, 0, 65) == (2, 0, 2, 0, 0)
+    assert module.matched_grade(omissions, cleans, 0, 65) == (0, 2, 0, 2, 0, 0)
     # 2 in 4 reaches the one-partial omission's (0, 0, 0, 1, 1), past the partials-only clean
-    assert module.matched_grade(omissions, cleans, 2, 4) == (0, 0, 0, 1, 1)
+    assert module.matched_grade(omissions, cleans, 2, 4) == (0, 0, 0, 0, 1, 1)
     assert (
         module.matched_grade(
             omissions[:1], [_note(module, "clean", _flag("F1"), _flag("F2"))], 0, 1
@@ -955,3 +958,136 @@ def test_severity_agreement_kappa_and_table(
     assert "graded by the audit: 3" in model and "we grade lower: 2" in model
     assert "metformin" not in text.lower()  # counts only
     assert text == capsys.readouterr().out
+
+
+# v5 mechanisms
+
+
+def test_v5_mechanisms_with_and_only(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    # p1: one partial-element flag, clearly absent: its mechanism alone flags the note
+    reports["syn|C1|omit|p1|err"]["flags"] = [
+        _flag(
+            "F1",
+            fact="Takes metformin 500 mg twice daily: missing 500 mg",
+            rule_id="pass_a.partial_element",
+            absence="clear",
+        )
+    ]
+    # p2: a never-dropped fact's flag beside an untagged one: 'with' only
+    reports["syn|C1|omit|p2|err"]["flags"] = [_flag("F1", fact="asthma"), _flag("F2", fact="cat")]
+    reports["syn|C1|omit|p2|err"]["pass_a_trace"] = [
+        _step("f1", "asthma", forced=["never_drop"]),
+        _step("f2", "cat"),
+    ]
+    # the clean note: a core-kind flag alone, a false alarm that mechanism costs
+    reports[CLEAN_KEY]["flags"] = [_flag("F1", fact="No fever", absence="probable")]
+    reports[CLEAN_KEY]["pass_a_trace"] = [_step("f1", "No fever", forced=["core_kind"])]
+    out = _score(subset, _run(subset, reports), capsys)
+    section = out.split("== v5 mechanisms")[1].split("\n==")[0]
+    rows = {" ".join(line.split()[:2]): line for line in section.splitlines()[4:]}
+    assert "detection 1/3 (33.3%), correct (words) 1/3 (33.3%)" in rows["partial_element with"]
+    assert "false alarms 0/1" in rows["partial_element only"]
+    assert "detection 1/3" in rows["never_drop with"] and "detection 0/3" in rows["never_drop only"]
+    assert (
+        "detection 0/3" in rows["core_kind with"] and "false alarms 1/1" in rows["core_kind only"]
+    )
+    assert "detection 1/3" in rows["clear only"] and "false alarms 1/1" in rows["probable only"]
+
+
+def test_v5_mechanisms_absent_before_v5(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = _score(subset, _run(subset, _standard_reports()), capsys)
+    assert "no flag carries a v5 tag (a run before v5)" in out
+
+
+# baselines' flagged facts
+
+
+def test_baseline_flagged_facts_follow_each_rule() -> None:
+    module = _load()
+    b3 = {
+        "baseline_facts": [
+            "critical | absent | Takes metformin | twice daily",
+            "supporting | absent | Has asthma",
+            "critical | present | No fever",
+        ]
+    }
+    assert module.baseline_flagged_facts("released B3 r1", b3) == ["Takes metformin | twice daily"]
+    two = {"baseline_facts": ["critical | Metformin dose", "- | Asthma"]}
+    assert module.baseline_flagged_facts("released power-gepa-high r1", two) == [
+        "Metformin dose",
+        "Asthma",
+    ]
+    assert module.baseline_flagged_facts("released B3 r1", {"n_absent_critical": 1}) is None
+    assert module.baseline_flagged_facts("released B3 r1", None) is None
+
+
+def test_baseline_correct_detection_from_the_judge(
+    subset: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load()
+    p1, p2 = "syn|C1|omit|p1|err", "syn|C1|omit|p2|err"
+    b3 = {
+        p1: {"n_absent_critical": 1, "baseline_facts": ["critical | absent | Metformin dose"]},
+        p2: {"n_absent_critical": 1},  # flagged, but no fact text kept
+        CLEAN_KEY: {"n_absent_critical": 0},
+    }
+    power = {p1: {"aggregate": 3, "baseline_facts": ["critical | Asthma review"]}}
+    monkeypatch.setattr(
+        module, "released_rows", lambda _: {"b3 r1": b3, "power r1": power, "power r3": {}}
+    )
+    notes = module._omission_notes(
+        module.argparse.Namespace(
+            run=_run(subset, _standard_reports()),
+            pairs=subset["pairs"],
+            spec=subset["spec"],
+            manifest=None,
+        )
+    )
+    items = module.baseline_items(subset["root"], notes)
+    assert items["released B3 r1"][p2] is None
+    assert [i for i, _ in items["released B3 r1"][p1].flags] == ["B1"]
+    assert items["released power-gepa-high r3"] == {}
+    # The judge says B3's fact names the removed fact and route two's does not.
+    path = subset["root"] / "fact_judgements.json"
+    answer = {"Metformin": _yes([], ["B1"]), "Asthma": _yes([])}
+    client = FakeClient(lambda task: next(v for k, v in answer.items() if k in task))
+    from scribecheck.model.budget import Budget
+
+    found = [it for by in items.values() for it in by.values() if it is not None]
+    module.fact_judge.judge(found, client, Budget(), {}, "m", path)
+    assert client.calls == 2
+    run = subset["root"] / "run"
+    args = ["score", "--run", str(run), "--pairs", str(subset["pairs"]), "--spec"]
+    args += [str(subset["spec"]), "--released", str(subset["root"]), "--judgements", str(path)]
+    assert module.main(args) == 0
+    out = capsys.readouterr().out
+    refs = out.split("== Reference methods")[1].split("\n==")[0]
+    b3_line = refs.split("released B3 r1:")[1].split("released power")[0]
+    assert "correct (model) 1/3 (33.3%) (1 flagged notes without fact text" in b3_line
+    assert "correct (model) 0/3 (0.0%)" in refs.split("power-gepa-high r1:")[1]
+    assert "released B3 r1 itself: correct (model) 1/3" in out
+    assert "Metformin dose" not in out  # baseline fact text is never printed
+
+
+def test_a_partial_element_flag_takes_its_facts_forced_tags() -> None:
+    module = _load()
+    note = _note(module, "omission")
+    note.report = {
+        "pass_a_trace": [
+            _step("f1", "Chest clear", audit="dropped", checked=False),
+            _step("f2", "Chest clear", forced=["core_kind"]),
+        ]
+    }
+    flag = module.Flag.model_validate(
+        _flag(
+            "F1", fact="Chest clear: missing left base crackles", rule_id="pass_a.partial_element"
+        )
+    )
+    assert module.mechanisms_of(note, flag) == {"partial_element", "core_kind"}

@@ -19,6 +19,7 @@ MARKERS = (
     ("TASK: AUDIT FACTS", "audit"),
     ("TASK: CHECK FACTS AGAINST THE NOTE", "check"),
     ("TASK: SECOND LOOK", "second_look"),
+    ("TASK: THE SPECIFIC ELEMENT", "partial_look"),
     ("TASK: CONFIRM RULE-BASED FINDINGS", "candidate"),
     ("TASK: GIVE THE EXACT QUOTE", "quote_recheck"),
     ("TASK: FIND CHANGED FACTS", "changes"),
@@ -77,6 +78,15 @@ def listed(body: dict[str, Any]) -> list[tuple[str, str]]:
     return [(m.group(1), m.group(2)) for m in _LINE.finditer(text)]
 
 
+def _no_element(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+    """The partial look's default: no fact has a specific element the note leaves out."""
+    return {"facts": [{"id": fid, "element": "", "missing": False} for fid, _ in listed]}
+
+
+DEFAULTS: dict[str, Script] = {"partial_look": _no_element}
+"""Stages a test need not script: their default reply changes nothing."""
+
+
 class MockClaude:
     """Routes requests to `scripts[stage]`, live or through the batch endpoints."""
 
@@ -97,7 +107,8 @@ class MockClaude:
     def reply(self, body: dict[str, Any]) -> dict[str, Any]:
         stage = stage_of(body)
         self.calls.append((stage, body))
-        value = self.scripts[stage](listed(body), body)
+        script = self.scripts.get(stage) or DEFAULTS[stage]
+        value = script(listed(body), body)
         text = value if isinstance(value, str) else json.dumps(value)
         return {
             "id": "msg_mock",

@@ -17,7 +17,11 @@ For each id:
   - a different item of the same kind: another medicine, another denied symptom, another
     safety-net trigger or another part of the plan.
 - "found": false if, after searching, the note genuinely does not carry it; leave "note_quote"
-  empty.
+  empty, and give "absence":
+  - "clear": the note is silent on this statement: nothing in it touches the same item.
+  - "probable": the note has a related, vaguer or partial statement on the same item that a
+    reader might take for it, but it does not carry this statement.
+  Leave "absence" empty when "found" is true.
 - "transcript_quote": in every case, the exact words from ONE transcript turn that establish the
   fact.
 

@@ -30,7 +30,14 @@ from pydantic import BaseModel
 
 from scribecheck import prompts
 from scribecheck.config import Config
-from scribecheck.flags import Flag, NoteEvidence, Severity, TranscriptEvidence, UncheckedItem
+from scribecheck.flags import (
+    Absence,
+    Flag,
+    NoteEvidence,
+    Severity,
+    TranscriptEvidence,
+    UncheckedItem,
+)
 from scribecheck.model.base import Block, Message, ModelFailure, ModelRequest
 from scribecheck.note import parse_note
 from scribecheck.pass_a.base import (
@@ -90,6 +97,24 @@ _NOT_LOGISTICS = re.compile(
 )
 
 
+_DENIAL = re.compile(
+    r"^\s*(?:(?:the\s+)?(?:patient|pt|he|she|they)\s+)?"
+    r"(?:denies|denied|no\b(?!\s+(?:longer|change|better|improvement|relief|appetite)\b))",
+    re.IGNORECASE,
+)
+"""A denied symptom: "Denies chest pain", "Patient denied fever", "No fever"; never "Not
+sleeping", "No longer able to climb stairs" or "No change in the pain"."""
+NEVER_DROPPED = frozenset({"plan", "follow_up"})
+"""Categories the audit can never drop (attendance logistics excepted): plan decisions,
+safety-net instructions and other instructions."""
+
+
+def is_core_kind(category: str, text: str) -> bool:
+    """An examination finding, or a pertinent negative (a denied symptom), which the audit
+    can never mark contextual."""
+    return category == "examination" or (category == "symptom" and bool(_DENIAL.match(text)))
+
+
 def is_logistics(category: str, text: str) -> bool:
     """Whether a plan or follow-up fact is only attendance logistics (whether to attend in
     person or face to face, transport, parking), which is never core. Kept narrow on
@@ -108,6 +133,7 @@ MAX_TOKENS = {
     "audit": 16000,
     "check": 8000,
     "second_look": 8000,
+    "partial_look": 8000,
     "candidate": 8000,
 }
 _PLACEHOLDER_NOTE = parse_note("(no note)")
@@ -152,6 +178,19 @@ class _Looked(BaseModel):
     found: bool
     note_quote: str = ""
     transcript_quote: str = ""
+    absence: Absence | None = None
+
+
+class _PartialLooked(BaseModel):
+    id: str
+    element: str = ""
+    missing: bool
+    transcript_quote: str = ""
+    absence: Absence | None = None
+
+
+class PartialLooked(BaseModel):
+    facts: list[_PartialLooked]
 
 
 class Looked(BaseModel):
@@ -202,8 +241,9 @@ def run(
     for case in cases:
         for fact in to_check[case.id]:
             outcomes[case.id].trace[fact.id]["checked"] = True
-    absent = _check(cases, to_check, config, stages, runner, ledger, outcomes)
+    absent, partial = _check(cases, to_check, config, stages, runner, ledger, outcomes)
     _second_look_and_candidates(cases, absent, config, stages, runner, ledger, outcomes)
+    _partial_look(cases, partial, config, stages, runner, ledger, outcomes)
 
 
 def _trace_extraction(
@@ -243,6 +283,8 @@ def _trace_extraction(
             "severity": fact.severity if audit in ("kept", "not_audited") else None,
             "checked": False,
         }
+        if fact.forced and audit == "kept":
+            outcome.trace[fact.id]["forced"] = list(fact.forced)
 
 
 # 1-2. Extraction, evidence and rules facts
@@ -449,13 +491,22 @@ def _audit(
             if entry is None:  # not audited: kept as a core supporting fact
                 kept.append(fact)
                 continue
-            if not entry.keep:
-                continue
-            # A medicine or allergy is always core, whatever the audit says; attendance and
-            # appointment logistics never are.
             logistics = is_logistics(fact.category, fact.text)
-            fact.core = (entry.core and not logistics) or fact.category in ALWAYS_CORE
+            forced: list[str] = []
+            if not entry.keep:
+                # A plan or follow-up fact is never dropped, unless it is logistics.
+                if fact.category not in NEVER_DROPPED or logistics:
+                    continue
+                forced.append("never_drop")
+            # A medicine or allergy, an examination finding or a pertinent negative is
+            # always core, whatever the audit says, as is a plan or follow-up fact kept
+            # against the audit; attendance and appointment logistics never are.
+            core = entry.core and not logistics
+            if not core and is_core_kind(fact.category, fact.text):
+                forced.append("core_kind")
+            fact.core = core or bool(forced) or fact.category in ALWAYS_CORE
             fact.severity = entry.severity
+            fact.forced = tuple(forced)
             kept.append(fact)
         out[key] = kept
     return out
@@ -472,8 +523,9 @@ def _check(
     runner: Runner,
     ledger: Ledger,
     outcomes: dict[str, Outcome],
-) -> dict[str, list[Fact]]:
-    """Present/partial/absent per fact; returns each note's absent facts."""
+) -> tuple[dict[str, list[Fact]], dict[str, list[tuple[Fact, NoteEvidence]]]]:
+    """Present/partial/absent per fact; returns each note's absent facts, and its partial
+    ones with their verified note quotes."""
     per_call = config.check_facts_per_call
 
     def requests_for(
@@ -527,6 +579,7 @@ def _check(
     fixer.resolve()
 
     absent: dict[str, list[Fact]] = {}
+    partial: dict[str, list[tuple[Fact, NoteEvidence]]] = {}
     for case in cases:
         outcome = outcomes[case.id]
         for fact in to_check.get(case.id, []):
@@ -549,7 +602,8 @@ def _check(
             outcome.trace[fact.id]["note_quote"] = note_quote.text
             if entry.verdict == "partial":
                 outcome.flags.append(_flag(fact, "partial", "possible", note_quote))
-    return absent
+                partial.setdefault(case.id, []).append((fact, note_quote))
+    return absent, partial
 
 
 # 5-6. Second look and rules candidates, in one round
@@ -637,8 +691,11 @@ def _second_look_and_candidates(
                     step["second_look"] = "rescued"
                     step["note_quote"] = rescued.text
             else:
-                outcome.flags.append(_flag(fact, "absent", "confirmed", None))
+                flag = _flag(fact, "absent", "confirmed", None)
+                outcome.flags.append(flag.model_copy(update={"absence": entry.absence}))
                 step["second_look"] = "confirmed"
+                if entry.absence is not None:
+                    step["absence"] = entry.absence
         confirmed_names: list[str] = []
         status_confirmed = False
         from_candidates: set[int] = set()
@@ -691,6 +748,96 @@ def _second_look_and_candidates(
                     or (status_confirmed and is_allergy_status(f.fact or ""))
                 )
             ]
+
+
+# 7. Partial look: the specific element a partial verdict leaves out
+
+
+PARTIAL_ELEMENT = "pass_a.partial_element"
+
+
+def _partial_look(
+    cases: Sequence[Case],
+    partial: dict[str, list[tuple[Fact, NoteEvidence]]],
+    config: Config,
+    stages: _Stages,
+    runner: Runner,
+    ledger: Ledger,
+    outcomes: dict[str, Outcome],
+) -> None:
+    """For each partial verdict, ask for the fact's specific element and whether the note
+    lacks it. A missing element with a verified transcript quote becomes an omission flag
+    (rule `pass_a.partial_element`) in place of the partial item."""
+    requests, owners = [], {}
+    for case in cases:
+        facts = partial.get(case.id, [])
+        if facts:
+            task = prompts.render(
+                prompts.load(PROMPTS, "partial_look"),
+                facts_block=facts_block(
+                    (f.id, f"{f.text} [the note has: {quote.text!r}]") for f, quote in facts
+                ),
+            )
+            request = stages.request("partial_look", _both(case), task, PartialLooked)
+            requests.append(request)
+            owners[request.custom_id] = case.id
+    looked: dict[str, dict[str, _PartialLooked]] = {}
+    failed: dict[str, ModelFailure] = {}
+    for cid, result in runner.run(requests).items():
+        case_id = owners[cid]
+        ledger.record(result, [case_id])
+        if isinstance(result, ModelFailure):
+            failed[case_id] = result
+        else:
+            looked[case_id] = {e.id.strip().lower(): e for e in result.parsed.facts}
+
+    fixer = QuoteFixer(runner, ledger, config, "transcript")
+    for case in cases:
+        for fact, _ in partial.get(case.id, []):
+            entry = looked.get(case.id, {}).get(fact.id)
+            if entry is not None and entry.missing and entry.element.strip():
+                fixer.want(case, f"part:{fact.id}", entry.element, entry.transcript_quote)
+    fixer.resolve()
+
+    for case in cases:
+        outcome = outcomes[case.id]
+        for fact, quote in partial.get(case.id, []):
+            step = outcome.trace[fact.id]
+            entry = looked.get(case.id, {}).get(fact.id)
+            if case.id in failed or entry is None:
+                step["partial_look"] = "failed"  # the partial item stands
+                continue
+            element = " ".join(entry.element.split())
+            if element:
+                step["partial_element"] = element
+            if not element:
+                step["partial_look"] = "no_element"
+                continue
+            if not entry.missing:
+                step["partial_look"] = "carried"
+                continue
+            found = fixer.evidence(case, f"part:{fact.id}")
+            if not isinstance(found, TranscriptEvidence):
+                step["partial_look"] = "unverified"  # the partial item stands
+                continue
+            kept = [f for f in outcome.flags if f.verdict == "partial" and f.fact == fact.text]
+            if not kept:
+                # A confirmed rules candidate already stands for this discrepancy (one
+                # discrepancy, one flag): no second flag.
+                step["partial_look"] = "superseded"
+                continue
+            step["partial_look"] = "flagged"
+            outcome.flags = [f for f in outcome.flags if all(f is not k for k in kept)]
+            outcome.flags.append(
+                _flag(fact, "absent", "confirmed", quote).model_copy(
+                    update={
+                        "rule_id": PARTIAL_ELEMENT,
+                        "fact": f"{fact.text}: missing {element}",
+                        "transcript_evidence": found,
+                        "absence": entry.absence,
+                    }
+                )
+            )
 
 
 def _names(name: str, text: str) -> bool:

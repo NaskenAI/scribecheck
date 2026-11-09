@@ -49,6 +49,7 @@ SCRIBECHECK_STAGES = frozenset(
         "audit",
         "check",
         "second_look",
+        "partial_look",
         "candidate",
         "quote_recheck",
         "changes",
@@ -503,7 +504,7 @@ fail_confidence = ["certain", "confirmed"]
 # max_tokens = 24000
 
 # [pass_a.scribecheck.check]             # stages: extract, audit, check, second_look,
-# effort = "low"                         # candidate, quote_recheck, changes,
+# effort = "low"                         # partial_look, candidate, quote_recheck, changes,
 #                                        # changes_second, split, statements,
 #                                        # statements_second
 

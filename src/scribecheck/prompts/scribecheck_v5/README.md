@@ -32,7 +32,17 @@ Earlier sets are kept unchanged, as measured runs used them:
 - `scribecheck_v5` (from v4): `audit.txt` leaves attendance and appointment logistics (whether
   to attend in person, booking, when a call will come, transport) out of the always-core plan
   rule; they are core or contextual by the ordinary rule. The pipeline's backstop never makes
-  them core either (`is_logistics` in `pass_a/pipeline.py`).
+  them core either (`is_logistics` in `pass_a/pipeline.py`). Also from v4, each tagged so one
+  run shows what it adds:
+  - `audit.txt` makes pertinent negatives the clinician asked about and examination findings
+    always core, and never drops a plan, follow-up, safety-net or instruction fact (logistics
+    excepted). The pipeline backstops both; a fact the code kept or made core against the
+    audit is tagged `core_kind` or `never_drop` in the trace.
+  - `second_look.txt` grades each confirmed absence `clear` or `probable` (the flag's
+    `absence`).
+  - `partial_look.txt` (new) asks, for each partial verdict, for the fact's specific element
+    and whether the note leaves it out; a missing element with a verified transcript quote is
+    an omission flag with rule `pass_a.partial_element`.
 
 Pass B (changed facts) uses `changes.txt` and `changes_second.txt`; Pass C (unsupported
 statements) uses `split.txt`, `statements.txt` and `statements_second.txt`. Their severity

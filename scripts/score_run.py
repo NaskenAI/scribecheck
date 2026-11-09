@@ -461,13 +461,20 @@ def confirmed_absent(note: Note) -> list[Flag]:
     return [f for f in note.pass_a if f.verdict == "absent" and RANK[f.confidence] >= 2]
 
 
-def grade(note: Note) -> tuple[int, int, int, int, int]:
-    """A note's graded score, compared in order: its confirmed absent critical flags, then
-    supporting ones, then all confirmed absent flags, then critical partial verdicts, then
-    all partial verdicts. Built from the report alone; (0, 0, 0, 0, 0) is never flagged."""
+Grade = tuple[int, int, int, int, int, int]
+NO_GRADE: Grade = (0, 0, 0, 0, 0, 0)
+
+
+def grade(note: Note) -> Grade:
+    """A note's graded score, compared in order: its confirmed absent flags the second look
+    called clearly absent (none in a run before v5), then its confirmed absent critical
+    flags, then supporting ones, then all confirmed absent flags, then critical partial
+    verdicts, then all partial verdicts. Built from the report alone; NO_GRADE is never
+    flagged."""
     absent = confirmed_absent(note)
     partials = [*note.info, *(f for f in note.pass_a if f.verdict == "partial")]
     return (
+        sum(f.absence == "clear" for f in absent),
         sum(f.severity == "critical" for f in absent),
         sum(f.severity == "supporting" for f in absent),
         len(absent),
@@ -478,18 +485,40 @@ def grade(note: Note) -> tuple[int, int, int, int, int]:
 
 def matched_grade(
     omissions: Sequence[Note], cleans: Sequence[Note], alarms: int, total: int
-) -> tuple[int, int, int, int, int] | None:
+) -> Grade | None:
     """The most lenient grade threshold whose false-alarm rate on `cleans` is at most
     alarms/total, or None when even the strictest passes it. The thresholds are the grades
     the notes have; a lower threshold never has fewer false alarms."""
     if total == 0:
         return None  # no reference rate to match
-    grades = sorted({grade(n) for n in [*omissions, *cleans]} - {(0, 0, 0, 0, 0)}, reverse=True)
+    grades = sorted({grade(n) for n in [*omissions, *cleans]} - {NO_GRADE}, reverse=True)
     best = None
     for g in grades:
         if sum(grade(n) >= g for n in cleans) * total <= alarms * len(cleans):
             best = g
     return best
+
+
+MECHANISMS = ("partial_element", "core_kind", "never_drop", "clear", "probable")
+"""v5's tagged changes: a partial verdict's missing element (`pass_a.partial_element`), a
+fact the code made core or kept against the audit (`core_kind`, `never_drop` in the trace),
+and the second look's grade of a confirmed absence (`clear`, `probable`)."""
+PARTIAL_ELEMENT = "pass_a.partial_element"
+
+
+def mechanisms_of(note: Note, flag: Flag) -> set[str]:
+    """The v5 mechanisms behind one of a note's flags: by its rule for a partial element,
+    by its trace fact's `forced` tags, and by its `absence`."""
+    tags: set[str] = {flag.absence} if flag.absence else set()
+    fact = flag.fact or ""
+    if flag.rule_id == PARTIAL_ELEMENT:
+        tags.add("partial_element")
+        fact = fact.rsplit(": missing ", 1)[0]  # "<fact>: missing <element>"
+    trace = (note.report or {}).get("pass_a_trace") or []
+    # The checked copy of the fact, when two trace facts share its text
+    steps = sorted((s for s in trace if s.get("fact") == fact), key=lambda s: not s.get("checked"))
+    tags.update(str(t) for t in (steps[0] if steps else {}).get("forced") or [])
+    return tags & set(MECHANISMS)
 
 
 def score(args: argparse.Namespace) -> int:
@@ -675,11 +704,61 @@ def score(args: argparse.Namespace) -> int:
                         say(f"      flag {x.id}:      {x.fact}")
         say(f"   detected notes where they differ: {differ}/{len(det)}")
 
+    say("== v5 mechanisms: decision-rule flags by the change behind them. 'with': notes with")
+    say("   one of its flags; 'only': notes flagged by its flags alone (what it adds, and what")
+    say("   it costs on clean notes). core_kind and never_drop count the code's overrides of the")
+    say("   audit only; what the prompt changes do shows only against a run before v5")
+    tagged = {
+        n.key: [(f, mechanisms_of(n, f)) for f in decision_flags(n)] for n in [*omissions, *cleans]
+    }
+    if not any(tags for flags in tagged.values() for _, tags in flags):
+        say("   no flag carries a v5 tag (a run before v5)")
+    else:
+        for mechanism in MECHANISMS:
+            for view in ("with", "only"):
+
+                def picked(n: Note, m: str = mechanism, v: str = view) -> list[Flag]:
+                    flags = tagged[n.key]
+                    mine = [f for f, tags in flags if m in tags]
+                    if v == "only" and len(mine) < len(flags):
+                        return []
+                    return mine
+
+                marked = [n for n in omissions if picked(n)]
+                words = sum(names_fact(n, picked(n)) for n in marked)
+                line = (
+                    f"   {mechanism:<16}{view:<5} detection {_rate(len(marked), len(omissions))}, "
+                    f"correct (words) {_rate(words, len(omissions))}"
+                )
+                if judgements is not None:
+                    model = sum(model_names(judgements.get(n.key), picked(n)) for n in marked)
+                    line += f", correct (model) {_rate(model, len(omissions))}"
+                alarms_m = sum(1 for n in cleans if picked(n))
+                say(line + f", false alarms {_rate(alarms_m, len(cleans))}")
+
     references = _references(args)
     if references:
         say("== Reference methods on the same notes: detection and false alarms (their own")
         say("   rules; correct detection needs fact text, which only Gate 1(b) B3 records")
         say("   hold; notes without a usable record are left out of these rates)")
+    baseline_correct: dict[str, str] = {}
+    if judgements is not None and args.judgements is not None:
+        cache = fact_judge.load_cache(args.judgements)
+        for name, by_note in baseline_items(args.released, omissions).items():
+            named = sum(
+                1
+                for it in by_note.values()
+                if it is not None
+                and (j := fact_judge.lookup(cache, it)) is not None
+                and j.flags.same
+            )
+            unjudged_b = sum(
+                1 for it in by_note.values() if it is None or fact_judge.lookup(cache, it) is None
+            )
+            gap = f" ({unjudged_b} flagged notes without fact text or judgement)"
+            baseline_correct[name] = f"correct (model) {_rate(named, len(omissions))}" + (
+                gap if unjudged_b else ""
+            )
     for name, ref in references.items():
         omit = [ref.get(n.key) for n in omissions]
         clean = [ref.get(n.key) for n in cleans]
@@ -688,15 +767,17 @@ def score(args: argparse.Namespace) -> int:
             f"   {name}: detection {_rate(sum(known_o), len(known_o))}, "
             f"false alarms {_rate(sum(known_c), len(known_c))}"
         )
+        if name in baseline_correct:
+            say(f"      {baseline_correct[name]}")
         if len(known_o) < len(omit) or len(known_c) < len(clean):
             say(
                 f"      ({len(omit) - len(known_o)} omission and {len(clean) - len(known_c)} "
                 "clean notes without a usable record)"
             )
 
-    say("== Graded note score: (confirmed absent critical, supporting, all; then critical")
-    say("   partials, all partials), compared in order; at each reference's false-alarm rate,")
-    say("   the most lenient grade threshold that does not pass it")
+    say("== Graded note score: (clearly absent; confirmed absent critical, supporting, all;")
+    say("   then critical partials, all partials), compared in order; at each reference's")
+    say("   false-alarm rate, the most lenient grade threshold that does not pass it")
     if not references:
         say("   no reference records given (--released, --gate1b)")
     for name, ref in references.items():
@@ -721,6 +802,8 @@ def score(args: argparse.Namespace) -> int:
             line += f", correct (model) {_rate(model, len(omissions))}"
         raised = sum(grade(n) >= target for n in cleans)
         say(line + f", false alarms {_rate(raised, len(cleans))}")
+        if name in baseline_correct:
+            say(f"      {name} itself: {baseline_correct[name]}")
 
     say("== Per-note agreement on omission and clean notes (information, not a gate)")
     say("   ours: the decision rule on Pass A omission flags; against B3 also 'critical")
@@ -1004,6 +1087,60 @@ def _omission_notes(args: argparse.Namespace) -> list[Note]:
     ]
 
 
+BASELINES = {
+    "released B3 r1": "b3 r1",
+    "released power-gepa-high r1": "power r1",
+    "released power-gepa-high r3": "power r3",
+}
+"""The released reference sets whose development rows can carry `baseline_facts` (the
+split keeps them for development rows only), by their label in `score`."""
+
+
+def baseline_flagged_facts(name: str, row: Mapping[str, Any] | None) -> list[str] | None:
+    """The facts a baseline's own rule counts on a note, from the row's `baseline_facts`:
+    route one's facts graded critical and judged absent; every omission route two reported.
+    None when the row holds no fact text."""
+    facts = None if row is None else row.get("baseline_facts")
+    if not isinstance(facts, list):
+        return None
+    texts = [str(f) for f in facts]
+    if "B3" in name:
+        parts = [t.split(" | ", 2) for t in texts]
+        return [p[2] for p in parts if len(p) == 3 and p[0] == "critical" and p[1] == "absent"]
+    return [t.split(" | ", 1)[1] if " | " in t else t for t in texts]
+
+
+def baseline_items(
+    released: Path | None, notes: Iterable[Note]
+) -> dict[str, dict[str, fact_judge.Item | None]]:
+    """For each baseline, each omission note its own rule flags: the judge item for its
+    flagged facts (ids B1...), or None when its row holds no fact text."""
+    if released is None:
+        return {}
+    rows = released_rows(released)
+    flagged = {"B3": route_one_flag, "power": route_two_flag}
+    out: dict[str, dict[str, fact_judge.Item | None]] = {}
+    for name, store in BASELINES.items():
+        rule = flagged["B3" if "B3" in name else "power"]
+        out[name] = {}
+        for n in notes:
+            row = rows[store].get(n.key)
+            if n.kind != "omission" or rule(row) is not True:
+                continue
+            facts = baseline_flagged_facts(name, row)
+            out[name][n.key] = (
+                None
+                if not facts
+                else fact_judge.Item(
+                    f"{name}|{n.pair.get('pair_id')}",
+                    tuple(removed_facts(n.pair)),
+                    (),
+                    tuple((f"B{i}", text) for i, text in enumerate(facts, start=1)),
+                )
+            )
+    return out
+
+
 def run_judge(args: argparse.Namespace) -> int:
     """Judge every scored omission note the cache lacks (paid calls: the user runs this)."""
     cache_path = args.cache or args.run / "fact_judgements.json"
@@ -1014,16 +1151,25 @@ def run_judge(args: argparse.Namespace) -> int:
     except InputError as exc:
         print(f"judge: {exc}", file=sys.stderr)
         return 2
+    notes = _omission_notes(args)
     items = [
         fact_judge.item(str(n.pair.get("pair_id")), removed_facts(n.pair), n.report)
-        for n in _omission_notes(args)
+        for n in notes
         if n.report is not None
     ]
+    baselines = baseline_items(args.released, notes)
+    for name, by_note in baselines.items():
+        found = [it for it in by_note.values() if it is not None]
+        print(
+            f"judge: {name}: {len(by_note)} omission notes flagged by its rule, "
+            f"{len(found)} with fact text"
+        )
+        items += found
     cache = fact_judge.load_cache(cache_path)
     tag = f"{config.model} effort={config.effort} max_tokens={config.max_tokens}"
     counts = fact_judge.judge(items, client, budget, cache, tag, cache_path)
     spent = budget.spent_usd
-    print(f"judge: {len(items)} omission notes: {_counts(counts)}")
+    print(f"judge: {len(items)} items (our notes and baselines'): {_counts(counts)}")
     print(
         f"judge: {budget.calls} calls, "
         + (f"${spent:.4f}" if spent is not None else "cost unknown")
@@ -1270,6 +1416,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     jd = commands.add_parser("judge", help="judge fact matches with a model (paid calls)")
     jd.add_argument("--config", type=Path, required=True)
     jd.add_argument("--cache", type=Path, help="default: <run>/fact_judgements.json")
+    jd.add_argument(
+        "--released", type=Path, help="also judge the released baselines' flagged facts"
+    )
     sa = commands.add_parser("sample", help="write a fixed-seed spot-check sample")
     sa.add_argument("--judgements", type=Path, required=True)
     sa.add_argument("--out", type=Path, required=True)

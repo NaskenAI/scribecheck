@@ -50,6 +50,8 @@ class Fact:
     evidence: TranscriptEvidence | None = None
     evidence_quote: str = ""
     origin: Literal["model", "rules"] = "model"
+    forced: tuple[str, ...] = ()
+    """Code rules that overrode the audit for this fact ("core_kind", "never_drop")."""
 
 
 @dataclass

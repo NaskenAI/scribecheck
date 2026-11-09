@@ -1,0 +1,24 @@
+TASK: THE SPECIFIC ELEMENT A PARTIAL STATEMENT LEAVES OUT
+
+A first reviewer judged each fact below, taken from the TRANSCRIPT above, to be only PARTLY
+carried by the NOTE above; the note text it matched is shown in brackets. Decide whether the
+note leaves out the fact's specific element.
+
+For each id:
+- "element": the fact's specific element, in a few words: a number, threshold, duration, drug,
+  dose, side, named trigger or main finding. Leave it empty if the fact has no such element
+  (the fact is general, or what the note lacks is only nuance, emphasis or wording).
+- "missing": true if the note does not carry that element anywhere, in any wording. A vaguer
+  or less specific note statement never carries it: "a few days" does not carry "3 days",
+  "pain" does not carry "left knee pain", "if it gets worse" does not carry "if the temperature
+  goes above 38". False if the note carries the element, in this sentence or elsewhere.
+- "transcript_quote": the exact words from ONE transcript turn that give the element, copied
+  character for character.
+- "absence", when "missing" is true: "clear" if the note has nothing on the element, or
+  "probable" if it has a vaguer or related version a reader might take for it.
+
+Do not invent an element the transcript does not give, and do not count the note's wording
+or ordering as a missing element.
+
+FACTS:
+{facts_block}

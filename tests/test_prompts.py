@@ -41,6 +41,7 @@ def test_route_one_attribution_and_licence_ship() -> None:
         ("audit", {"facts_block": "f1: x"}),
         ("check", {"facts_block": "f1: x"}),
         ("second_look", {"facts_block": "f1: x"}),
+        ("partial_look", {"facts_block": "f1: x"}),
         ("candidate", {"facts_block": "c1: x"}),
         ("quote_recheck", {"source": "NOTE", "unit": "passage", "facts_block": "q1: x"}),
     ],
@@ -76,10 +77,13 @@ def test_v2_changes_only_the_candidate_prompt() -> None:
     assert "recounts a past episode" in prompts.load("scribecheck_v2", "candidate")
 
 
-def _changed(old: prompts.PromptSet, new: prompts.PromptSet) -> set[str]:
+def _changed(
+    old: prompts.PromptSet, new: prompts.PromptSet, added: frozenset[str] = frozenset()
+) -> set[str]:
+    """The files `new` changes from `old`; `added` are the files only `new` has."""
     folder = resources.files(prompts)
     names = {p.name for p in (folder / old).iterdir() if p.name.endswith(".txt")}
-    assert names == {p.name for p in (folder / new).iterdir() if p.name.endswith(".txt")}
+    assert names | added == {p.name for p in (folder / new).iterdir() if p.name.endswith(".txt")}
     return {n for n in names if prompts.load(old, n[:-4]) != prompts.load(new, n[:-4])}
 
 
@@ -139,7 +143,10 @@ def test_v4_second_look_rescues_more_specific_never_vaguer() -> None:
 
 
 def test_v5_leaves_attendance_logistics_out_of_the_plan_rule() -> None:
-    assert _changed("scribecheck_v4", "scribecheck_v5") == {"audit.txt"}
+    assert _changed("scribecheck_v4", "scribecheck_v5", frozenset({"partial_look.txt"})) == {
+        "audit.txt",
+        "second_look.txt",
+    }
     audit = " ".join(prompts.load("scribecheck_v5", "audit").split())
     rule = audit.split("Attendance and appointment logistics")[1].split('- "severity"')[0]
     assert "are not plan decisions and follow the ordinary rule" in rule
@@ -147,3 +154,30 @@ def test_v5_leaves_attendance_logistics_out_of_the_plan_rule() -> None:
         assert kind in rule, kind
     # The always-core kinds are unchanged.
     assert "decisions not to treat, test or refer; safety-net instructions" in audit
+
+
+def test_v5_audit_core_kinds_and_never_drop() -> None:
+    audit = " ".join(prompts.load("scribecheck_v5", "audit").split())
+    assert "pertinent negatives the clinician asked about" in audit
+    assert "examination findings, normal or abnormal" in audit
+    never = audit.split("Never drop a plan decision")[1].split(".")[0]
+    for kind in ("follow-up arrangement", "safety-net instruction", "other instruction"):
+        assert kind in never, kind
+    assert "unless it is only attendance or appointment logistics" in never
+
+
+def test_v5_second_look_grades_the_absence() -> None:
+    look = " ".join(prompts.load("scribecheck_v5", "second_look").split())
+    assert '"clear": the note is silent on this statement' in look
+    assert '"probable": the note has a related, vaguer or partial statement' in look
+
+
+def test_v5_partial_look_names_the_element_and_never_accepts_a_vaguer_note() -> None:
+    look = " ".join(prompts.load("scribecheck_v5", "partial_look").split())
+    element = look.split('"element":')[1].split('- "missing"')[0]
+    for kind in ("number", "threshold", "duration", "drug", "dose", "side", "named trigger"):
+        assert kind in element, kind
+    assert "main finding" in element
+    assert "A vaguer or less specific note statement never carries it" in look
+    assert '"a few days" does not carry "3 days"' in look
+    assert "ONE transcript turn" in look
