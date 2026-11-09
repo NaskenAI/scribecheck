@@ -31,7 +31,13 @@ Rules:
    (its entries whose verdict is "absent", by severity) are worked out from it first, so the
    pipeline tier's per-fact rule can be recomputed without any detail text. A list with no
    graded entry (the two-stage tier grades none) gets no counts, since 0 would read as
-   "nothing absent". A kept value that could hold text aborts the run.
+   "nothing absent". A kept value that could hold text aborts the run, with one exception:
+   for a development row only, `baseline_facts` keeps the baseline's own flagged-fact text
+   as a list of one-line strings, so its correct detection can be judged on development
+   data: route two's omissions_reported entries as "<severity> | <missing>" (their "why" is
+   never kept), or else route one's graded detail.missing_facts entries as "<severity> |
+   <verdict> | <fact>". Line breaks inside a fact become spaces, and a string longer than
+   MAX_FACT_STRING characters stops the run. A held-out row is never reduced at all.
 6. Before anything is written, the counts must match EXPECTED_COUNTS, and both output
    folders must be empty or absent and outside --raw; otherwise the run stops and writes
    nothing.
@@ -77,13 +83,17 @@ SCORE_FIELDS = (
     "n_present", "n_partial", "n_absent",
 )  # fmt: skip
 # Score-file fields that can carry text; never copied, whatever SCORE_FIELDS says.
-NEVER_KEPT = frozenset({"matched_key", "fact_key", "detail", "samples", "receipts", "totals"})
+NEVER_KEPT = frozenset(
+    {"matched_key", "fact_key", "detail", "samples", "receipts", "totals", "omissions_reported"}
+)
 assert not NEVER_KEPT & set(SCORE_FIELDS), "a text-bearing field is listed in SCORE_FIELDS"
 # Integer counts worked out from detail.missing_facts before detail is dropped.
 SEVERITIES = ("critical", "supporting", "peripheral")
 DERIVED_FIELDS = tuple(f"n_absent_{severity}" for severity in SEVERITIES)
 LOG_FOLDERS = ("judgements", "validation", "notes")
 MAX_SCORE_STRING = 200
+MAX_FACT_STRING = 400
+BASELINE_FACTS = "baseline_facts"
 PAIRS_FILE = Path("pairs") / "dataset_v2.json"
 SITES_FILE = Path("pairs") / "fact_sites.json"
 SEVERITY_FILE = Path("pairs") / "factorial_severity.json"
@@ -420,7 +430,7 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
             continue
         if not all(isinstance(r, dict) and "note_key" in r for r in records):
             continue
-        kept, dropped = [], 0
+        kept, dropped, with_facts, skipped = [], 0, 0, 0
         for row in records:
             reduced = {f: row[f] for f in SCORE_FIELDS if f in row}
             reduced.update(_absent_counts(row))
@@ -433,12 +443,63 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
             key = _key_of(row.get("pair_id")) or _key_of(row.get("clean_key"))
             if key is None and isinstance(row.get("stratum"), str):
                 key = f"{row['stratum']}|{row.get('consultation')}"
-            if key in known.dev:
-                kept.append(reduced)
-            else:
+            if key not in known.dev:
                 dropped += 1
+                continue
+            # Development rows only: the baseline's own flagged-fact text.
+            facts, unknown = _baseline_facts(row)
+            skipped += unknown
+            if facts is not None:
+                if any(len(fact) > MAX_FACT_STRING for fact in facts):
+                    raise SplitError(f"{name}: a baseline fact is longer than {MAX_FACT_STRING}")
+                reduced[BASELINE_FACTS] = facts
+                with_facts += 1
+            kept.append(reduced)
         plan.dev_json[Path("judge_scores") / name] = {"records": kept}
-        plan.notes.append(f"judge_scores/{name}: kept {len(kept)} rows, dropped {dropped}")
+        plan.notes.append(
+            f"judge_scores/{name}: kept {len(kept)} rows, dropped {dropped}; "
+            f"{with_facts} with baseline_facts, {skipped} fact entries of unknown shape skipped"
+        )
+
+
+def _baseline_facts(row: dict[str, Any]) -> tuple[list[str] | None, int]:
+    """A development row's flagged-fact text as one-line strings, and how many entries had
+    an unknown shape: route two's omissions_reported as "<severity> | <missing>" when the
+    row has it (so a route-two row is never written in route one's format), else route
+    one's graded detail.missing_facts as "<severity> | <verdict> | <fact>". None when the
+    row has neither (a list with no graded entry, as the two-stage tier writes, counts as
+    neither)."""
+    reported = row.get("omissions_reported")
+    if isinstance(reported, list):
+        out, unknown = [], 0
+        for o in reported:
+            if isinstance(o, dict) and isinstance(o.get("missing"), str):
+                severity = o.get("severity") if isinstance(o.get("severity"), str) else "-"
+                out.append(f"{_one_line(str(severity))} | {_one_line(o['missing'])}")
+            else:
+                unknown += 1
+        return out, unknown
+    detail = row.get("detail")
+    graded = detail.get("missing_facts") if isinstance(detail, dict) else None
+    if isinstance(graded, list) and any(
+        isinstance(f, dict) and isinstance(f.get("severity"), str) for f in graded
+    ):
+        out, unknown = [], 0
+        for f in graded:
+            if isinstance(f, dict) and all(
+                isinstance(f.get(k), str) for k in ("severity", "verdict", "fact")
+            ):
+                parts = (f["severity"], f["verdict"], f["fact"])
+                out.append(" | ".join(_one_line(p) for p in parts))
+            else:
+                unknown += 1
+        return out, unknown
+    return None, 0
+
+
+def _one_line(text: str) -> str:
+    """Runs of whitespace as one space (a line break inside a fact is not text to keep)."""
+    return " ".join(text.split())
 
 
 def _absent_counts(row: dict[str, Any]) -> dict[str, int]:

@@ -140,17 +140,27 @@ def varied_rows(dev: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows.append({**base, "tier": "B3", "detail": {"missing_facts": MISSING_FACTS}})
     rows.append({**base, "tier": "B3", "detail": {"missing_facts": []}})
     rows.append({**base, "tier": "B2", "detail": {"missing_facts": UNGRADED_FACTS}})
+    rows.append({**base, "arm": "power-gepa-high", "omissions_reported": OMISSIONS_REPORTED})
     return rows
 
 
-# Per-fact verdicts as the pipeline tier writes them; the fact text must never be kept.
+# Per-fact verdicts as the pipeline tier writes them. A development row keeps each graded
+# entry's fact text in baseline_facts (DEV_FACT); anything else in detail is never kept.
+DEV_FACT = "Synthetic baseline fact"
+HELDOUT_FACT = "Held-out baseline fact, never kept"
 MISSING_FACTS = [
-    {"id": "f1", "fact": f"fact {SENTINEL}", "severity": "critical", "verdict": "absent"},
-    {"id": "f2", "fact": f"fact {SENTINEL}", "severity": "critical", "verdict": "absent"},
-    {"id": "f3", "fact": f"fact {SENTINEL}", "severity": "critical", "verdict": "present"},
-    {"id": "f4", "fact": f"fact {SENTINEL}", "severity": "supporting", "verdict": "absent"},
-    {"id": "f5", "fact": f"fact {SENTINEL}", "severity": "peripheral", "verdict": "partial"},
+    {"id": "f1", "fact": f"{DEV_FACT} 1", "severity": "critical", "verdict": "absent"},
+    {"id": "f2", "fact": f"{DEV_FACT}\n2", "severity": "critical", "verdict": "absent"},
+    {"id": "f3", "fact": f"{DEV_FACT} 3", "severity": "critical", "verdict": "present"},
+    {"id": "f4", "fact": f"{DEV_FACT} 4", "severity": "supporting", "verdict": "absent"},
+    {"id": "f5", "fact": f"{DEV_FACT} 5", "severity": "peripheral", "verdict": "partial"},
     f"stray text {SENTINEL}",
+]
+# Route two's structured omissions (the "score" format): "why" is never kept.
+OMISSIONS_REPORTED = [
+    {"missing": f"{DEV_FACT} 6", "severity": "critical", "why": f"why {SENTINEL}"},
+    {"missing": f"{DEV_FACT} 7"},
+    f"stray {SENTINEL}",
 ]
 # The two-stage tier (B2) grades no fact's severity, so its entries carry severity null.
 UNGRADED_FACTS = [
@@ -229,6 +239,10 @@ def build_fixture(
     firsts = {p["key"]: p for p in reversed(heldout)}
     subset = list(firsts.values()) + [p for p in heldout if p not in firsts.values()]
     heldout_rows = [_score_row(p["stratum"], p["id"], p["pair_id"]) for p in subset[:151]]
+    heldout_rows[0]["detail"] = {
+        "missing_facts": [{"fact": HELDOUT_FACT, "severity": "critical", "verdict": "absent"}]
+    }
+    heldout_rows[1]["omissions_reported"] = [{"missing": HELDOUT_FACT, "severity": "critical"}]
     heldout_rows += [_score_row(s, c, None) for s, c in HELDOUT_KEYS]
     records = raw / "judgements" / "w2" / "pipeline_scored_records.json"
     _write(records, {"records": heldout_rows})
@@ -444,7 +458,7 @@ def test_judge_scores_keep_run_fields_and_never_text_fields(
     assert not set(SPLIT.SCORE_FIELDS) & SPLIT.NEVER_KEPT
     for path in (dev_out / "judge_scores").iterdir():
         for row in json.loads(path.read_text())["records"]:
-            assert set(row) <= set(SPLIT.SCORE_FIELDS) | set(SPLIT.DERIVED_FIELDS)
+            assert set(row) <= {*SPLIT.SCORE_FIELDS, *SPLIT.DERIVED_FIELDS, SPLIT.BASELINE_FACTS}
             assert not set(row) & SPLIT.NEVER_KEPT
             if "varied" not in path.name:  # every field present in w1 and w2
                 assert set(row) == set(SPLIT.SCORE_FIELDS)
@@ -458,16 +472,17 @@ def test_judge_scores_keep_only_the_fields_a_row_has(split: tuple[Path, Path, st
         {k: v for k, v in row.items() if k in SPLIT.SCORE_FIELDS}
         for row in varied_rows(_pairs(dev_out)["pairs"])
     ]
-    expected[-3].update(n_absent_critical=2, n_absent_supporting=1, n_absent_peripheral=0)
+    expected[-4].update(n_absent_critical=2, n_absent_supporting=1, n_absent_peripheral=0)
     path = dev_out / "judge_scores" / "judgements__w3__varied_records.json"
     kept = json.loads(path.read_text())["records"]
-    assert kept == expected
+    # baseline_facts has its own test
+    assert [{k: v for k, v in r.items() if k != "baseline_facts"} for r in kept] == expected
     assert [r["replicate"] for r in kept[:3]] == [1, 2, 3]
-    assert {r["arm"] for r in kept} == {"B2", "gepa-optimized"}
+    assert {r["arm"] for r in kept} == {"B2", "gepa-optimized", "power-gepa-high"}
     assert {r["model"] for r in kept} == {"openai/gpt-5.4", "google/gemini-3.1-pro-preview"}
     assert sum(r["parse_failure"] for r in kept) == 1
     assert {r["dataset_version"] for r in kept} == {"factorial-v1", "factorial-v1-armsmoke"}
-    missing, null = kept[-6], kept[-5]
+    missing, null = kept[-7], kept[-6]
     assert "tier" not in missing and "replicate" not in missing  # still missing, not null
     assert "tier" in null and null["tier"] is None
 
@@ -502,3 +517,46 @@ def test_long_verdict_aborts(tmp_path: Path) -> None:
     _write(path, data)
     dev_out, heldout_out = tmp_path / "dev", tmp_path / "heldout"
     _assert_aborted(_run(raw, records, dev_out, heldout_out), dev_out, heldout_out)
+
+
+def test_baseline_facts_kept_for_development_rows_only(split: tuple[Path, Path, str]) -> None:
+    dev_out, heldout_out, log = split
+    path = dev_out / "judge_scores" / "judgements__w3__varied_records.json"
+    kept = json.loads(path.read_text())["records"]
+    facts = [row["baseline_facts"] for row in kept if "baseline_facts" in row]
+    assert facts == [
+        [
+            f"critical | absent | {DEV_FACT} 1",
+            f"critical | absent | {DEV_FACT} 2",  # a line break becomes a space
+            f"critical | present | {DEV_FACT} 3",
+            f"supporting | absent | {DEV_FACT} 4",
+            f"peripheral | partial | {DEV_FACT} 5",
+        ],
+        [f"critical | {DEV_FACT} 6", f"- | {DEV_FACT} 7"],
+    ]
+    # No list for an empty or ungraded (B2) missing_facts list, nor for rows without one.
+    assert sum("baseline_facts" in row for row in kept) == 2
+    assert all("omissions_reported" not in row and "detail" not in row for row in kept)
+    assert "2 with baseline_facts, 2 fact entries of unknown shape skipped" in log
+    # Held-out rows' facts go nowhere, and "why" and stray entries are never kept.
+    for folder in (dev_out, heldout_out):
+        assert HELDOUT_FACT not in _all_text(folder)
+    assert SENTINEL not in path.read_text() and HELDOUT_FACT not in log
+
+
+def test_long_baseline_fact_aborts(tmp_path: Path) -> None:
+    raw, records = build_fixture(tmp_path)
+    path = raw / "judgements" / "w3" / "varied_records.json"
+    data = json.loads(path.read_text())
+    data["records"][-1]["omissions_reported"] = [{"missing": "x" * 401, "severity": "critical"}]
+    _write(path, data)
+    dev_out, heldout_out = tmp_path / "dev", tmp_path / "heldout"
+    _assert_aborted(_run(raw, records, dev_out, heldout_out), dev_out, heldout_out)
+
+
+def test_a_route_two_row_is_written_in_its_own_format() -> None:
+    row = {
+        "detail": {"missing_facts": [{"fact": "a", "severity": "critical", "verdict": "present"}]},
+        "omissions_reported": [{"missing": "b\nc", "severity": "critical"}],
+    }
+    assert SPLIT._baseline_facts(row) == (["critical | b c"], 0)
