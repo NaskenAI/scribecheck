@@ -198,7 +198,7 @@ def _trace_extraction(
     graded = stages.audited.get(key)
     for fact in facts.get(key, []):
         if graded is None:
-            audit = "failed"
+            audit = "failed"  # nor do core and severity mean anything
         elif fact.id not in graded:
             audit = "not_audited"
         else:
@@ -210,8 +210,9 @@ def _trace_extraction(
             "origin": fact.origin,
             "evidence_verified": True,
             "audit": audit,
-            "core": fact.core if audit != "failed" else None,
-            "severity": fact.severity if audit != "failed" else None,
+            # A dropped fact was never graded, and a failed audit graded nothing.
+            "core": fact.core if audit in ("kept", "not_audited") else None,
+            "severity": fact.severity if audit in ("kept", "not_audited") else None,
             "checked": False,
         }
 
@@ -504,6 +505,7 @@ def _check(
             note_quote = fixer.evidence(by_case[case.id], fact.id)
             if not isinstance(note_quote, NoteEvidence):
                 outcome.unchecked.append(_unchecked(fact, "quote_unverified"))
+                outcome.trace[fact.id]["note_quote_verified"] = False
                 continue
             outcome.trace[fact.id]["note_quote"] = note_quote.text
             if entry.verdict == "partial":

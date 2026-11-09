@@ -302,3 +302,40 @@ def test_pass_a_trace_follows_each_fact(mock: MockClaude) -> None:
     assert knee.verdict == "present" and knee.note_quote == "Knee swollen and painful for 2 weeks"
     assert all(t.evidence_verified and t.origin == "model" for t in report.pass_a_trace)
     assert json.loads(report.to_json())["pass_a_trace"][0]["id"] == "f1"
+
+
+def test_no_trace_without_the_scribecheck_pipeline(mock: MockClaude) -> None:
+    from test_pass_a_route_one import _scripts
+
+    mock.scripts = _scripts([True])
+    config = FULL.model_copy(update={"pipeline": "route_one", "pass_a_trace": True})
+    assert check(TRANSCRIPT, NOTE, config).pass_a_trace is None
+
+
+def test_an_unchecked_item_on_a_partials_quote_is_the_same_finding() -> None:
+    from scribecheck.checker import _report
+    from scribecheck.flags import Flag, UncheckedItem, note_evidence
+    from scribecheck.note import parse_note
+    from scribecheck.transcript import parse_transcript
+
+    t = parse_transcript(TRANSCRIPT)
+    n = parse_note(NOTE)
+    start = n.text.index("Refer to physiotherapy")
+    quote = note_evidence(n, start, start + len("Refer to physiotherapy"))
+    partial = Flag(
+        id="F0",
+        type="omission",
+        category="plan",
+        verdict="partial",
+        severity="supporting",
+        confidence="possible",
+        origin="model",
+        fact="Plan: X-ray and physiotherapy referral",
+        note_evidence=quote,
+    )
+    item = UncheckedItem(
+        category="plan", item="physiotherapy", reasons=("unaligned",), note_evidence=(quote,)
+    )
+    report = _report(t, n, FULL, [partial], [item])
+    assert [i.id for i in report.info] == ["I1"]
+    assert report.unchecked == () and report.counts.unchecked == 0

@@ -449,7 +449,8 @@ def test_trace_records_every_stage() -> None:
     outcome, _ = run(mock, candidates=False)
     steps = {s["fact"]: s for s in outcome.trace.values()}
     assert steps["Has a cat"]["evidence_verified"] is False and "audit" not in steps["Has a cat"]
-    assert steps["Working impression: viral cough"]["audit"] == "dropped"
+    dropped = steps["Working impression: viral cough"]
+    assert (dropped["audit"], dropped["core"], dropped["severity"]) == ("dropped", None, None)
     no_fever = steps["No fever"]
     assert (no_fever["audit"], no_fever["core"], no_fever["checked"]) == ("kept", False, False)
     cough = steps["Cough for two weeks"]
@@ -461,3 +462,19 @@ def test_trace_records_every_stage() -> None:
     asked = steps["Doctor asked what brings the patient in"]
     assert (asked["verdict"], asked["second_look"]) == ("absent", "rescued")
     assert asked["note_quote"] == "Likely viral illness"
+
+
+def test_trace_marks_an_unverified_present_quote() -> None:
+    def check(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        rows = []
+        for fid, t in listed:
+            verdict, quote = VERDICTS[t]
+            rows.append({"id": fid, "verdict": verdict, "note_quote": quote})
+            if t == "No fever":
+                rows[-1]["note_quote"] = "Patient is entirely afebrile"
+        return {"verdicts": rows}
+
+    outcome, _ = run(MockClaude(scripts(check=check)), candidates=False)
+    step = next(s for s in outcome.trace.values() if s["fact"] == "No fever")
+    assert (step["verdict"], step["note_quote_verified"]) == ("present", False)
+    assert "note_quote" not in step

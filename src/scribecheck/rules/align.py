@@ -20,7 +20,8 @@ Each drug mention also records what makes its values unsafe to compare:
   past use (increase, start, stop, switch, titrate, used to, was on, ...); in a transcript,
   a drug named in a recounted past episode (an emergency visit, a hospital stay, "back
   then", "that time") is past use too, when the episode is in its sentence or the sentence
-  before it, which may end the same speaker's previous turn;
+  before it, which may end the same speaker's previous turn, unless its own sentence speaks
+  of current use ("take", "now", "still");
 - `range_or_max`: its sentence gives a range or a maximum ("2-3 times", "up to");
 - a tablet count (`has_count`, `count`): a count unit ("one tablet", "2 puffs"), a bare
   number ("two metformin 500 mg tablets"), a multiplier ("x2") or a split ("cut in half").
@@ -147,12 +148,22 @@ _PAST = _any(
     "last week", "any more", "anymore", "no longer", "previously", "before",
 )  # fmt: skip
 """Past or stopped use: not a current medicine."""
-_EPISODE = _any(
-    "in ER", "the ER", "A&E", "A and E", "emergency department", "emergency room",
-    "casualty", "in hospital", "in the hospital", "hospital stay", "was admitted",
-    "were admitted", "got admitted", "back then", "that time", "at the time", "once I had",
+_EPISODE = re.compile(
+    _any(
+        "A&E", "emergency department", "emergency room", "casualty", "in hospital",
+        "in the hospital", "hospital stay", "was admitted", "were admitted", "got admitted",
+        "back then", "that time", "once I had",
+    ).pattern
+    + r"|(?<![A-Za-z])(?-i:ER)(?![A-Za-z])",
+    re.IGNORECASE,
 )  # fmt: skip
-"""A recounted past episode: a drug given or withheld then is not a current medicine."""
+"""A recounted past episode: a drug given or withheld then is not a current medicine. "ER"
+counts only in capitals, since "er" is a filler in speech."""
+_CURRENT_USE = _any(
+    "take", "takes", "taking", "now", "currently", "still", "at the moment", "these days",
+    "nowadays", "every day", "each day",
+)  # fmt: skip
+"""Present-tense use in the drug's own sentence outweighs a nearby past episode."""
 _PLANNED_OR_PAST = re.compile(f"{_PLANNED.pattern}|{_PAST.pattern}", re.IGNORECASE)
 _STOPPED = _any(
     "stopped it", "stopped them", "stopped taking", "quit it", "quit them", "quit taking",
@@ -449,7 +460,7 @@ def _unit_facts(
         sentence = text[sentence_start:sentence_end]
         question = is_question(text, sentence_start, sentence_end)
         planned, past = bool(_PLANNED.search(sentence)), bool(_PAST.search(sentence))
-        if speaker.transcript is not None and not past:
+        if speaker.transcript is not None and not past and not _CURRENT_USE.search(sentence):
             past = _in_episode(text, sentence_start, sentence_end, previous)
         mine = attached[index]
         strengths = [

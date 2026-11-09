@@ -765,3 +765,17 @@ SECOND_REVIEW_CASES = [
 @pytest.mark.parametrize(("transcript", "note"), SECOND_REVIEW_CASES)
 def test_second_review_cases_give_no_certain_flag(transcript: str, note: str) -> None:
     assert check(transcript, note).flags == ()
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "I take metformin 500 mg twice a day at the time of breakfast.",
+        "I was in hospital last year. Now I take metformin 500 mg twice a day.",
+    ],
+)
+def test_current_use_near_an_episode_phrase_still_compares(said: str) -> None:
+    transcript = parse_transcript(f"Patient: {said}")
+    note = parse_note("Medications:\nMetformin 850 mg twice daily.\n")
+    flag = only_flag(check_changed_facts(transcript, note))
+    assert (flag.category, flag.transcript_value, flag.note_value) == ("dose", "500 mg", "850 mg")

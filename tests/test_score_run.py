@@ -539,6 +539,10 @@ def test_misses_without_a_trace_use_the_flags(
         ),
         ({"audit": "kept", "checked": True}, "unchecked"),  # the check failed
         ({"audit": "failed"}, "unchecked"),
+        (
+            {"audit": "kept", "checked": True, "verdict": "present", "note_quote_verified": False},
+            "unchecked",
+        ),
     ],
 )
 def test_classify_miss(step: dict[str, Any] | None, label: str) -> None:

@@ -138,6 +138,8 @@ class TraceFact(BaseModel):
     """"present", "partial", "absent", or None when not checked or the check failed."""
     note_quote: str | None = None
     """The verified note quote for a present or partial verdict."""
+    note_quote_verified: bool | None = None
+    """False when that quote could not be found in the note: the fact went unchecked."""
     second_look: str | None = None
     """For an absent verdict: "confirmed", "rescued", "unverified" or "failed"."""
 
@@ -167,7 +169,8 @@ class Report(BaseModel):
     not_verifiable: tuple[NotVerifiable, ...] = ()
     """Full mode only: statements reported as not verifiable."""
     pass_a_trace: tuple[TraceFact, ...] | None = None
-    """Full mode with `pass_a_trace` set: every extracted fact's path through Pass A."""
+    """Full mode with `pass_a_trace` set and the scribecheck pipeline running Pass A: every
+    extracted fact's path through it."""
 
     def to_dict(self) -> dict[str, Any]:
         """The report as JSON-ready data, keys in the spec's order."""

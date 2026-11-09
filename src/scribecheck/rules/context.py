@@ -182,7 +182,8 @@ _RULES: tuple[_Rule, ...] = (
         "advised against",
         "advise against",
     ),
-    # "They don't need to give me morphine" denies the drug; "give up" is another verb.
+    # "They don't need to give me morphine" denies the drug; "give up" is another verb, and
+    # "I don't give myself" is about who gives it, not whether it is taken.
     _Rule(
         re.compile(
             _words(
@@ -200,7 +201,8 @@ _RULES: tuple[_Rule, ...] = (
                 "mustn't",
                 "must not",
             )
-            + r"\s+give(?!\s+up)(?![A-Za-z])",
+            + r"\s+give(?![A-Za-z])"
+            + r"(?!\s+(?:up|myself|yourself|himself|herself|themselves|ourselves)(?![A-Za-z]))",
             re.IGNORECASE,
         ),
         "negated",

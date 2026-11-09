@@ -190,7 +190,7 @@ def _report(
         info = _numbered((f for f in kept if f.verdict == "partial"), prefix="I")
         kept = tuple(f for f in kept if f.verdict != "partial")
     flags = _numbered(kept)
-    flagged = [f.note_evidence for f in flags if f.note_evidence is not None]
+    flagged = [f.note_evidence for f in (*flags, *info) if f.note_evidence is not None]
     unchecked = [  # an unchecked item about a span a flag already reports is the same finding
         u
         for u in unchecked
@@ -272,7 +272,7 @@ def _check_full(
                 passes=modes,
                 pass_a_trace=(
                     tuple(TraceFact(**step) for step in outcome.trace.values())
-                    if config.pass_a_trace
+                    if config.pass_a_trace and modes["a"] == "scribecheck"
                     else None
                 ),
                 model=ModelInfo(

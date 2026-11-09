@@ -589,6 +589,8 @@ def classify_miss(step: Mapping[str, Any] | None) -> str:
         return "dropped by the audit"
     if step.get("audit") == "failed" or (step.get("checked") and step.get("verdict") is None):
         return "unchecked"
+    if step.get("note_quote_verified") is False:
+        return "unchecked"  # its present or partial quote was not found in the note
     if not step.get("checked"):
         return "contextual, never checked"
     verdict, look = step.get("verdict"), step.get("second_look")

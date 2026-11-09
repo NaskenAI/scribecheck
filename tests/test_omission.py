@@ -520,6 +520,15 @@ def test_a_drug_in_a_recounted_past_episode_is_past_use(transcript: str) -> None
         # The episode is in another speaker's turn, or two sentences back.
         "Doctor: Once you were in A&E?\nPatient: I take morphine every day.",
         "Patient: I was in A&E once. I'm fine now. I take morphine every day.",
+        # Review findings: ordinary current use near an episode-like phrase.
+        "Patient: I take metformin 500 mg twice a day at the time of breakfast and dinner.",
+        "Patient: I take vitamins A and E and metformin 500 mg twice a day.",
+        "Patient: Twice a day, er, the er metformin.",
+        "Patient: I was in hospital last year for my heart. Now I take bisoprolol 5 mg daily.",
+        "Patient: I was in hospital last year for my heart.\nPatient: I take bisoprolol 5 mg.",
+        "Patient: I had a fall that time.\nPatient: I take bisoprolol 5 mg daily.",
+        "Patient: I take bisoprolol 5 mg daily, as they told me in the hospital.",
+        "Patient: I don't give myself my metformin 500 mg on Sundays.",
     ],
 )
 def test_current_use_still_raises_a_candidate(transcript: str) -> None:
