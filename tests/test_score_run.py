@@ -547,3 +547,68 @@ def test_misses_without_a_trace_use_the_flags(
 )
 def test_classify_miss(step: dict[str, Any] | None, label: str) -> None:
     assert _load().classify_miss(step) == label
+
+
+def _b3_row(key: str, *facts: tuple[str, str, str]) -> dict[str, Any]:
+    return {
+        "note_key": key,
+        "tier": "B3",
+        "parse_failure": False,
+        "detail": {
+            "missing_facts": [
+                {"id": f"f{i}", "fact": fact, "severity": sev, "verdict": verdict}
+                for i, (fact, sev, verdict) in enumerate(facts, start=1)
+            ]
+        },
+    }
+
+
+def test_route_one_correct_detection_from_gate1b(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    gate = subset["root"] / "gate1b" / "gate1b-pipeline" / "_state"
+    gate.mkdir(parents=True)
+    rows = [
+        # p1: a critical absent fact naming the removed fact: detected and correct
+        _b3_row("syn|C1|omit|p1|err", ("Metformin 500 mg twice a day", "critical", "absent")),
+        # p2: a critical absent fact about something else: detected, not correct
+        _b3_row("syn|C1|omit|p2|err", ("Asthma since childhood", "critical", "absent")),
+        # p3: the removed fact only as partial, or as supporting: not detected
+        _b3_row(
+            "syn|C1|omit|p3|err",
+            ("Metformin 500 mg twice daily", "critical", "partial"),
+            ("Metformin 500 mg twice daily", "supporting", "absent"),
+        ),
+        _b3_row(CLEAN_KEY, ("Cough for a week", "critical", "absent")),  # a false alarm
+    ]
+    (gate / "gate1b-B3.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
+    )
+    run = _run(subset, _standard_reports())
+    out = _score(subset, run, capsys, "--gate1b", str(subset["root"] / "gate1b"))
+    section = out.split("== Route one (Gate 1(b) B3)")[1].split("==")[0]
+    assert "detection on omission notes: 2/3 (66.7%)" in section
+    assert "correct detection: 1/3 (33.3%)" in section
+    assert "false alarms on clean notes: 1/1 (100.0%)" in section
+    assert "correct-fact rate: 1/2 (50.0%)" in section
+    assert "syn|C1|omit|p1  0.87  yes" in section and "syn|C1|omit|p2  0.00  no" in section
+    assert "metformin" not in section.lower()
+    shown = _score(subset, run, capsys, "--gate1b", str(subset["root"] / "gate1b"), "--show-facts")
+    assert "route one fact: Metformin 500 mg twice a day" in shown
+
+
+def test_misses_weak_match(subset: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+    reports = _standard_reports()
+    # p1's removed fact is buried in a compound fact: comparable, but below the threshold
+    compound = (
+        "Medicines: metformin, ramipril, atorvastatin, aspirin, omeprazole, sertraline, bisoprolol"
+    )
+    reports["syn|C1|omit|p1|err"]["pass_a_trace"] = [_step("f1", compound, verdict="partial")]
+    reports["syn|C1|omit|p1|err"]["flags"] = []
+    for key in ("syn|C1|omit|p2|err", "syn|C1|omit|p3|err"):
+        reports[key]["pass_a_trace"] = [_step("f1", "Has asthma", verdict="present")]
+    out = _misses(subset, _run(subset, reports), capsys, "--show-facts")
+    line = next(x for x in out.splitlines() if "syn|C1|omit|p1" in x)
+    assert line.endswith("weak match (compound?)")
+    assert f"closest fact: {compound}" in out
+    assert "   weak match (compound?): 1" in out and "   not extracted: 2" in out

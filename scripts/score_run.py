@@ -29,6 +29,9 @@ are shown separately, for information):
   --show-facts);
 - per-note agreement with the released B3 r1 and power-gepa-high r1/r3 records, and with
   the Gate 1(b) runs, on the same notes;
+- route one's own detection, correct detection and false alarms on the same notes, from
+  the critical facts judged absent in the Gate 1(b) B3 records (the released records hold
+  no fact text), matched to the removed fact the same way as our flags;
 - calls, tokens, cost and wall-clock time per note, and each unchecked reason's count.
 
 Partial verdicts are information, not flags, whether the run listed them in `info` or (a
@@ -39,8 +42,10 @@ run from before the change) among its flags; `--partial-as-flags` counts them as
 (with the score), the audit's core or contextual call and severity, the check's verdict
 (with the note quote for present) and the second look, and classes it as detected, not
 extracted, dropped by the audit, contextual and so never checked, judged present, judged
-partial, rescued by the second look, or unchecked; counts per class and per trace. A run
-without a trace can only be classed from its flags.
+partial, rescued by the second look, or unchecked; counts per class and per trace. An
+unmatched removed fact whose closest comparable fact scores at least 0.25 is a "weak match
+(compound?)", as when it is buried in a longer compound fact. A run without a trace can
+only be classed from its flags.
 
 Only counts, IDs, labels and scores are printed (and, with --show-facts, the benchmark's
 and the flags' fact strings), never transcript or note text. Development data only.
@@ -344,17 +349,40 @@ def comparable(a: str, b: str) -> bool:
     return neg_a == neg_b
 
 
+def match_texts(pair: Mapping[str, Any], texts: Sequence[str]) -> tuple[float, int | None, str]:
+    """(score, index into `texts`, removed fact) of the best-scoring text comparable with
+    one of the pair's removed facts; (0.0, None, "") when none is comparable."""
+    best: tuple[float, int | None, str] = (0.0, None, "")
+    for fact in removed_facts(pair):
+        for i, text in enumerate(texts):
+            if comparable(fact, text) and (score := similarity(fact, text)) > best[0]:
+                best = (score, i, fact)
+    return best
+
+
 def best_match(note: Note, flags: Iterable[Flag]) -> tuple[float, Flag | None, str]:
     """The best-scoring flag whose fact is comparable with a removed fact."""
-    best: tuple[float, Flag | None, str] = (0.0, None, "")
-    for fact in removed_facts(note.pair):
-        for flag in flags:
-            if not comparable(fact, flag.fact or ""):
-                continue
-            score = similarity(fact, flag.fact or "")
-            if score > best[0]:
-                best = (score, flag, fact)
-    return best
+    listed = list(flags)
+    score, index, fact = match_texts(note.pair, [f.fact or "" for f in listed])
+    return score, None if index is None else listed[index], fact
+
+
+def route_one_facts(row: Mapping[str, Any] | None) -> list[str] | None:
+    """The facts a route-one (B3) record graded critical and judged absent, or None when the
+    record holds no fact text (the released records) or is missing or failed."""
+    if row is None or row.get("parse_failure") is True:
+        return None
+    detail = row.get("detail")
+    facts = detail.get("missing_facts") if isinstance(detail, Mapping) else None
+    if not isinstance(facts, list):
+        return None
+    return [
+        str(f.get("fact") or "")
+        for f in facts
+        if isinstance(f, Mapping)
+        and f.get("severity") == "critical"
+        and f.get("verdict") == "absent"
+    ]
 
 
 def score(args: argparse.Namespace) -> int:
@@ -442,6 +470,37 @@ def score(args: argparse.Namespace) -> int:
     say(f"   detection on omission notes: {_rate(r_det, len(omissions))}")
     say(f"   correct detection: {_rate(r_correct, len(omissions))}")
     say(f"   false alarms on clean notes: {_rate(r_alarms, len(cleans))}")
+    for name, rows in _route_one_stores(args).items():
+        say(f"== Route one ({name}) on the same notes: its own rule, a critical fact judged")
+        say("   absent, from the fact text in its records")
+        usable_rows = {n.key: route_one_facts(rows.get(n.key)) for n in [*omissions, *cleans]}
+        if not any(v is not None for v in usable_rows.values()):
+            say("   its records carry no fact text: correct detection cannot be computed")
+            continue
+        lost = [key for key, v in usable_rows.items() if v is None]
+        if lost:
+            say(f"   {len(lost)} notes without a usable record (counted as not flagged)")
+        hits: list[tuple[Note, float, str, str]] = []
+        for n in omissions:
+            facts = usable_rows[n.key] or []
+            if facts:
+                value, index, fact = match_texts(n.pair, facts)
+                hits.append((n, value, fact, facts[index] if index is not None else ""))
+        right = sum(1 for _, value, _, text in hits if text and value >= threshold)
+        alarms = sum(1 for n in cleans if usable_rows[n.key])
+        say(f"   detection on omission notes: {_rate(len(hits), len(omissions))}")
+        say(f"   correct detection: {_rate(right, len(omissions))}")
+        say(f"   false alarms on clean notes: {_rate(alarms, len(cleans))}")
+        rate = _rate(right, len(hits))
+        say(f"   correct-fact rate: {rate} of detected notes name the removed fact")
+        say("   per detected note (pair id, score, matched):")
+        for n, value, fact, text in hits:
+            hit = "yes" if text and value >= threshold else "no"
+            say(f"   {n.pair.get('pair_id')}  {value:.2f}  {hit}")
+            if args.show_facts and text:
+                say(f"      removed fact:   {fact}")
+                say(f"      route one fact: {text}")
+
     say("== k-and-c sweep: at least k Pass A omission flags at confidence c or higher and")
     say("   severity at or above the floor")
     say("   c          severity     k  detection          correct            false alarms")
@@ -556,6 +615,7 @@ MISS_CLASSES = (
     "not extracted",
     "dropped by the audit",
     "contextual, never checked",
+    "weak match (compound?)",
     "judged present",
     "judged partial",
     "rescued by the second look",
@@ -563,22 +623,19 @@ MISS_CLASSES = (
     "no matching flag",
 )
 """Where an omission note's removed fact ended up. "detected": a confirmed absent flag names
-it. "no matching flag" is the only class a run without a Pass A trace can give besides
-"detected" and "judged partial"."""
+it. "weak match (compound?)": no extracted fact reaches the match threshold, but one
+comparable fact scores at least WEAK_MATCH, as when the removed fact is buried in a longer
+compound fact. "no matching flag" is the only class a run without a Pass A trace can give
+besides "detected" and "judged partial"."""
+WEAK_MATCH = 0.25
 
 
 def trace_match(
-    pair: Mapping[str, Any], trace: Sequence[Mapping[str, Any]], threshold: float
+    pair: Mapping[str, Any], trace: Sequence[Mapping[str, Any]]
 ) -> tuple[float, Mapping[str, Any] | None]:
-    """The best-scoring trace fact comparable with a removed fact, if it reaches
-    `threshold`, and the best score among comparable facts either way."""
-    best: tuple[float, Mapping[str, Any] | None] = (0.0, None)
-    for fact in removed_facts(pair):
-        for step in trace:
-            text = str(step.get("fact") or "")
-            if comparable(fact, text) and (value := similarity(fact, text)) > best[0]:
-                best = (value, step)
-    return best if best[0] >= threshold else (best[0], None)
+    """The best-scoring trace fact comparable with a removed fact, with its score."""
+    value, index, _ = match_texts(pair, [str(step.get("fact") or "") for step in trace])
+    return value, None if index is None else trace[index]
 
 
 def classify_miss(step: Mapping[str, Any] | None) -> str:
@@ -632,9 +689,14 @@ def misses(args: argparse.Namespace) -> int:
         flag_score, flag, _ = best_match(n, [*n.pass_a, *n.info])
         named = flag if flag is not None and flag_score >= threshold else None
         trace = n.report.get("pass_a_trace")
+        closest = None
         if trace is not None:
-            value, step = trace_match(n.pair, trace, threshold)
+            value, step = trace_match(n.pair, trace)
+            if step is not None and value < threshold:
+                closest, step = step, None
             label = classify_miss(step)
+            if label == "not extracted" and closest is not None and value >= WEAK_MATCH:
+                label = "weak match (compound?)"
             if named is not None and named.verdict == "absent" and RANK[named.confidence] >= 2:
                 label = "detected"  # a confirmed rules candidate names it
         else:
@@ -666,6 +728,8 @@ def misses(args: argparse.Namespace) -> int:
                 say(f"      our fact:     {step.get('fact')}")
                 if step.get("note_quote"):
                     say(f'      note quote:   "{step.get("note_quote")}"')
+            elif closest is not None and label == "weak match (compound?)":
+                say(f"      closest fact: {closest.get('fact')}")
             elif named is not None:
                 say(f"      flag fact:    {named.fact}")
     say("== Classes")
@@ -691,6 +755,19 @@ def _critical(note: Note) -> bool:
 def _label(problem: str) -> str:
     """A batch problem's file or case name only (never the rest of the message)."""
     return problem.split(":", 1)[0] if ":" in problem else "(a problem without a case name)"
+
+
+def _route_one_stores(args: argparse.Namespace) -> dict[str, Rows]:
+    """Route one's (B3) records with their fact lists: Gate 1(b)'s run, and the released r1
+    (whose records hold no fact text, which the section says)."""
+    stores: dict[str, Rows] = {}
+    if args.gate1b is not None:
+        b3 = next(args.gate1b.glob("gate1b-pipeline/_state/*B3*.jsonl"), None)
+        if b3 is not None:
+            stores["Gate 1(b) B3"] = read_store(b3, lambda r: _arm(r) == "B3")
+    if args.released is not None:
+        stores["released B3 r1"] = released_rows(args.released)["b3 r1"]
+    return stores
 
 
 def _references(args: argparse.Namespace) -> dict[str, dict[str, bool | None]]:
