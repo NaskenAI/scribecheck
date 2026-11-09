@@ -601,7 +601,8 @@ def test_misses_weak_match(subset: dict[str, Path], capsys: pytest.CaptureFixtur
     reports = _standard_reports()
     # p1's removed fact is buried in a compound fact: comparable, but below the threshold
     compound = (
-        "Medicines: metformin, ramipril, atorvastatin, aspirin, omeprazole, sertraline, bisoprolol"
+        "Medicines: metformin 500, ramipril, atorvastatin, aspirin, omeprazole, sertraline, "
+        "bisoprolol"
     )
     reports["syn|C1|omit|p1|err"]["pass_a_trace"] = [_step("f1", compound, verdict="partial")]
     reports["syn|C1|omit|p1|err"]["flags"] = []
@@ -612,3 +613,26 @@ def test_misses_weak_match(subset: dict[str, Path], capsys: pytest.CaptureFixtur
     assert line.endswith("weak match (compound?)")
     assert f"closest fact: {compound}" in out
     assert "   weak match (compound?): 1" in out and "   not extracted: 2" in out
+
+
+@pytest.mark.parametrize(
+    ("removed", "candidate", "same"),
+    [
+        # a removed fact naming a drug matches only a candidate naming the same drug
+        ("Occasionally takes Xanax for sleep", "Takes melatonin for sleep", False),
+        ("Occasionally takes Xanax for sleep", "Takes alprazolam occasionally for sleep", True),
+        ("Continue Lipitor 80 mg daily", "Continue atorvastatin 80 mg daily", True),
+        ("Continue Lipitor 80 mg daily", "Continue rosuvastatin 80 mg daily", False),
+        ("Vitamin D, melatonin and Aleve for cramps", "Takes Aleve sometimes for cramps", True),
+        # a removed fact giving numbers needs one of them and no other
+        ("Seek review if temperature above 38", "Seek review if temperature is high", False),
+        ("Fever above 37.5-38 or spiking", "Seek review if temperature above 38", True),
+        ("Seek review if temperature above 38", "Seek review if temperature above 39", False),
+        # neither: unchanged
+        ("Antibiotics not needed", "Antibiotics judged not needed", True),
+    ],
+)
+def test_comparable_needs_the_same_drug_and_numbers(
+    removed: str, candidate: str, same: bool
+) -> None:
+    assert _load().comparable(removed, candidate) is same

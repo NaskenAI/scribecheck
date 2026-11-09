@@ -78,6 +78,7 @@ from compare_gate1b import (  # noqa: E402
 
 from scribecheck.decision import decide  # noqa: E402
 from scribecheck.flags import Flag  # noqa: E402
+from scribecheck.rules.lexicon import find_drugs  # noqa: E402
 
 RANK = {"possible": 1, "confirmed": 2, "certain": 3}
 LEVELS = ("possible", "confirmed")
@@ -335,18 +336,30 @@ _NUMBER = re.compile(r"\d+(?:[./]\d+)*")
 
 
 def comparable(a: str, b: str) -> bool:
-    """A match must share a distinctive word, give the same numbers, and agree on
-    negation: shared units, frequencies or filler alone never make two facts the same."""
+    """Whether candidate fact `b` can name removed fact `a`. They must share a distinctive
+    word or a drug, and agree on negation: shared units, frequencies or filler alone never
+    make two facts the same. When `a` names drugs (by the lexicon's generic names, so a
+    brand matches its generic), `b` must name one of them. When `a` gives numbers, `b` must
+    give at least one of them and none that `a` lacks."""
+    drugs_a = _drugs(a)
+    shared_drug = bool(drugs_a & _drugs(b))
+    if drugs_a and not shared_drug:
+        return False
     ta, tb = set(_tokens(a)), set(_tokens(b))
     distinctive = {w for w in ta & tb if w not in _GENERIC and not w[0].isdigit()}
-    if not distinctive:
+    if not distinctive and not shared_drug:
         return False
     na, nb = set(_NUMBER.findall(a)), set(_NUMBER.findall(b))
-    if na and nb and na != nb:
+    if na and (not nb or not nb <= na):
         return False
     neg_a = bool(set(a.casefold().split()) & _NEGATION)
     neg_b = bool(set(b.casefold().split()) & _NEGATION)
     return neg_a == neg_b
+
+
+def _drugs(text: str) -> set[str]:
+    """The generic names of the drugs `text` names."""
+    return {generic for match in find_drugs(text) for generic in match.generic}
 
 
 def match_texts(pair: Mapping[str, Any], texts: Sequence[str]) -> tuple[float, int | None, str]:
