@@ -1,0 +1,32 @@
+# M3 session 4: one open-weight model through OpenRouter, Pass A only, strict standard.
+# Key: OPENROUTER_API_KEY in the environment (never in this file).
+# Fill in the three marked lines from `python scripts/openrouter_candidates.py` before running.
+mode = "full"
+standard = "strict"
+passes = ["a"]
+
+[model]
+provider = "openai"
+base_url = "https://openrouter.ai/api/v1"
+name = "<model id from the candidates script>"            # FILL IN
+max_tokens = 16000
+temperature = 0.0
+seed = 0
+json_mode = "json_schema"
+timeout_s = 300
+# Pin one provider, with no fallback, and require it to support every parameter sent
+# (structured output included). Record the quantization the script listed for it.
+extra_body = { provider = { order = ["<Provider>"], allow_fallbacks = false, require_parameters = true } }  # FILL IN
+
+# FILL IN: uncomment these three lines and set the pinned provider's prices per million
+# tokens, as the candidates script printed them. Until then the run refuses to start,
+# because a cost cap cannot be enforced without prices.
+# [model.prices]
+# input = 0.0
+# output = 0.0
+
+[budget]
+cost_cap_usd = 3.0
+
+[pass_a]
+pipeline = "scribecheck"

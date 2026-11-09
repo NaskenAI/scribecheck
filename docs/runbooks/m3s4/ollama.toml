@@ -1,0 +1,13 @@
+# The local path on a laptop (an 8 GB Apple M3): a 3-4B model through Ollama, full mode.
+# For trying the tool, not for accuracy. No key needed for a local endpoint.
+mode = "full"
+
+[model]
+provider = "openai"
+base_url = "http://localhost:11434/v1"
+name = "qwen3:4b"          # or the 3-4B model you pulled
+max_tokens = 4096
+temperature = 0.0
+seed = 0
+json_mode = "json_schema"
+timeout_s = 900            # a laptop model is slow; one call may take minutes
