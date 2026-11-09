@@ -2,7 +2,7 @@
 
 **Decision: warn** (mode rules, standard clinical)
 
-> Rules mode: findings are warnings at possible confidence and never fail a build. It checks omissions of medicines, doses, frequencies, allergies and sides, and changed doses, frequencies, routes, sides and symptom negation; every other check needs the model.
+> Rules mode: findings are warnings at possible confidence and never fail a build. It checks omissions of medicines, doses, frequencies, allergies and sides, changed doses, frequencies, routes, sides and symptom negation, and examination findings in telephone or video consultations; every other check needs the model.
 
 | Omissions | Changed facts | Unsupported | Not verifiable | Unchecked |
 | --- | --- | --- | --- | --- |

@@ -29,11 +29,21 @@ from typing import Any, cast
 
 from scribecheck.config import Config
 from scribecheck.decision import apply_standard, decide
+from scribecheck.dedupe import deduplicate
 from scribecheck.errors import InputError
 from scribecheck.flags import Flag, UncheckedItem, verify_evidence
 from scribecheck.note import Note, parse_note, parse_note_file
-from scribecheck.report import Case, ModelInfo, PassAInfo, Report, UsageInfo, count
+from scribecheck.report import (
+    Case,
+    ModelInfo,
+    NotVerifiable,
+    PassAInfo,
+    Report,
+    UsageInfo,
+    count,
+)
 from scribecheck.rules import changed
+from scribecheck.rules.examination import examination_flags
 from scribecheck.rules.omission import structured_omissions
 from scribecheck.transcript import Transcript, parse_transcript, parse_transcript_file
 
@@ -89,21 +99,52 @@ def check_parsed(transcript: Transcript, note: Note, config: Config | None = Non
     config = config or Config()
     if config.mode == "full":
         return _check_full([(transcript, note)], config, live=True)[0]
-    found, unchecked = _rules(transcript, note, config)
-    return _report(transcript, note, config, found, unchecked)
+    rules = _rules(transcript, note, config)
+    partial = set(config.passes) != {"a", "b", "c"}
+    return _report(
+        transcript,
+        note,
+        config,
+        rules.flags(config),
+        rules.unchecked(config),
+        passes={p: ("rules" if p in config.passes else "off") for p in "abc"} if partial else None,
+    )
 
 
-def _rules(
-    transcript: Transcript, note: Note, config: Config
-) -> tuple[list[Flag], list[UncheckedItem]]:
-    """The rules layer's warnings (omission candidates, changed values) and unchecked items."""
+@dataclass
+class _Rules:
+    """The rules layer's findings, by pass."""
+
+    a_flags: list[Flag]
+    a_unchecked: list[UncheckedItem]
+    b_flags: list[Flag]
+    b_unchecked: list[UncheckedItem]
+    c_flags: list[Flag]
+
+    def flags(self, config: Config) -> list[Flag]:
+        return [
+            *(self.a_flags if "a" in config.passes else []),
+            *(self.b_flags if "b" in config.passes else []),
+            *(self.c_flags if "c" in config.passes else []),
+        ]
+
+    def unchecked(self, config: Config) -> list[UncheckedItem]:
+        return [
+            *(self.a_unchecked if "a" in config.passes else []),
+            *(self.b_unchecked if "b" in config.passes else []),
+        ]
+
+
+def _rules(transcript: Transcript, note: Note, config: Config) -> _Rules:
+    """The rules layer's warnings (omission candidates, changed values, the examination
+    rule) and unchecked items, by pass."""
     brands = config.brands or None
     omissions = structured_omissions(transcript, note, brands=brands)
     changes = changed.check_changed_facts(
         transcript, note, brands=brands, symptom_extra=config.symptoms or None
     )
-    found = [*omissions.candidates, *changes.flags]
-    unchecked: list[UncheckedItem] = list(omissions.unchecked)
+    b_flags = list(changes.flags)
+    b_unchecked: list[UncheckedItem] = []
     pass_a_medicines = {
         f.transcript_evidence
         for f in omissions.candidates
@@ -120,10 +161,16 @@ def _rules(
         ):
             continue  # a drug in the transcript only is Pass A's, and reported there already
         if item.reasons == (changed.CERTAIN_DISABLED,):
-            found.append(_possible_change(item))
+            b_flags.append(_possible_change(item))
         else:
-            unchecked.append(item)
-    return found, unchecked
+            b_unchecked.append(item)
+    return _Rules(
+        list(omissions.candidates),
+        list(omissions.unchecked),
+        b_flags,
+        b_unchecked,
+        list(examination_flags(transcript, note)),
+    )
 
 
 def _report(
@@ -135,9 +182,16 @@ def _report(
     **extra: Any,
 ) -> Report:
     flags = _numbered(apply_standard(found, config.standard))
+    flagged = [f.note_evidence for f in flags if f.note_evidence is not None]
+    unchecked = [  # an unchecked item about a span a flag already reports is the same finding
+        u
+        for u in unchecked
+        if not any(q.start < n.end and n.start < q.end for q in u.note_evidence for n in flagged)
+    ]
     entries: list[Flag | UncheckedItem] = [*flags, *unchecked]
     for entry in entries:
         verify_evidence(entry, transcript, note)
+    not_verifiable = extra.get("not_verifiable", ())
     return Report(
         consultation_id=transcript.consultation_id,
         mode=config.mode,
@@ -148,7 +202,7 @@ def _report(
             fail_on=config.fail_on,
             fail_confidence=config.fail_confidence,
         ),
-        counts=count(flags, unchecked),
+        counts=count(flags, unchecked, not_verifiable=len(not_verifiable)),
         flags=flags,
         unchecked=tuple(unchecked),
         **extra,
@@ -158,36 +212,55 @@ def _report(
 def _check_full(
     items: Sequence[tuple[Transcript, Note]], config: Config, *, live: bool
 ) -> list[Report]:
-    """Rules plus Pass A with the model, for several consultations at once."""
+    """The rules plus the model passes, for several consultations at once."""
     # Imported here so rules mode never loads the model client (or httpx).
     from scribecheck.model import create_budget, create_client
+    from scribecheck.model_passes import pass_modes, run_passes
     from scribecheck.pass_a import Case as PassCase
-    from scribecheck.pass_a import prompt_set, run_pass_a
+    from scribecheck.pass_a import prompt_set
 
+    modes = pass_modes(config)
     client = create_client(config)
     budget = create_budget(config)
     try:
         rules = [_rules(t, n, config) for t, n in items]
-        use_candidates = config.pipeline == "scribecheck"
         cases = [
-            PassCase(f"c{i}", t, n, tuple(found) if use_candidates else ())
-            for i, ((t, n), (found, _)) in enumerate(zip(items, rules, strict=True))
+            PassCase(
+                f"c{i}",
+                t,
+                n,
+                candidates=tuple(r.a_flags) if modes["a"] == "scribecheck" else (),
+                warnings=tuple(r.b_flags) if modes["b"] == "model" else (),
+                pass_b_items=tuple(r.b_unchecked) if modes["b"] == "model" else (),
+            )
+            for i, ((t, n), r) in enumerate(zip(items, rules, strict=True))
         ]
-        outcomes = run_pass_a(cases, config, client, budget, live=live)
+        outcomes = run_passes(cases, config, client, budget, live=live)
     finally:
         client.close()
     reports = []
-    for case, (found, unchecked) in zip(cases, rules, strict=True):
+    for case, r in zip(cases, rules, strict=True):
         outcome = outcomes[case.id]
-        kept = [f for i, f in enumerate(found) if i not in outcome.resolved_candidates]
+        kept = _Rules(
+            [f for i, f in enumerate(r.a_flags) if i not in outcome.resolved_candidates],
+            r.a_unchecked,
+            [f for i, f in enumerate(r.b_flags) if i not in outcome.resolved_warnings],
+            [u for i, u in enumerate(r.b_unchecked) if i not in outcome.resolved_items],
+            r.c_flags,
+        )
         tally = outcome.tally
         reports.append(
             _report(
                 case.transcript,
                 case.note,
                 config,
-                [*kept, *outcome.flags],
-                [*unchecked, *outcome.unchecked],
+                deduplicate([*kept.flags(config), *outcome.flags]),
+                [*kept.unchecked(config), *outcome.unchecked],
+                not_verifiable=tuple(
+                    NotVerifiable(**evidence.model_dump(), kind=kind)
+                    for evidence, kind in outcome.not_verifiable
+                ),
+                passes=modes,
                 model=ModelInfo(
                     name=config.model or client.model,
                     version=", ".join(sorted(tally.model_ids)) or None,

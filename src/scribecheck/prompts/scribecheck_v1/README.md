@@ -13,3 +13,7 @@ The prompts for scribecheck's own Pass A pipeline (docs/spec.md, "Pass A: omissi
 
 Changing any file here changes results: bump the folder version (`scribecheck_v2`) rather than
 editing it after a measured run.
+
+Pass B (changed facts) uses `changes.txt` and `changes_second.txt`; Pass C (unsupported
+statements) uses `split.txt`, `statements.txt` and `statements_second.txt`. Their severity
+wording follows the same rubric.

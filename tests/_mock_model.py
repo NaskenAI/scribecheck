@@ -21,6 +21,11 @@ MARKERS = (
     ("TASK: SECOND LOOK", "second_look"),
     ("TASK: CONFIRM RULE-BASED FINDINGS", "candidate"),
     ("TASK: GIVE THE EXACT QUOTE", "quote_recheck"),
+    ("TASK: FIND CHANGED FACTS", "changes"),
+    ("TASK: SECOND CHECK OF CHANGED FACTS", "changes_second"),
+    ("TASK: SPLIT THE NOTE INTO STATEMENTS", "split"),
+    ("TASK: CHECK NOTE STATEMENTS AGAINST THE TRANSCRIPT", "statements"),
+    ("TASK: SECOND CHECK OF UNSUPPORTED STATEMENTS", "statements_second"),
     ("You are a UK GP and a meticulous clinical auditor", "r1_extract"),
     ("CANDIDATE FACTS:", "r1_audit"),
     ("CLINICAL NOTE UNDER REVIEW:", "r1_check"),
@@ -54,7 +59,15 @@ def stage_of(body: dict[str, Any]) -> str:
 def listed(body: dict[str, Any]) -> list[tuple[str, str]]:
     """The (id, text) lines of the last block that lists facts."""
     text = text_of(body)
-    for heading in ("FACTS:\n", "FINDINGS:\n", "ITEMS:\n", "CLAIMED-MISSING FACTS:\n"):
+    for heading in (
+        "FACTS:\n",
+        "FINDINGS:\n",
+        "ITEMS:\n",
+        "CLAIMED-MISSING FACTS:\n",
+        "ITEMS TO JUDGE:\n",
+        "CLAIMS:\n",
+        "STATEMENTS:\n",
+    ):
         if heading in text:
             text = text.rsplit(heading, 1)[1]
             break

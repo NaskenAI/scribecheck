@@ -45,8 +45,9 @@ _ALWAYS = frozenset({"transcript_evidence", "note_evidence"})
 
 RULES_MODE_NOTE = (
     "Rules mode: findings are warnings at possible confidence and never fail a build. "
-    "It checks omissions of medicines, doses, frequencies, allergies and sides, and changed "
-    "doses, frequencies, routes, sides and symptom negation; every other check needs the model."
+    "It checks omissions of medicines, doses, frequencies, allergies and sides, changed "
+    "doses, frequencies, routes, sides and symptom negation, and examination findings in "
+    "telephone or video consultations; every other check needs the model."
 )
 
 
@@ -108,6 +109,12 @@ class PassAInfo(BaseModel):
     """Flags kept although their transcript quote could not be found (route one only)."""
 
 
+class NotVerifiable(NoteEvidence):
+    """A note statement the transcript could not be expected to support (Pass C)."""
+
+    kind: str
+
+
 class Report(BaseModel):
     """One consultation's report."""
 
@@ -126,6 +133,10 @@ class Report(BaseModel):
     """Full mode only."""
     pass_a: PassAInfo | None = None
     """Full mode only."""
+    passes: dict[str, str] | None = None
+    """Full mode only: what each pass ran as (a pipeline or "model", "rules", or "off")."""
+    not_verifiable: tuple[NotVerifiable, ...] = ()
+    """Full mode only: statements reported as not verifiable."""
 
     def to_dict(self) -> dict[str, Any]:
         """The report as JSON-ready data, keys in the spec's order."""
@@ -144,6 +155,10 @@ class Report(BaseModel):
             data["usage"] = self.usage.model_dump()
         if self.pass_a is not None:
             data["pass_a"] = self.pass_a.model_dump()
+        if self.passes is not None:
+            data["passes"] = dict(self.passes)
+        if self.not_verifiable:
+            data["not_verifiable"] = [n.model_dump() for n in self.not_verifiable]
         return data
 
     def to_json(self) -> str:
@@ -160,13 +175,16 @@ class Case:
     report: Report
 
 
-def count(flags: Iterable[Flag], unchecked: Sequence[UncheckedItem]) -> Counts:
-    """Counts for a report's flags and unchecked items."""
+def count(
+    flags: Iterable[Flag], unchecked: Sequence[UncheckedItem], *, not_verifiable: int = 0
+) -> Counts:
+    """Counts for a report's flags, unchecked items and not-verifiable statements."""
     by_type = Counter(f.type for f in flags)
     return Counts(
         omission=by_type["omission"],
         changed_fact=by_type["changed_fact"],
         unsupported=by_type["unsupported"],
+        not_verifiable=not_verifiable,
         unchecked=len(unchecked),
     )
 
@@ -224,6 +242,9 @@ def render_markdown(report: Report, *, level: int = 1, case: Case | None = None)
     ]
     if report.mode == "rules":
         lines += [f"> {RULES_MODE_NOTE}", ""]
+        if report.passes is not None:
+            ran = ", ".join(f"Pass {k.upper()} {v}" for k, v in sorted(report.passes.items()))
+            lines += [f"> Passes: {ran}. A pass that is off reports nothing.", ""]
     else:
         lines += [f"> {_full_mode_note(report)}", ""]
     c = report.counts
@@ -262,9 +283,12 @@ def render_markdown(report: Report, *, level: int = 1, case: Case | None = None)
 
 
 def _full_mode_note(report: Report) -> str:
-    parts = ["Full mode: rules plus Pass A with the model"]
+    parts = ["Full mode: rules plus the model"]
+    if report.passes is not None:
+        ran = ", ".join(f"Pass {k.upper()} {v}" for k, v in sorted(report.passes.items()))
+        parts[0] += f" ({ran})"
     if report.pass_a is not None:
-        parts[0] += f" (pipeline {report.pass_a.pipeline}, prompts {report.pass_a.prompts})"
+        parts.append(f"prompts {report.pass_a.prompts}")
     if report.model is not None:
         parts.append(f"model {report.model.version or report.model.name}")
     if report.usage is not None:
@@ -273,7 +297,8 @@ def _full_mode_note(report: Report) -> str:
         parts.append(f"{u.calls} calls ({u.shared_calls} shared), {cost}")
     if report.pass_a is not None and report.pass_a.unverified_evidence:
         parts.append(f"{report.pass_a.unverified_evidence} flags without a verified quote")
-    parts.append("the Pass B model path and Pass C are not built yet")
+    if report.counts.not_verifiable:
+        parts.append(f"{report.counts.not_verifiable} statements not verifiable")
     return "; ".join(parts) + "."
 
 

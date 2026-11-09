@@ -48,6 +48,7 @@ UncheckedReason = Literal[
     "model_refusal",
     "model_error",
     "quote_unverified",
+    "second_check_rejected",
 ]
 """Why an item got no certain flag; see rules/changed.py for each."""
 

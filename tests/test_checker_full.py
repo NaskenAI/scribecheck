@@ -83,8 +83,10 @@ def test_full_mode_markdown_banner(folder: MockClaude) -> None:
         Config(mode="full", provider="anthropic", model="claude-sonnet-5-5"),
     )
     text = render_markdown(report)
-    assert "Full mode: rules plus Pass A with the model (pipeline scribecheck" in text
-    assert "not built yet" in text
+    assert (
+        "Full mode: rules plus the model (Pass A scribecheck, Pass B model, Pass C model)" in text
+    )
+    assert "not built yet" not in text
 
 
 def test_route_one_full_mode_reports_unverified_evidence_count(

@@ -13,7 +13,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-from scribecheck.flags import Flag, Severity, TranscriptEvidence, UncheckedItem
+from scribecheck.flags import Flag, NoteEvidence, Severity, TranscriptEvidence, UncheckedItem
 from scribecheck.model.base import Completion, ModelClient, ModelFailure, ModelRequest, Usage
 from scribecheck.model.budget import Budget
 from scribecheck.model.structured import BatchClient, complete, complete_batch
@@ -31,7 +31,11 @@ class Case:
     transcript: Transcript
     note: Note
     candidates: tuple[Flag, ...] = ()
-    """Rules omission candidates and changed-value warnings, to confirm or reject."""
+    """Rules omission candidates, for Pass A's second check."""
+    warnings: tuple[Flag, ...] = ()
+    """Rules changed-value warnings, for Pass B's model check."""
+    pass_b_items: tuple[UncheckedItem, ...] = ()
+    """Pass B items the rules could not settle, for Pass B's model check."""
 
 
 @dataclass
@@ -68,6 +72,12 @@ class Outcome:
     facts: list[Fact] = field(default_factory=list)
     resolved_candidates: set[int] = field(default_factory=set)
     """Indexes into `Case.candidates` the model decided (confirmed or rejected)."""
+    resolved_warnings: set[int] = field(default_factory=set)
+    """Indexes into `Case.warnings` Pass B's model decided."""
+    resolved_items: set[int] = field(default_factory=set)
+    """Indexes into `Case.pass_b_items` Pass B's model decided."""
+    not_verifiable: list[tuple[NoteEvidence, str]] = field(default_factory=list)
+    """Pass C statements reported as not verifiable, with their kind."""
     tally: Tally = field(default_factory=Tally)
 
 

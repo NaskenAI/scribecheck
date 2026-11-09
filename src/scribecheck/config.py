@@ -20,6 +20,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
     StrictFloat,
     StrictInt,
     ValidationError,
@@ -42,7 +43,28 @@ JsonMode = Literal["json_schema", "json_object", "none"]
 Pipeline = Literal["scribecheck", "route_one"]
 ROUTE_ONE_STAGES = frozenset({"extract", "audit", "check", "refute"})
 SCRIBECHECK_STAGES = frozenset(
-    {"extract", "audit", "check", "second_look", "candidate", "quote_recheck"}
+    {
+        "extract",
+        "audit",
+        "check",
+        "second_look",
+        "candidate",
+        "quote_recheck",
+        "changes",
+        "changes_second",
+        "split",
+        "statements",
+        "statements_second",
+    }
+)
+PassName = Literal["a", "b", "c"]
+ExemptKind = Literal["vital", "result", "record_history", "demographic", "examination"]
+DEFAULT_EXEMPT: tuple[ExemptKind, ...] = (
+    "vital",
+    "result",
+    "record_history",
+    "demographic",
+    "examination",
 )
 
 CONFIG_FILENAME = "scribecheck.toml"
@@ -130,6 +152,20 @@ class Config(BaseModel):
     chunk_overlap_turns: int = Field(default=4, ge=0)
     stages: dict[str, StageSettings] = Field(default_factory=dict)
     """Per-stage settings, keyed "route_one.<stage>" or "scribecheck.<stage>"."""
+    passes: tuple[PassName, ...] = ("a", "b", "c")
+    """The passes to run and report: a (omissions), b (changed facts), c (unsupported)."""
+    exempt: tuple[ExemptKind, ...] = DEFAULT_EXEMPT
+    """Pass C statement kinds reported as not verifiable instead of checked."""
+    show_rejected_as_possible: bool = False
+    """Report Pass B and C verdicts the second check rejected as possible flags, instead of
+    as unchecked items ("second_check_rejected")."""
+
+    @field_validator("passes")
+    @classmethod
+    def _some_pass(cls, value: tuple[PassName, ...]) -> tuple[PassName, ...]:
+        if not value:
+            raise ValueError("choose at least one pass: a, b or c")
+        return tuple(sorted(set(value)))
 
     @field_validator("speakers")
     @classmethod
@@ -239,6 +275,18 @@ def _known_stages(
     return value
 
 
+class _PassC(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    exempt: list[ExemptKind] = list(DEFAULT_EXEMPT)
+
+
+class _Report(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    show_rejected_as_possible: StrictBool = False
+
+
 class _Budget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -250,6 +298,7 @@ class _File(BaseModel):
 
     mode: Mode = "rules"
     standard: Standard = "clinical"
+    passes: list[PassName] = ["a", "b", "c"]
     decision: _Decision = _Decision()
     speakers: dict[str, str] = {}
     headings: dict[str, str] = {}
@@ -258,6 +307,8 @@ class _File(BaseModel):
     model: _Model = _Model()
     budget: _Budget = _Budget()
     pass_a: _PassA = _PassA()
+    pass_c: _PassC = _PassC()
+    report: _Report = _Report()
 
 
 _KEY_NAMES = frozenset({"api_key", "key", "apikey", "token", "secret", "password"})
@@ -319,6 +370,9 @@ def config_from_mapping(data: Mapping[str, object], *, source: str = "config") -
             check_facts_per_call=parsed.pass_a.check_facts_per_call,
             chunk_chars=parsed.pass_a.chunk_chars,
             chunk_overlap_turns=parsed.pass_a.chunk_overlap_turns,
+            passes=tuple(parsed.passes),
+            exempt=tuple(parsed.pass_c.exempt),
+            show_rejected_as_possible=parsed.report.show_rejected_as_possible,
             stages={
                 **{f"route_one.{k}": v for k, v in parsed.pass_a.route_one.items()},
                 **{f"scribecheck.{k}": v for k, v in parsed.pass_a.scribecheck.items()},
@@ -345,6 +399,10 @@ STARTER_CONFIG = """\
 
 # "rules" needs no model and makes no network calls. "full" arrives in a later release.
 mode = "rules"
+
+# The passes to run and report: a (omissions), b (changed facts), c (unsupported
+# statements). Benchmark (OmissionBench) runs use ["a"].
+# passes = ["a", "b", "c"]
 
 # "clinical" (default): critical and supporting facts must appear in the note.
 # "strict": every fact must appear, including peripheral ones; for benchmarking only.
@@ -417,6 +475,18 @@ fail_confidence = ["certain", "confirmed"]
 # max_tokens = 24000
 
 # [pass_a.scribecheck.check]             # stages: extract, audit, check, second_look,
-# effort = "low"                         # candidate, quote_recheck
+# effort = "low"                         # candidate, quote_recheck, changes,
+#                                        # changes_second, split, statements,
+#                                        # statements_second
+
+# [pass_c]
+# Note statements reported as not verifiable instead of checked against the transcript.
+# record_history applies only where the note marks a statement as from the record.
+# exempt = ["vital", "result", "record_history", "demographic", "examination"]
+
+# [report]
+# Show Pass B and C verdicts their second check rejected as possible flags, instead of as
+# unchecked items.
+# show_rejected_as_possible = false
 """
 """Written by `scribecheck init`."""

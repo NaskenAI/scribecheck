@@ -45,6 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
     settings.add_argument("--mode", choices=("rules", "full"))
     settings.add_argument("--standard", choices=("clinical", "strict"))
     settings.add_argument(
+        "--passes",
+        type=_passes,
+        help="the passes to run and report, e.g. 'a' or 'a,b,c' (default: all); "
+        "a = omissions, b = changed facts, c = unsupported statements",
+    )
+    settings.add_argument(
         "--fail-on",
         choices=tuple(_FAIL_ON),
         help="full mode only: fail on flags of this severity or higher",
@@ -139,6 +145,8 @@ def _config(args: argparse.Namespace) -> Config:
         updates["standard"] = args.standard
     if args.fail_on is not None:
         updates["fail_on"] = _FAIL_ON[args.fail_on]
+    if args.passes is not None:
+        updates["passes"] = args.passes
     config = config.model_copy(update=updates)
     if config.mode == "rules" and config.fail_on:
         print(
@@ -146,6 +154,13 @@ def _config(args: argparse.Namespace) -> Config:
             file=sys.stderr,
         )
     return config
+
+
+def _passes(value: str) -> tuple[str, ...]:
+    chosen = tuple(sorted({p.strip().lower() for p in value.split(",") if p.strip()}))
+    if not chosen or not set(chosen) <= {"a", "b", "c"}:
+        raise argparse.ArgumentTypeError("choose one or more of a, b and c, e.g. 'a,b'")
+    return chosen
 
 
 def _init(path: Path, *, force: bool) -> int:

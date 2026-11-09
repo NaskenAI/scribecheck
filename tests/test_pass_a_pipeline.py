@@ -100,7 +100,18 @@ def scripts(**overrides: Any) -> Scripts:
     def requote(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
         return {"quotes": [{"id": i, "quote": ""} for i, _ in listed]}
 
+    def no_changes(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {"findings": [{"id": i, "verdict": "consistent"} for i, _ in listed]}
+
+    def no_statements(_: Any, __: dict[str, Any]) -> Any:
+        return {"statements": []}
+
     base: Scripts = {
+        "changes": no_changes,
+        "changes_second": lambda listed, _: {"claims": []},
+        "split": no_statements,
+        "statements": no_statements,
+        "statements_second": no_statements,
         "extract": extract,
         "audit": audit,
         "check": check,
@@ -128,7 +139,8 @@ def run(
     )
     settings = Config(mode="full", provider="anthropic", model="claude-sonnet-5-5", **config)
     t, n = parse_transcript(transcript, consultation_id="p1"), parse_note(note)
-    found, _ = _rules(t, n, settings)
+    rules = _rules(t, n, settings)
+    found = [*rules.a_flags, *rules.b_flags]
     case = Case("c0", t, n, tuple(found) if candidates else ())
     return run_pass_a([case], settings, client, Budget(), live=True)["c0"], case
 
