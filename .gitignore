@@ -27,3 +27,6 @@ data/omissionbench/
 # Run outputs
 reports/
 runs/
+
+# Spot-check sample of correct-fact matches: holds benchmark fact text
+docs/review/correct_fact_sample.csv

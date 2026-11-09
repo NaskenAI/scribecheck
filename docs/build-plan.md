@@ -154,7 +154,9 @@ The goal is to tune on development data only and freeze the settings before the 
 - [ ] Measure the rules layer's effect by running with and without it
 - [ ] Score Pass B and Pass C on the 117 development pairs that add or change a fact
 - Scoring note: OmissionBench detection and false alarms use Pass A runs only (`--passes a`); Pass B and Pass C are evaluated separately, on the 117 development pairs that add or change a fact
-- [ ] Measure severity agreement with OmissionBench's per-fact grades (Cohen's kappa) for each model
+- [ ] Measure severity agreement with OmissionBench's per-fact grades (Cohen's kappa) for each model (first measurement, Claude Sonnet 5.5 with the scribecheck_v4 prompts: [docs/evidence/severity_agreement_v4.md](evidence/severity_agreement_v4.md))
+- For the preprint: on the full development run (scribecheck_v4, Claude Sonnet 5.5), 4 of the 6 clean-note false alarms are facts the benchmark's clean note genuinely leaves out (a review plan if a drug fails, a safety-net for recurrence, a usual medicine, a pertinent negative); one is a paraphrase the second look failed to rescue and one is appointment logistics. The benchmark's clean notes are not complete, so clean-note false-alarm counts overstate the error rate. Report them as measured, with this caveat
+- [ ] Robustness analysis for the preprint: a blinded clinician adjudication of every clean-note flag, from scribecheck and from the reference methods where their records name the fact, each judged a real omission, an acceptable omission or wrong. The clinician sees the transcript, the clean note and the flagged fact, never which method raised it. Report the false-alarm rate counting only "wrong" beside the benchmark's own rate
 - [ ] Stability: run each model 3 times on a fixed 100-note development subset
 - [ ] Publish minimum model guidance, including the minimum context length
 - [ ] Freeze the settings and tag the commit before any held-out run

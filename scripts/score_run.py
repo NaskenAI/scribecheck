@@ -61,8 +61,10 @@ and the flags' fact strings), never transcript or note text. Development data on
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
+import random
 import re
 import sys
 from collections import Counter
@@ -74,6 +76,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fact_judge  # noqa: E402
 from compare_gate1b import (  # noqa: E402
     Rows,
     _arm,
@@ -82,9 +85,13 @@ from compare_gate1b import (  # noqa: E402
     route_one_flag,
     route_two_flag,
 )
+from fact_judge import Judgement  # noqa: E402
 
+from scribecheck.config import load_config  # noqa: E402
 from scribecheck.decision import decide  # noqa: E402
+from scribecheck.errors import InputError  # noqa: E402
 from scribecheck.flags import Flag  # noqa: E402
+from scribecheck.model import create_budget, create_client  # noqa: E402
 from scribecheck.rules.lexicon import find_drugs  # noqa: E402
 
 RANK = {"possible": 1, "confirmed": 2, "certain": 3}
@@ -93,6 +100,8 @@ SEVERITY_RANK = {"peripheral": 1, "supporting": 2, "critical": 3}
 FLOORS = (("all", "peripheral"), ("supporting+", "supporting"), ("critical", "critical"))
 """Severity floors for the sweep: all severities, supporting or higher, critical only."""
 KS = (1, 2, 3, 4, 5)
+SAMPLE_SEED = 20261109
+"""The spot-check sample's seed (`sample`), fixed so the sample can be drawn again."""
 _WORD = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
 _STOP = frozenset(
     "a an the of to and or in on at for with by is are was were be been has have had "
@@ -429,6 +438,60 @@ def route_one_facts(row: Mapping[str, Any] | None) -> list[str] | None:
     ]
 
 
+def load_judged(path: Path | None, notes: Iterable[Note]) -> dict[str, Judgement | None] | None:
+    """Each omission note's valid cached judgement (None for one the cache lacks, or whose
+    entry is stale or invalid), by note key; None when no cache is given."""
+    if path is None:
+        return None
+    cache = fact_judge.load_cache(path)
+    out: dict[str, Judgement | None] = {}
+    for n in notes:
+        if n.kind == "omission" and n.report is not None:
+            it = fact_judge.item(str(n.pair.get("pair_id")), removed_facts(n.pair), n.report)
+            out[n.key] = fact_judge.lookup(cache, it)
+    return out
+
+
+def model_names(judgement: Judgement | None, flags: Iterable[Flag]) -> bool:
+    """Whether the judge named one of `flags` as stating the removed fact."""
+    return judgement is not None and bool(set(judgement.flags.ids) & {f.id for f in flags})
+
+
+def confirmed_absent(note: Note) -> list[Flag]:
+    return [f for f in note.pass_a if f.verdict == "absent" and RANK[f.confidence] >= 2]
+
+
+def grade(note: Note) -> tuple[int, int, int, int, int]:
+    """A note's graded score, compared in order: its confirmed absent critical flags, then
+    supporting ones, then all confirmed absent flags, then critical partial verdicts, then
+    all partial verdicts. Built from the report alone; (0, 0, 0, 0, 0) is never flagged."""
+    absent = confirmed_absent(note)
+    partials = [*note.info, *(f for f in note.pass_a if f.verdict == "partial")]
+    return (
+        sum(f.severity == "critical" for f in absent),
+        sum(f.severity == "supporting" for f in absent),
+        len(absent),
+        sum(f.severity == "critical" for f in partials),
+        len(partials),
+    )
+
+
+def matched_grade(
+    omissions: Sequence[Note], cleans: Sequence[Note], alarms: int, total: int
+) -> tuple[int, int, int, int, int] | None:
+    """The most lenient grade threshold whose false-alarm rate on `cleans` is at most
+    alarms/total, or None when even the strictest passes it. The thresholds are the grades
+    the notes have; a lower threshold never has fewer false alarms."""
+    if total == 0:
+        return None  # no reference rate to match
+    grades = sorted({grade(n) for n in [*omissions, *cleans]} - {(0, 0, 0, 0, 0)}, reverse=True)
+    best = None
+    for g in grades:
+        if sum(grade(n) >= g for n in cleans) * total <= alarms * len(cleans):
+            best = g
+    return best
+
+
 def score(args: argparse.Namespace) -> int:
     pairs = _pairs(args.pairs)
     keys = sorted(json.loads(args.spec.read_text(encoding="utf-8"))["note_keys"])
@@ -576,6 +639,42 @@ def score(args: argparse.Namespace) -> int:
             say(f"      removed fact: {fact}")
             say(f"      flag fact:    {flag.fact}")
 
+    judgements = load_judged(args.judgements, omissions)
+    if judgements is not None:
+        say("== Model-assisted correct detection: a judge (fact_judge.py) says whether a counted")
+        say("   flag states the removed fact; fact texts only, never the transcript or note. The")
+        say("   word matcher is beside it as a cross-check.")
+        lacking = [n for n in omissions if judgements.get(n.key) is None]
+        say(f"   omission notes without a valid judgement: {len(lacking)} (counted as not named)")
+        for n in lacking:
+            say(f"      no judgement: {n.pair.get('pair_id')}")
+        for label, pick in points:
+            words = model = 0
+            for n in omissions:
+                if flags := pick(n):
+                    words += names_fact(n, flags)
+                    model += model_names(judgements.get(n.key), flags)
+            say(
+                f"   {label}: correct detection by words {_rate(words, len(omissions))}, "
+                f"by the model {_rate(model, len(omissions))}"
+            )
+        say("   where they differ at the decision rule (pair id, counted flags):")
+        differ = 0
+        for n in det:
+            flags = decision_flags(n)
+            by_words = names_fact(n, flags)
+            by_model = model_names(judgements.get(n.key), flags)
+            if by_words != by_model:
+                differ += 1
+                side = "words yes, model no" if by_words else "words no, model yes"
+                say(f"   {side}: {n.pair.get('pair_id')}  {','.join(x.id for x in flags)}")
+                if args.show_facts:
+                    for fact in removed_facts(n.pair):
+                        say(f"      removed fact: {fact}")
+                    for x in flags:
+                        say(f"      flag {x.id}:      {x.fact}")
+        say(f"   detected notes where they differ: {differ}/{len(det)}")
+
     references = _references(args)
     if references:
         say("== Reference methods on the same notes: detection and false alarms (their own")
@@ -594,6 +693,34 @@ def score(args: argparse.Namespace) -> int:
                 f"      ({len(omit) - len(known_o)} omission and {len(clean) - len(known_c)} "
                 "clean notes without a usable record)"
             )
+
+    say("== Graded note score: (confirmed absent critical, supporting, all; then critical")
+    say("   partials, all partials), compared in order; at each reference's false-alarm rate,")
+    say("   the most lenient grade threshold that does not pass it")
+    if not references:
+        say("   no reference records given (--released, --gate1b)")
+    for name, ref in references.items():
+        known_c = [v for v in (ref.get(n.key) for n in cleans) if v is not None]
+        target = matched_grade(omissions, cleans, sum(known_c), len(known_c))
+        if target is None:
+            say(f"   at {name}'s {_rate(sum(known_c), len(known_c))}: no threshold qualifies")
+            continue
+        graded = [
+            (n, [*confirmed_absent(n), *n.info, *(f for f in n.pass_a if f.verdict == "partial")])
+            for n in omissions
+            if grade(n) >= target
+        ]
+        words = sum(names_fact(n, flags) for n, flags in graded)
+        say(f"   at {name}'s false alarms {sum(known_c)}/{len(known_c)}: grade >= {target}")
+        line = (
+            f"      detection {_rate(len(graded), len(omissions))}, correct (words) "
+            f"{_rate(words, len(omissions))}"
+        )
+        if judgements is not None:
+            model = sum(model_names(judgements.get(n.key), flags) for n, flags in graded)
+            line += f", correct (model) {_rate(model, len(omissions))}"
+        raised = sum(grade(n) >= target for n in cleans)
+        say(line + f", false alarms {_rate(raised, len(cleans))}")
 
     say("== Per-note agreement on omission and clean notes (information, not a gate)")
     say("   ours: the decision rule on Pass A omission flags; against B3 also 'critical")
@@ -724,6 +851,19 @@ def classify_miss(step: Mapping[str, Any] | None) -> str:
     return "unchecked"
 
 
+def model_step(
+    judgement: Judgement, trace: Sequence[Mapping[str, Any]]
+) -> Mapping[str, Any] | None:
+    """The trace fact the judge named, preferring the one that went furthest (a confirmed
+    second look, then a checked fact, then any); None when it named none."""
+    named = [step for step in trace if str(step.get("id")) in set(judgement.facts.ids)]
+
+    def reach(step: Mapping[str, Any]) -> int:
+        return (step.get("second_look") == "confirmed") * 2 + bool(step.get("checked"))
+
+    return max(named, key=reach, default=None)
+
+
 def misses(args: argparse.Namespace) -> int:
     """Trace each omission note's removed fact through Pass A and classify where it went."""
     pairs = _pairs(args.pairs)
@@ -734,6 +874,7 @@ def misses(args: argparse.Namespace) -> int:
         for n in build_notes(keys, pairs, reports)
         if n.kind == "omission" and n.report is not None and not n.failed
     ]
+    judgements = load_judged(args.judgements, notes)
     threshold = args.match_threshold
     traced = sum(1 for n in notes if n.report is not None and "pass_a_trace" in n.report)
     out: list[str] = []
@@ -742,37 +883,42 @@ def misses(args: argparse.Namespace) -> int:
     if traced < len(notes):
         say("   a note without a Pass A trace ([report] pass_a_trace) can only be classed")
         say("   from its flags: detected, judged partial or no matching flag")
-    say("   pair id, trace, removed-fact severity, match score, class, then the stages:")
+    if judgements is not None:
+        say("   matched by the judge (fact_judge.py) where it has a valid judgement, else by")
+        say("   words; '(words: ...)' gives the word matcher's class where it differs")
+    say("   pair id, trace, removed-fact severity, word match score, class, then the stages:")
     say("   extracted / audit (core or contextual, severity) / check verdict / second look")
     classes: Counter[str] = Counter()
     by_trace: dict[str, Counter[str]] = {}
+    differ: Counter[tuple[str, str]] = Counter()
+    unjudged = untraced = 0
     for n in notes:
         assert n.report is not None
-        flag_score, flag, _ = best_match(n, [*n.pass_a, *n.info])
-        named = flag if flag is not None and flag_score >= threshold else None
+        value, step, closest, label, named = _word_class(n, threshold)
+        judgement = judgements.get(n.key) if judgements is not None else None
+        words = label
         trace = n.report.get("pass_a_trace")
-        closest = None
-        if trace is not None:
-            value, step = trace_match(n.pair, trace)
-            if step is not None and value < threshold:
-                closest, step = step, None
+        if judgements is not None and judgement is None:
+            unjudged += 1
+        elif judgements is not None and trace is None:
+            untraced += 1
+        elif judgement is not None and trace is not None:
+            step, closest = model_step(judgement, trace), None
             label = classify_miss(step)
-            if label == "not extracted" and closest is not None and value >= WEAK_MATCH:
-                label = "weak match (compound?)"
-            if named is not None and named.verdict == "absent" and RANK[named.confidence] >= 2:
-                label = "detected"  # a confirmed rules candidate names it
-        else:
-            value, step = flag_score, None
-            if named is None:
-                label = "no matching flag"
-            elif named.verdict == "partial":
-                label = "judged partial"
-            else:
-                label = "detected" if RANK[named.confidence] >= 2 else "no matching flag"
+            confirmed = [f for f in [*n.pass_a, *n.info] if f.id in set(judgement.flags.ids)]
+            if any(f.verdict == "absent" and RANK[f.confidence] >= 2 for f in confirmed):
+                label = "detected"
+            named = confirmed[0] if confirmed and step is None else None
+            if words != label:
+                differ[(words, label)] += 1
         classes[label] += 1
         level = str(n.pair.get("residual_level"))
         by_trace.setdefault(level, Counter())[label] += 1
-        say(f"   {n.pair.get('pair_id')}  {level}  {n.pair.get('severity')}  {value:.2f}  {label}")
+        aside = f"  (words: {words})" if words != label else ""
+        say(
+            f"   {n.pair.get('pair_id')}  {level}  {n.pair.get('severity')}  {value:.2f}  "
+            f"{label}{aside}"
+        )
         if step is not None:
             core = {True: "core", False: "contextual", None: "-"}[step.get("core")]
             say(
@@ -802,7 +948,239 @@ def misses(args: argparse.Namespace) -> int:
     for level, counter in sorted(by_trace.items()):
         detail = ", ".join(f"{c} {counter[c]}" for c in MISS_CLASSES if counter[c])
         say(f"   {level} ({sum(counter.values())}): {detail}")
+    if judgements is not None:
+        say("== Word and model classes")
+        say(f"   notes classed by words for want of a valid judgement: {unjudged}")
+        if untraced:
+            say(f"   notes classed from their flags for want of a Pass A trace: {untraced}")
+        say(f"   notes whose class differs: {sum(differ.values())}")
+        for (words, model), count in sorted(differ.items()):
+            say(f"   words '{words}' -> model '{model}': {count}")
     print("\n".join(out))
+    return 0
+
+
+def _word_class(
+    n: Note, threshold: float
+) -> tuple[float, Mapping[str, Any] | None, Mapping[str, Any] | None, str, Flag | None]:
+    """The word matcher's view of a removed fact: (score, matched trace fact, closest
+    unmatched trace fact, class, the flag that names it)."""
+    assert n.report is not None
+    flag_score, flag, _ = best_match(n, [*n.pass_a, *n.info])
+    named = flag if flag is not None and flag_score >= threshold else None
+    trace = n.report.get("pass_a_trace")
+    closest = None
+    if trace is not None:
+        value, step = trace_match(n.pair, trace)
+        if step is not None and value < threshold:
+            closest, step = step, None
+        label = classify_miss(step)
+        if label == "not extracted" and closest is not None and value >= WEAK_MATCH:
+            label = "weak match (compound?)"
+        if named is not None and named.verdict == "absent" and RANK[named.confidence] >= 2:
+            label = "detected"  # a confirmed rules candidate names it
+        return value, step, closest, label, named
+    if named is None:
+        label = "no matching flag"
+    elif named.verdict == "partial":
+        label = "judged partial"
+    else:
+        label = "detected" if RANK[named.confidence] >= 2 else "no matching flag"
+    return flag_score, None, None, label, named
+
+
+# judge, sample, severity
+
+
+def _omission_notes(args: argparse.Namespace) -> list[Note]:
+    """The run's scored omission notes (with a report, Pass A finished)."""
+    pairs = _pairs(args.pairs)
+    keys = sorted(json.loads(args.spec.read_text(encoding="utf-8"))["note_keys"])
+    reports, _, _ = load_reports(args.run, args.manifest)
+    return [
+        n
+        for n in build_notes(keys, pairs, reports)
+        if n.kind == "omission" and n.report is not None and not n.failed
+    ]
+
+
+def run_judge(args: argparse.Namespace) -> int:
+    """Judge every scored omission note the cache lacks (paid calls: the user runs this)."""
+    cache_path = args.cache or args.run / "fact_judgements.json"
+    try:
+        config = load_config(args.config)
+        client = create_client(config)
+        budget = create_budget(config)
+    except InputError as exc:
+        print(f"judge: {exc}", file=sys.stderr)
+        return 2
+    items = [
+        fact_judge.item(str(n.pair.get("pair_id")), removed_facts(n.pair), n.report)
+        for n in _omission_notes(args)
+        if n.report is not None
+    ]
+    cache = fact_judge.load_cache(cache_path)
+    tag = f"{config.model} effort={config.effort} max_tokens={config.max_tokens}"
+    counts = fact_judge.judge(items, client, budget, cache, tag, cache_path)
+    spent = budget.spent_usd
+    print(f"judge: {len(items)} omission notes: {_counts(counts)}")
+    print(
+        f"judge: {budget.calls} calls, "
+        + (f"${spent:.4f}" if spent is not None else "cost unknown")
+        + f"; cache {cache_path}"
+    )
+    return 0 if sum(counts[k] for k in ("cached", "judged")) == len(items) else 2
+
+
+SAMPLE_COLUMNS = (
+    "pair_id",
+    "removed_fact",
+    "model_same",
+    "model_fact_ids",
+    "model_facts",
+    "model_flag_ids",
+    "word_fact",
+    "word_score",
+    "word_same",
+    "reviewer_same",
+    "reviewer_comment",
+)
+
+
+def write_sample(args: argparse.Namespace) -> int:
+    """A fixed-seed sample of judged omission notes for a person to spot-check: the removed
+    fact, the facts the judge named and the word matcher's best fact (benchmark fact text:
+    the file is git-ignored)."""
+    notes = _omission_notes(args)
+    judgements = load_judged(args.judgements, notes) or {}
+    pool = sorted((n for n in notes if judgements.get(n.key) is not None), key=lambda n: n.key)
+    chosen = sorted(
+        random.Random(args.seed).sample(pool, min(args.n, len(pool))), key=lambda n: n.key
+    )
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    with args.out.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(SAMPLE_COLUMNS)
+        for n in chosen:
+            judgement = judgements[n.key]
+            assert judgement is not None and n.report is not None
+            trace = n.report.get("pass_a_trace") or []
+            texts = {str(s.get("id")): str(s.get("fact") or "") for s in trace}
+            value, step = trace_match(n.pair, trace)
+            writer.writerow(
+                [
+                    n.pair.get("pair_id"),
+                    " / ".join(removed_facts(n.pair)),
+                    "yes" if judgement.facts.same else "no",
+                    " ".join(judgement.facts.ids),
+                    " | ".join(texts.get(i, "") for i in judgement.facts.ids),
+                    " ".join(judgement.flags.ids),
+                    step.get("fact") if step is not None else "",
+                    f"{value:.2f}",
+                    "yes" if step is not None and value >= args.match_threshold else "no",
+                    "",
+                    "",
+                ]
+            )
+    print(
+        f"wrote {args.out}: {len(chosen)} of {len(pool)} judged omission notes (seed {args.seed})"
+    )
+    return 0
+
+
+GRADES = ("critical", "supporting", "peripheral")
+
+
+def kappa(table: Mapping[tuple[str, str], int]) -> float | None:
+    """Cohen's kappa for a square table keyed (ours, benchmark); None when undefined."""
+    n = sum(table.values())
+    if not n:
+        return None
+    observed = sum(table.get((g, g), 0) for g in GRADES) / n
+    expected = sum(
+        sum(table.get((g, b), 0) for b in GRADES) * sum(table.get((o, g), 0) for o in GRADES)
+        for g in GRADES
+    ) / (n * n)
+    return None if expected == 1 else (observed - expected) / (1 - expected)
+
+
+def severity_table(
+    notes: Sequence[Note], pick: Callable[[Note], Mapping[str, Any] | None]
+) -> Counter[tuple[str, str]]:
+    """(our audit severity, the benchmark's severity) for each removed fact `pick` finds in
+    the trace and the audit graded."""
+    table: Counter[tuple[str, str]] = Counter()
+    for n in notes:
+        step = pick(n)
+        ours, theirs = (step or {}).get("severity"), n.pair.get("severity")
+        if ours in GRADES and theirs in GRADES:
+            table[(str(ours), str(theirs))] += 1
+    return table
+
+
+def severity_lines(label: str, table: Mapping[tuple[str, str], int]) -> list[str]:
+    n = sum(table.values())
+    k = kappa(table)
+    over = sum(c for (o, b), c in table.items() if SEVERITY_RANK[o] > SEVERITY_RANK[b])
+    under = sum(c for (o, b), c in table.items() if SEVERITY_RANK[o] < SEVERITY_RANK[b])
+    lines = [
+        f"### {label}",
+        "",
+        f"Removed facts matched and graded by the audit: {n}. Cohen's kappa: "
+        + ("undefined" if k is None else f"{k:.2f}")
+        + f". Exact agreement: {sum(table.get((g, g), 0) for g in GRADES)}/{n}; "
+        f"we grade higher: {over}; we grade lower: {under}.",
+        "",
+        "| ours \\ benchmark | " + " | ".join(GRADES) + " | total |",
+        "|---|" + "---|" * (len(GRADES) + 1),
+    ]
+    for o in GRADES:
+        row = [table.get((o, b), 0) for b in GRADES]
+        lines.append(f"| {o} | " + " | ".join(map(str, row)) + f" | {sum(row)} |")
+    cols = [sum(table.get((o, b), 0) for o in GRADES) for b in GRADES]
+    lines.append("| total | " + " | ".join(map(str, cols)) + f" | {n} |")
+    return [*lines, ""]
+
+
+def severity(args: argparse.Namespace) -> int:
+    """Our audit's severity against the benchmark's for each removed fact we extracted, by
+    the word matcher and, with --judgements, by the judge's match. Counts only."""
+    notes = [n for n in _omission_notes(args) if (n.report or {}).get("pass_a_trace") is not None]
+    threshold = args.match_threshold
+
+    def by_words(n: Note) -> Mapping[str, Any] | None:
+        value, step = trace_match(n.pair, (n.report or {}).get("pass_a_trace") or [])
+        return step if step is not None and value >= threshold else None
+
+    lines = [
+        f"# Severity agreement: {args.run.name}",
+        "",
+        "Our audit's severity for each removed fact we extracted, against the benchmark's",
+        f"severity, over {len(notes)} omission notes with a Pass A trace. Development data only;",
+        "counts only. Each omission note counts once, so a fact removed from several notes of",
+        "one consultation counts once per note. 'Higher' means our audit graded the fact more",
+        "severe than the benchmark. Regenerate with `scripts/score_run.py severity`.",
+        "",
+        *severity_lines(f"Word matcher (score >= {threshold})", severity_table(notes, by_words)),
+    ]
+    judgements = load_judged(args.judgements, notes)
+    if judgements is not None:
+
+        def by_model(n: Note) -> Mapping[str, Any] | None:
+            judgement = judgements.get(n.key)
+            trace = (n.report or {}).get("pass_a_trace") or []
+            return None if judgement is None else model_step(judgement, trace)
+
+        lacking = sum(1 for n in notes if judgements.get(n.key) is None)
+        lines += severity_lines(
+            f"Model-assisted matcher (fact_judge.py; {lacking} notes without a valid judgement)",
+            severity_table(notes, by_model),
+        )
+    text = "\n".join(lines).rstrip() + "\n"
+    print(text, end="")
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text, encoding="utf-8")
     return 0
 
 
@@ -877,6 +1255,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="count partial verdicts as flags, as before they became information",
     )
+    sc.add_argument("--judgements", type=Path, help="fact_judgements.json from `judge`")
     sp = commands.add_parser("spec", help="write a spec of every note in the pairs file")
     sp.add_argument("--pairs", type=Path, required=True)
     sp.add_argument("--out", type=Path, required=True)
@@ -887,11 +1266,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     ms.add_argument("--manifest", type=Path, help="prepare's manifest.json (exact case ids)")
     ms.add_argument("--show-facts", action="store_true")
     ms.add_argument("--match-threshold", type=float, default=0.5)
+    ms.add_argument("--judgements", type=Path, help="fact_judgements.json from `judge`")
+    jd = commands.add_parser("judge", help="judge fact matches with a model (paid calls)")
+    jd.add_argument("--config", type=Path, required=True)
+    jd.add_argument("--cache", type=Path, help="default: <run>/fact_judgements.json")
+    sa = commands.add_parser("sample", help="write a fixed-seed spot-check sample")
+    sa.add_argument("--judgements", type=Path, required=True)
+    sa.add_argument("--out", type=Path, required=True)
+    sa.add_argument("--n", type=int, default=30)
+    sa.add_argument("--seed", type=int, default=SAMPLE_SEED)
+    sa.add_argument("--match-threshold", type=float, default=0.5)
+    sv = commands.add_parser("severity", help="our audit severity against the benchmark's")
+    sv.add_argument("--judgements", type=Path)
+    sv.add_argument("--out", type=Path, help="also write the result here (Markdown)")
+    sv.add_argument("--match-threshold", type=float, default=0.5)
+    for sub in (jd, sa, sv):
+        sub.add_argument("--run", type=Path, required=True)
+        sub.add_argument("--pairs", type=Path, required=True)
+        sub.add_argument("--spec", type=Path, required=True)
+        sub.add_argument("--manifest", type=Path, help="prepare's manifest.json (exact case ids)")
     args = parser.parse_args(argv)
     if args.command == "prepare":
         return prepare(args.pairs, args.transcripts, args.spec, args.out)
     if args.command == "misses":
         return misses(args)
+    if args.command == "judge":
+        return run_judge(args)
+    if args.command == "sample":
+        return write_sample(args)
+    if args.command == "severity":
+        return severity(args)
     if args.command == "spec":
         return write_spec(args.pairs, args.out)
     return score(args)

@@ -677,3 +677,281 @@ def test_reference_methods_detection_and_false_alarms(
     # p3 has no row: left out of its denominator and counted
     assert "Gate 1(b) power-gepa-high: detection 1/2 (50.0%), false alarms 1/1 (100.0%)" in section
     assert "(1 omission and 0 clean notes without a usable record)" in section
+    graded = out.split("== Graded note score")[1].split("== Per-note")[0]
+    # The clean note has no Pass A omission flag, so any threshold is within 1/1
+    assert "at Gate 1(b) power-gepa-high's false alarms 1/1: grade >= (0, 0, 1, 0, 0)" in graded
+    # p2's only flag is possible, so its grade is zero and it is never flagged
+    assert "detection 2/3 (66.7%), correct (words) 1/3 (33.3%), false alarms 0/1" in graded
+
+
+# graded note score
+
+
+def _note(module: ModuleType, kind: str, *flags: dict[str, Any], info: int = 0) -> Any:
+    note = module.Note(f"k{id(flags)}", kind, _pair(1), {"mode": "full"})
+    note.pass_a = [module.Flag.model_validate(f) for f in flags]
+    note.info = [module.Flag.model_validate(_flag(f"I{i}", verdict="partial")) for i in range(info)]
+    return note
+
+
+def test_grade_orders_confirmed_critical_first() -> None:
+    module = _load()
+    crit = _note(module, "omission", _flag("F1"))
+    supp_two = _note(module, "omission", _flag("F1", severity="supporting"), _flag("F2"))
+    possible = _note(module, "omission", _flag("F1", confidence="possible"))
+    partials = _note(module, "omission", info=3)
+    assert module.grade(crit) == (1, 0, 1, 0, 0)
+    assert module.grade(supp_two) == (1, 1, 2, 0, 0)
+    assert module.grade(possible) == (0, 0, 0, 0, 0)  # only confirmed absent flags count
+    assert module.grade(partials) == (0, 0, 0, 3, 3)
+    assert module.grade(supp_two) > module.grade(crit) > module.grade(partials)
+
+
+def test_matched_grade_takes_the_most_lenient_threshold_within_the_rate() -> None:
+    module = _load()
+    omissions = [
+        _note(module, "omission", _flag("F1"), _flag("F2")),
+        _note(module, "omission", _flag("F1")),
+        _note(module, "omission", _flag("F1", severity="supporting")),
+        _note(module, "omission", info=1),
+    ]
+    cleans = [
+        _note(module, "clean", _flag("F1")),
+        _note(module, "clean", info=2),
+        _note(module, "clean"),
+        _note(module, "clean"),
+    ]
+    # 1 false alarm in 4: down to the supporting omission's (0, 1, 1, 0, 0), which flags only
+    # the critical clean note
+    assert module.matched_grade(omissions, cleans, 1, 4) == (0, 1, 1, 0, 0)
+    # 0 in 65: only thresholds above the clean note's critical flag
+    assert module.matched_grade(omissions, cleans, 0, 65) == (2, 0, 2, 0, 0)
+    # 2 in 4 reaches the one-partial omission's (0, 0, 0, 1, 1), past the partials-only clean
+    assert module.matched_grade(omissions, cleans, 2, 4) == (0, 0, 0, 1, 1)
+    assert (
+        module.matched_grade(
+            omissions[:1], [_note(module, "clean", _flag("F1"), _flag("F2"))], 0, 1
+        )
+        is None
+    )
+
+
+# model-assisted matching
+
+
+class FakeClient:
+    """A model client that answers each judge request from `answer` and counts calls."""
+
+    provider = "anthropic"
+    model = "m"
+
+    def __init__(self, answer: Any) -> None:
+        self.answer = answer
+        self.calls = 0
+
+    @property
+    def endpoint(self) -> Any:
+        from scribecheck.model.endpoint import Endpoint
+
+        return Endpoint.from_url("https://api.anthropic.com")
+
+    def send(self, request: Any, *, correction: str | None = None) -> Any:
+        from scribecheck.model.base import RawReply, Usage
+
+        self.calls += 1
+        task = request.messages[0].blocks[0].text
+        return RawReply(json.dumps(self.answer(task)), "end", Usage(100, 20), "m-1")
+
+
+def _yes(fact_ids: list[str], flag_ids: list[str] | None = None) -> dict[str, Any]:
+    flags = flag_ids or []
+    return {
+        "facts": {"same": bool(fact_ids), "ids": fact_ids},
+        "flags": {"same": bool(flags), "ids": flags},
+    }
+
+
+def _items(module: ModuleType) -> list[Any]:
+    judge = module.fact_judge
+    report = {
+        "pass_a_trace": [_step("f1", "Takes metformin 500 mg twice a day")],
+        "flags": [_flag("F1", fact="metformin")],
+    }
+    return [
+        judge.item("p1", ["Takes metformin 500 mg twice daily"], report),
+        judge.item("p2", ["Has asthma"], report),
+    ]
+
+
+def test_judge_caches_and_judges_a_changed_fact_list_afresh(tmp_path: Path) -> None:
+    from scribecheck.model.budget import Budget
+
+    module = _load()
+    judge = module.fact_judge
+    client = FakeClient(
+        lambda task: _yes(["f1"], ["F1"]) if "metformin" in task.split("EXTRACTED")[0] else _yes([])
+    )
+    path = tmp_path / "cache.json"
+    items = _items(module)
+    counts = judge.judge(items, client, Budget(), judge.load_cache(path), "m", path)
+    assert (counts["judged"], client.calls) == (2, 2)
+    cache = judge.load_cache(path)
+    assert judge.lookup(cache, items[0]).flags.ids == ["F1"]
+    assert judge.lookup(cache, items[1]).facts.same is False
+    # Again: nothing to call.
+    counts = judge.judge(items, client, Budget(), cache, "m", path)
+    assert (counts["cached"], client.calls) == (2, 2)
+    # A changed fact list is judged afresh; the sent texts never include a transcript or note.
+    changed = judge.Item("p1", items[0].removed, (("f1", "Takes metformin 1 g"),), items[0].flags)
+    assert judge.lookup(cache, changed) is None
+    judge.judge([changed], client, Budget(), cache, "m", path)
+    assert client.calls == 3
+
+
+def test_judge_rejects_ids_it_was_not_sent(tmp_path: Path) -> None:
+    from scribecheck.model.budget import Budget
+
+    module = _load()
+    judge = module.fact_judge
+    path = tmp_path / "cache.json"
+    items = _items(module)[:1]
+    counts = judge.judge(items, FakeClient(lambda _: _yes(["f9"])), Budget(), {}, "m", path)
+    assert counts["invalid ids"] == 1
+    assert judge.lookup(judge.load_cache(path), items[0]) is None
+    bad = judge.Judgement.model_validate(
+        {"facts": {"same": True, "ids": []}, "flags": {"same": False, "ids": []}}
+    )
+    assert judge.problem(bad, items[0]) == "facts: 'same' disagrees with the ids"
+
+
+def test_judge_stops_without_the_key(
+    subset: dict[str, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    config = subset["root"] / "judge.toml"
+    config.write_text(
+        'mode = "full"\n[model]\nprovider = "anthropic"\nname = "claude-sonnet-5-5"\n',
+        encoding="utf-8",
+    )
+    run = _run(subset, _standard_reports())
+    args = ["judge", "--run", str(run), "--pairs", str(subset["pairs"])]
+    args += ["--spec", str(subset["spec"]), "--config", str(config)]
+    assert _load().main(args) == 2
+    assert not (run / "fact_judgements.json").exists()
+    assert "key" in capsys.readouterr().err
+
+
+def _cache(
+    subset: dict[str, Path], reports: dict[str, dict[str, Any]], answers: dict[str, Any]
+) -> Path:
+    """A judgement cache for model "m": `answers` by pair id."""
+    module = _load()
+    pairs = {p["pair_id"]: p for p in json.loads(subset["pairs"].read_text())["pairs"]}
+    entries = {}
+    for pair_id, answer in answers.items():
+        it = module.fact_judge.item(
+            pair_id, module.removed_facts(pairs[pair_id]), reports[f"{pair_id}|err"]
+        )
+        entries[pair_id] = {"key": it.key("m"), "judgement": answer}
+    path = subset["root"] / "fact_judgements.json"
+    path.write_text(json.dumps({"model": "m", "entries": entries}), encoding="utf-8")
+    return path
+
+
+def test_score_with_judgements_lists_where_words_and_model_differ(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    # p1: words yes (metformin 500 mg), model no; p2: words no (asthma), model yes
+    cache = _cache(
+        subset,
+        reports,
+        {"syn|C1|omit|p1": _yes([]), "syn|C1|omit|p2": _yes([], ["F1"])},
+    )
+    out = _score(subset, _run(subset, reports), capsys, "--judgements", str(cache))
+    section = out.split("== Model-assisted correct detection")[1].split("== Graded")[0]
+    assert "omission notes without a valid judgement: 1" in section
+    assert "no judgement: syn|C1|omit|p3" in section
+    assert "decision rule: correct detection by words 1/3 (33.3%), by the model 1/3" in section
+    assert "words yes, model no: syn|C1|omit|p1  F1" in section
+    assert "words no, model yes: syn|C1|omit|p2  F1" in section
+    assert "detected notes where they differ: 2/2" in section
+    assert "metformin" not in section  # fact text only with --show-facts
+    # A stale entry (the flag list changed) counts as missing, never as a match.
+    reports["syn|C1|omit|p2|err"]["flags"] = [_flag("F1", fact="asthma, wheeze")]
+    out = _score(subset, _run_again(subset, reports), capsys, "--judgements", str(cache))
+    assert "omission notes without a valid judgement: 2" in out
+
+
+def test_misses_with_judgements_classify_the_named_fact(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    reports["syn|C1|omit|p2|err"]["pass_a_trace"] = [
+        _step("f1", "Has asthma", verdict="present"),
+        _step("f2", "Diabetes tablet twice a day", verdict="absent", second_look="confirmed"),
+    ]
+    for key in ("syn|C1|omit|p1|err", "syn|C1|omit|p3|err"):
+        reports[key]["pass_a_trace"] = [_step("f1", "Has asthma", verdict="present")]
+    cache = _cache(subset, reports, {"syn|C1|omit|p2": _yes(["f2"])})
+    out = _misses(subset, _run(subset, reports), capsys, "--judgements", str(cache))
+    line = next(x for x in out.splitlines() if "syn|C1|omit|p2" in x)
+    assert line.endswith("detected  (words: not extracted)")
+    assert "notes classed by words for want of a valid judgement: 2" in out
+    assert "words 'not extracted' -> model 'detected': 1" in out
+
+
+def test_sample_is_fixed_and_shaped_for_review(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    answers = {f"syn|C1|omit|p{n}": _yes([]) for n in (1, 2, 3)}
+    cache = _cache(subset, reports, answers)
+    run = _run(subset, reports)
+    rows = []
+    for name in ("a.csv", "b.csv"):
+        out = subset["root"] / name
+        args = ["sample", "--run", str(run), "--pairs", str(subset["pairs"])]
+        args += ["--spec", str(subset["spec"]), "--judgements", str(cache), "--out", str(out)]
+        assert _load().main([*args, "--n", "2"]) == 0
+        rows.append(out.read_text(encoding="utf-8"))
+    assert rows[0] == rows[1]  # the seed fixes the sample
+    lines = rows[0].splitlines()
+    assert lines[0].split(",") == list(_load().SAMPLE_COLUMNS)
+    assert len(lines) == 3
+    assert "wrote" in capsys.readouterr().out
+
+
+def test_severity_agreement_kappa_and_table(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = _load()
+    assert module.kappa({("critical", "critical"): 5, ("supporting", "supporting"): 5}) == 1.0
+    assert module.kappa({}) is None
+    reports = _standard_reports()
+    # p1 graded critical (agrees), p2 supporting (lower), p3 matched only by the model
+    reports["syn|C1|omit|p1|err"]["pass_a_trace"] = [
+        _step("f1", "Takes metformin 500 mg twice daily")
+    ]
+    reports["syn|C1|omit|p2|err"]["pass_a_trace"] = [
+        _step("f1", "Takes metformin 500 mg twice daily", severity="supporting")
+    ]
+    reports["syn|C1|omit|p3|err"]["pass_a_trace"] = [
+        _step("f1", "Diabetes tablet", severity="peripheral")
+    ]
+    cache = _cache(
+        subset,
+        reports,
+        {f"syn|C1|omit|p{n}": _yes(["f1"]) for n in (1, 2, 3)},
+    )
+    md = subset["root"] / "severity.md"
+    args = ["severity", "--run", str(_run(subset, reports)), "--pairs", str(subset["pairs"])]
+    args += ["--spec", str(subset["spec"]), "--judgements", str(cache), "--out", str(md)]
+    assert module.main(args) == 0
+    text = md.read_text(encoding="utf-8")
+    words, model = text.split("### Word matcher")[1].split("### Model-assisted")
+    assert "graded by the audit: 2" in words and "we grade lower: 1" in words
+    assert "| supporting | 1 | 0 | 0 | 1 |" in words
+    assert "graded by the audit: 3" in model and "we grade lower: 2" in model
+    assert "metformin" not in text.lower()  # counts only
+    assert text == capsys.readouterr().out

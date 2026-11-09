@@ -1,0 +1,22 @@
+# M3 session 4: the correct-fact judge (scripts/fact_judge.py), Claude Sonnet 5.5 at effort
+# low. Key: ANTHROPIC_API_KEY in the environment (never in this file).
+mode = "full"
+
+[model]
+provider = "anthropic"
+name = "claude-sonnet-5-5"
+effort = "low"
+max_tokens = 4000
+
+[model.prices]
+# USD per million tokens for Claude Sonnet 5.5, as claude-medium.toml. Confirm on the
+# Anthropic pricing page before the run.
+input = 2.0
+output = 10.0
+cache_write_5m = 2.5
+cache_write_1h = 4.0
+cache_read = 0.2
+batch_multiplier = 0.5
+
+[budget]
+cost_cap_usd = 3.0

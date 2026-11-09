@@ -14,6 +14,13 @@ The three synthetic demo consultations in `src/scribecheck/demo/` (a transcript 
 `manifest.json` describing what each should show) are marked `"reviewed": false`; please check
 that they read as plausible consultations and that the findings they show are fair.
 
+`correct_fact_sample.csv` (written by `docs/runbooks/m3s4/run_judge.sh`, git-ignored because it
+holds benchmark fact text) lists 30 omission notes drawn with a fixed seed: the fact removed from
+the note, the facts a model judge said state it, and the word matcher's closest fact. Please fill
+`reviewer_same` with `yes` if any fact in `model_facts` states the removed fact, `no` if none
+does, and use `reviewer_comment` for anything else (for example, that `word_fact` states it
+when the model's facts don't). The agreement goes in `docs/evidence/fact_matching_v4.md`.
+
 Design questions that need a clinical answer, rather than a row-by-row check, are in
 `clinical_questions.md`; please answer them there.
 
