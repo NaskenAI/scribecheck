@@ -30,7 +30,7 @@ from scribecheck.pass_a.base import Case, Ledger, Outcome, Runner, facts_block, 
 from scribecheck.pass_a.quotes_stage import QuoteFixer
 from scribecheck.rules.context import find_cues
 
-PROMPTS = "scribecheck_v3"
+PROMPTS = "scribecheck_v4"
 Kind = Literal[
     "certainty",
     "drug_substituted",

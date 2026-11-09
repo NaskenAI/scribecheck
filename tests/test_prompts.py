@@ -46,7 +46,7 @@ def test_route_one_attribution_and_licence_ship() -> None:
     ],
 )
 def test_scribecheck_prompts_render_every_slot(name: str, slots: dict[str, str]) -> None:
-    text = prompts.render(prompts.load("scribecheck_v3", name), **slots)
+    text = prompts.render(prompts.load("scribecheck_v4", name), **slots)
     assert "{" not in text.replace('{"', "").replace("{}", "")
 
 
@@ -59,7 +59,7 @@ def test_render_is_literal_and_strict() -> None:
 
 
 def test_audit_prompt_attributes_the_rubric() -> None:
-    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v3", "audit")
+    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v4", "audit")
 
 
 def test_v2_changes_only_the_candidate_prompt() -> None:
@@ -105,3 +105,17 @@ def test_v3_makes_facts_atomic() -> None:
     assert "does not carry this one" in check
     look = " ".join(prompts.load("scribecheck_v3", "second_look").split())
     assert "in part" not in look and "only gestures at" in look
+
+
+def test_v4_audit_makes_kinds_always_core() -> None:
+    assert _changed("scribecheck_v3", "scribecheck_v4") == {"audit.txt"}
+    audit = " ".join(prompts.load("scribecheck_v4", "audit").split())
+    for kind in (
+        "always core",
+        "current medicines, including occasional or as-needed use",
+        "allergies and allergy status",
+        "decisions not to treat",
+        "safety-net instructions",
+        "numeric thresholds",
+    ):
+        assert kind in audit, kind

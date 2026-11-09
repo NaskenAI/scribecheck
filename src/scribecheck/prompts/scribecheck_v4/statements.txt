@@ -1,0 +1,19 @@
+TASK: CHECK NOTE STATEMENTS AGAINST THE TRANSCRIPT
+
+For each statement below, taken from the NOTE above, decide whether the TRANSCRIPT above
+supports it:
+- "supported": the transcript establishes it (paraphrase, abbreviation and unit conversion are
+  fine);
+- "contradicted": the transcript establishes something different;
+- "unsupported": the transcript does not establish it at all;
+- "not_verifiable": it is content a clinician normally adds without saying it aloud and the
+  transcript could not be expected to contain.
+
+Give "transcript_quote", the exact words from ONE transcript turn, for supported and
+contradicted statements. Give "severity" for contradicted and unsupported statements: the
+consequence of the note carrying it, graded as an audit grades an omission ("critical" if it
+would plausibly change clinical action or create a safety risk, "supporting" if it weakens the
+record without changing what happens next, otherwise "peripheral").
+
+STATEMENTS:
+{facts_block}

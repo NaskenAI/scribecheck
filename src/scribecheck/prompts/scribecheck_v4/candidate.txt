@@ -1,0 +1,22 @@
+TASK: CONFIRM RULE-BASED FINDINGS
+
+A rule-based screen compared the TRANSCRIPT above with the NOTE above and raised the findings
+below. Rules are often wrong: a medicine may have been stopped, declined or a relative's; a value
+may have been corrected later in the consultation; the note may carry the item in other words.
+A drug named while someone recounts a past episode (an emergency visit, a hospital stay, "back
+then", "that time"), whether it was given or withheld then, is not a current medicine: a
+missing-medicine finding for it is not an error. Judge each finding on the transcript and note
+alone.
+
+For each id:
+- "confirmed": true only if the finding is a real error in the note: the item is missing, or the
+  note's value differs from what the transcript establishes for this patient now.
+- "transcript_quote": the exact words from ONE transcript turn that establish the item.
+- "note_quote": for a changed value, the exact note text that carries the different value; for a
+  confirmed omission, empty; for a rejected finding, the note text that carries the item, if any.
+- "severity": if confirmed, grade the consequence of the error with the same rubric as an audit:
+  "critical" if it would plausibly change clinical action or remove a safety net, "supporting" if
+  it weakens the record without changing what happens next, otherwise "peripheral".
+
+FINDINGS:
+{facts_block}

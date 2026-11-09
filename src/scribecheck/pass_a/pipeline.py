@@ -6,7 +6,7 @@
 2. Merge in the rules layer's structured facts (the patient's current medicines and
    allergies), unless a model fact already names them.
 3. Audit: drop unsupported or duplicate facts, mark core or contextual, grade severity with
-   Fox et al.'s rubric.
+   Fox et al.'s rubric. A medicine or allergy fact is always core.
 4. Check the facts the standard requires against the whole note, about ten per call, as
    present / partial / absent; present and partial must quote the note.
 5. Second look at absent facts, which may rescue them only with a verified note quote.
@@ -48,7 +48,7 @@ from scribecheck.pass_a.quotes_stage import QuoteFixer
 from scribecheck.rules.omission import STATUS_RULE, is_allergy_status, structured_omissions
 from scribecheck.transcript import Transcript
 
-PROMPTS = "scribecheck_v3"
+PROMPTS = "scribecheck_v4"
 Category = Literal[
     "presenting_complaint",
     "symptom",
@@ -75,6 +75,9 @@ SECTION: dict[str, str] = {
     "plan": "Plan",
     "follow_up": "Plan",
 }
+ALWAYS_CORE = frozenset({"medicine", "allergy"})
+"""Categories the audit can never mark contextual (the prompt also makes plan decisions,
+safety-net instructions and numeric thresholds core)."""
 MAX_TOKENS = {
     "extract": 16000,
     "audit": 16000,
@@ -423,7 +426,9 @@ def _audit(
                 continue
             if not entry.keep:
                 continue
-            fact.core, fact.severity = entry.core, entry.severity
+            # A medicine or allergy is always core, whatever the audit says.
+            fact.core = entry.core or fact.category in ALWAYS_CORE
+            fact.severity = entry.severity
             kept.append(fact)
         out[key] = kept
     return out

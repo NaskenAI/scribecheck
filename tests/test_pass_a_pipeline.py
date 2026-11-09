@@ -564,3 +564,20 @@ def test_a_confirmed_status_never_removes_an_allergen_flag() -> None:
         "Takes cetirizine for allergic rhinitis",
         "no known drug allergies",
     ]
+
+
+def test_medicines_and_allergies_are_always_core() -> None:
+    def audit(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {"id": fid, "keep": True, "core": False, "severity": "supporting"}
+                for fid, _ in listed
+            ]
+        }
+
+    outcome, _ = run(MockClaude(scripts(audit=audit)), candidates=False)
+    steps = {s["fact"]: s for s in outcome.trace.values()}
+    for fact in ("Takes metformin 500 mg twice a day", "Allergic to penicillin"):
+        assert (steps[fact]["core"], steps[fact]["checked"]) == (True, True), fact
+    for fact in ("Cough for two weeks", "Working impression: viral cough"):
+        assert (steps[fact]["core"], steps[fact]["checked"]) == (False, False), fact

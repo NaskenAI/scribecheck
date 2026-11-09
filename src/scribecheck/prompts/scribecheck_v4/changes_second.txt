@@ -1,0 +1,15 @@
+TASK: SECOND CHECK OF CHANGED FACTS
+
+A first reviewer claimed that the NOTE above records each fact below differently from the
+TRANSCRIPT above. Such claims are often wrong: the transcript may change during the consultation,
+the note may paraphrase correctly, or the two may describe different things. Check each claim
+against both texts.
+
+For each id:
+- "upheld": true only if the note really does record the fact differently from what the
+  transcript establishes for this patient now;
+- "transcript_quote": the exact words from ONE transcript turn that establish the fact;
+- "note_quote": the exact note text that records it differently.
+
+CLAIMS:
+{facts_block}
