@@ -46,7 +46,7 @@ def test_route_one_attribution_and_licence_ship() -> None:
     ],
 )
 def test_scribecheck_prompts_render_every_slot(name: str, slots: dict[str, str]) -> None:
-    text = prompts.render(prompts.load("scribecheck_v1", name), **slots)
+    text = prompts.render(prompts.load("scribecheck_v2", name), **slots)
     assert "{" not in text.replace('{"', "").replace("{}", "")
 
 
@@ -59,4 +59,18 @@ def test_render_is_literal_and_strict() -> None:
 
 
 def test_audit_prompt_attributes_the_rubric() -> None:
-    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v1", "audit")
+    assert "Fox et al., OmissionBench harness, MIT" in prompts.load("scribecheck_v2", "audit")
+
+
+def test_v2_changes_only_the_candidate_prompt() -> None:
+    folder = resources.files(prompts)
+    v1 = {p.name for p in (folder / "scribecheck_v1").iterdir() if p.name.endswith(".txt")}
+    v2 = {p.name for p in (folder / "scribecheck_v2").iterdir() if p.name.endswith(".txt")}
+    assert v1 == v2
+    changed = {
+        name
+        for name in v1
+        if prompts.load("scribecheck_v1", name[:-4]) != prompts.load("scribecheck_v2", name[:-4])
+    }
+    assert changed == {"candidate.txt"}
+    assert "recounts a past episode" in prompts.load("scribecheck_v2", "candidate")

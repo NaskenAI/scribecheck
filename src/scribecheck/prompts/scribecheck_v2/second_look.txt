@@ -1,0 +1,19 @@
+TASK: SECOND LOOK AT FACTS JUDGED ABSENT
+
+A first reviewer judged each fact below, taken from the TRANSCRIPT above, to be ABSENT from the
+NOTE above. Such judgements are often wrong: the note may say the same thing in other words, as an
+abbreviation, as a number in a list, as a denial, or in another section. Search the whole note
+for each fact.
+
+For each id:
+- "found": true if the note does carry the fact (fully or in part); then give "note_quote", the
+  exact note text that carries it.
+- "found": false if, after searching, the note genuinely does not carry it; leave "note_quote"
+  empty.
+- "transcript_quote": in every case, the exact words from ONE transcript turn that establish the
+  fact.
+
+Do not strain to rescue a fact: if the note is silent, the honest answer is false.
+
+FACTS:
+{facts_block}

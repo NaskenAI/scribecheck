@@ -48,7 +48,7 @@ from scribecheck.pass_a.quotes_stage import QuoteFixer
 from scribecheck.rules.omission import structured_omissions
 from scribecheck.transcript import Transcript
 
-PROMPTS = "scribecheck_v1"
+PROMPTS = "scribecheck_v2"
 Category = Literal[
     "presenting_complaint",
     "symptom",

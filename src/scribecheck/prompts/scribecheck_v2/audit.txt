@@ -1,0 +1,34 @@
+TASK: AUDIT FACTS
+
+A colleague extracted the candidate facts below from the TRANSCRIPT above. Audit the list against
+the transcript. You are auditing the fact list, not any note.
+
+CANDIDATE FACTS:
+{facts_block}
+
+For every candidate id, return exactly one entry:
+- "keep": false if the transcript does not establish it (or only a weaker or hedged version), if
+  another kept fact already says the same thing, or if it is conversational colour, rapport,
+  closure or generic education a note has no duty to carry. Otherwise true.
+- "core": true if a correct note of this consultation must carry it; false if it is contextual
+  detail a concise note may reasonably leave out.
+- "severity": grade the consequence if the note OMITTED this fact, using this rubric
+  (Fox et al., OmissionBench harness, MIT):
+
+   "critical" - the omission would plausibly change clinical action, delay or misdirect care, or
+     create a safety risk. Anchors: an omitted working diagnosis, or a hedged impression that
+     would harden into certainty; omitted red-flag safety-netting; an omitted or wrong drug,
+     allergy, dose, frequency, duration or interaction; a conditional plan made definite; an
+     omitted examination that did happen; an omitted pertinent negative that licenses the
+     management decision; patient identity attributes used clinically.
+   "supporting" - degrades the note's completeness, clarity or defensibility, but is unlikely to
+     change what happens next. Anchors: duration or onset detail that colours but does not gate
+     the plan; social context relevant to follow-up; nuance lost without meaning being inverted;
+     a secondary symptom that neither supports nor threatens the diagnosis.
+   "peripheral" - no plausible clinical consequence. Anchors: conversational colour, rapport,
+     patient-education phrasing, administrative closure, redundant restatement.
+
+   Decide in order: (1) would a competent clinician plausibly DO something different if this
+   fact were missing? yes -> critical. (2) does its absence remove a safety net or create a
+   latent risk? yes -> critical. (3) does its absence materially weaken the note as a record?
+   yes -> supporting. (4) otherwise peripheral. If torn between two grades, take the lower one.

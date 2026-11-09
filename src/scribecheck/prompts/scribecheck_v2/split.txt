@@ -1,0 +1,15 @@
+TASK: SPLIT THE NOTE INTO STATEMENTS
+
+Split the NOTE above into atomic statements: each one claim about the patient or the plan. Copy
+each statement's text exactly from the note (a whole sentence or list item, or the part of one
+that makes a single claim), character for character. Skip headings, empty lines and pure
+formatting.
+
+For each statement give "text" and "kind":
+- "examination": a finding of a physical examination;
+- "vital": a vital sign or measurement (blood pressure, pulse, temperature, saturations, weight);
+- "result": a test or investigation result;
+- "record_history": history the note itself attributes to the record rather than to this
+  consultation ("per records", "previously documented", a prefilled history list);
+- "demographic": age, sex, name, date of birth or similar prefilled details;
+- "clinical": anything else.

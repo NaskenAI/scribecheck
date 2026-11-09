@@ -17,7 +17,10 @@ counts only when followed by a dose form or by no word, so "oral thrush" is not 
 Each drug mention also records what makes its values unsafe to compare:
 
 - `planned_or_past`: it is in a question, or its sentence speaks of a planned change or
-  past use (increase, start, stop, switch, titrate, used to, was on, ...);
+  past use (increase, start, stop, switch, titrate, used to, was on, ...); in a transcript,
+  a drug named in a recounted past episode (an emergency visit, a hospital stay, "back
+  then", "that time") is past use too, when the episode is in its sentence or the sentence
+  before it, which may end the same speaker's previous turn;
 - `range_or_max`: its sentence gives a range or a maximum ("2-3 times", "up to");
 - a tablet count (`has_count`, `count`): a count unit ("one tablet", "2 puffs"), a bare
   number ("two metformin 500 mg tablets"), a multiplier ("x2") or a split ("cut in half").
@@ -144,6 +147,12 @@ _PAST = _any(
     "last week", "any more", "anymore", "no longer", "previously", "before",
 )  # fmt: skip
 """Past or stopped use: not a current medicine."""
+_EPISODE = _any(
+    "in ER", "the ER", "A&E", "A and E", "emergency department", "emergency room",
+    "casualty", "in hospital", "in the hospital", "hospital stay", "was admitted",
+    "were admitted", "got admitted", "back then", "that time", "at the time", "once I had",
+)  # fmt: skip
+"""A recounted past episode: a drug given or withheld then is not a current medicine."""
 _PLANNED_OR_PAST = re.compile(f"{_PLANNED.pattern}|{_PAST.pattern}", re.IGNORECASE)
 _STOPPED = _any(
     "stopped it", "stopped them", "stopped taking", "quit it", "quit them", "quit taking",
@@ -344,7 +353,8 @@ def transcript_facts(
         answers[key] = (status, Span(binding.answer_turn, start, end))
 
     collected = _Collected()
-    for turn in transcript.turns:
+    for i, turn in enumerate(transcript.turns):
+        before = transcript.turns[i - 1] if i else None
         _unit_facts(
             collected,
             turn.text,
@@ -353,6 +363,7 @@ def transcript_facts(
             symptoms_by_turn[turn.number],
             answers,
             brands,
+            previous=before.text if before is not None and before.speaker == turn.speaker else "",
         )
     return collected.facts()
 
@@ -370,6 +381,21 @@ def note_facts(
     return collected.facts()
 
 
+def _in_episode(text: str, start: int, end: int, previous: str) -> bool:
+    """Whether text[start:end], or the sentence before it, recounts a past episode."""
+    if _EPISODE.search(text, start, end):
+        return True
+    head = text[:start].rstrip()
+    if head:
+        before_start, before_end = sentence_span(head, len(head) - 1, len(head))
+        return bool(_EPISODE.search(head, before_start, before_end))
+    tail = previous.rstrip()
+    if not tail:
+        return False
+    before_start, before_end = sentence_span(tail, len(tail) - 1, len(tail))
+    return bool(_EPISODE.search(tail, before_start, before_end))
+
+
 def _unit_facts(
     out: _Collected,
     text: str,
@@ -378,7 +404,11 @@ def _unit_facts(
     symptoms: Sequence[SymptomMatch],
     answers: Mapping[tuple[int, int, int], tuple[SymptomStatus, Span]],
     brands: Mapping[str, Sequence[str]] | None,
+    *,
+    previous: str = "",
 ) -> None:
+    """`previous` is the same speaker's turn just before this one, if any (transcripts
+    only), for a past episode recounted across two turns."""
     drugs = find_drugs(text, brands=brands)
     sides = find_sides(text)
     plurals = [m for m in _PLURAL_SITE.finditer(text)]
@@ -419,6 +449,8 @@ def _unit_facts(
         sentence = text[sentence_start:sentence_end]
         question = is_question(text, sentence_start, sentence_end)
         planned, past = bool(_PLANNED.search(sentence)), bool(_PAST.search(sentence))
+        if speaker.transcript is not None and not past:
+            past = _in_episode(text, sentence_start, sentence_end, previous)
         mine = attached[index]
         strengths = [
             d

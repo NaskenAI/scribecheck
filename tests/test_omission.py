@@ -460,3 +460,67 @@ def test_a_year_is_not_a_tablet_count() -> None:
         )
     )
     assert candidate.fact == "metformin 500 mg"
+
+
+# A drug from a recounted past episode is not a current medicine (synthetic, after a
+# development case where a past emergency visit's "don't give morphine" became a candidate).
+
+EPISODE_NOTE = "Past medical history:\nSevere kidney infection, seen in A&E.\n"
+
+
+def test_past_episode_morphine_regression() -> None:
+    transcript = (
+        "Doctor: Any other medical problems before?\n"
+        "Patient: Once I had a really bad kidney infection, and they had me in A&E.\n"
+        "Patient: And my GP called them to tell them they don't need to give me morphine.\n"
+        "Patient: That was awful, but otherwise I'm well.\n"
+    )
+    result = run(transcript, EPISODE_NOTE)
+    assert (result.candidates, result.unchecked) == ((), ())  # negated: not the patient's
+    # Without the negation, the past episode alone keeps it from being a candidate.
+    result = run(transcript.replace("don't need to give", "gave"), EPISODE_NOTE)
+    assert result.candidates == ()
+    assert reasons(result) == {("medicine", "morphine", "planned_or_past")}
+
+
+@pytest.mark.parametrize(
+    "transcript",
+    [
+        "Patient: They don't need to give me morphine.",
+        "Patient: My GP said there's no need to give me morphine.",
+        "Doctor: We shouldn’t give you morphine.",
+        "Patient: The GP advised against morphine.",
+    ],
+)
+def test_no_need_to_give_negates_the_drug(transcript: str) -> None:
+    assert run(transcript, NOTE).candidates == ()
+
+
+@pytest.mark.parametrize(
+    "transcript",
+    [
+        "Patient: Once I had a kidney stone and they had me in A&E.\n"
+        "Patient: They gave me morphine for the pain.",
+        "Patient: I was admitted with pneumonia and they gave me amoxicillin.",
+        "Patient: Back then I was on a drip. They gave me morphine.",
+        "Patient: That time they put me on morphine.",
+    ],
+)
+def test_a_drug_in_a_recounted_past_episode_is_past_use(transcript: str) -> None:
+    result = run(transcript, NOTE)
+    assert result.candidates == ()
+    assert {u.reason for u in result.unchecked} == {"planned_or_past"}
+
+
+@pytest.mark.parametrize(
+    "transcript",
+    [
+        "Patient: I take morphine every day.",
+        "Patient: I don't need to give up my metformin. I take it every day.",
+        # The episode is in another speaker's turn, or two sentences back.
+        "Doctor: Once you were in A&E?\nPatient: I take morphine every day.",
+        "Patient: I was in A&E once. I'm fine now. I take morphine every day.",
+    ],
+)
+def test_current_use_still_raises_a_candidate(transcript: str) -> None:
+    assert [c.category for c in run(transcript, NOTE).candidates] == ["medicine"]

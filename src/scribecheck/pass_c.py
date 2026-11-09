@@ -43,7 +43,7 @@ from scribecheck.pass_a.base import (
 from scribecheck.pass_a.quotes_stage import QuoteFixer
 from scribecheck.rules.examination import HANDS_ON
 
-PROMPTS = "scribecheck_v1"
+PROMPTS = "scribecheck_v2"
 StatementKind = Literal[
     "examination", "vital", "result", "record_history", "demographic", "clinical"
 ]

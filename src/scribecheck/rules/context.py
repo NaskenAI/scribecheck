@@ -178,6 +178,33 @@ _RULES: tuple[_Rule, ...] = (
         "does not get",
         "don't feel",
         "wouldn't say",
+        "no need for",
+        "advised against",
+        "advise against",
+    ),
+    # "They don't need to give me morphine" denies the drug; "give up" is another verb.
+    _Rule(
+        re.compile(
+            _words(
+                "no need to",
+                "don't need to",
+                "do not need to",
+                "doesn't need to",
+                "does not need to",
+                "didn't need to",
+                "not to",
+                "don't",
+                "do not",
+                "shouldn't",
+                "should not",
+                "mustn't",
+                "must not",
+            )
+            + r"\s+give(?!\s+up)(?![A-Za-z])",
+            re.IGNORECASE,
+        ),
+        "negated",
+        "forward",
     ),
     _rule(
         "negated",

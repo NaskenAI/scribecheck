@@ -1,0 +1,14 @@
+TASK: SECOND CHECK OF UNSUPPORTED STATEMENTS
+
+A first reviewer judged each statement below, taken from the NOTE above, to be contradicted by or
+unsupported by the TRANSCRIPT above. Such judgements are often wrong: the transcript may say the
+same thing in other words, or in a turn the reviewer missed. Search the whole transcript.
+
+For each id:
+- "upheld": true if, after searching, the transcript really does not support the statement (or
+  contradicts it); false if the transcript supports it;
+- "transcript_quote": for a statement the transcript supports or contradicts, the exact words from
+  ONE transcript turn; otherwise empty.
+
+STATEMENTS:
+{facts_block}
