@@ -8,6 +8,8 @@ Usage:
         --pairs data/omissionbench/pairs/dataset_v2.json --spec runs/gate1b/subset_spec.json \
         [--released data/omissionbench/judge_scores] [--gate1b runs/gate1b/harness-results] \
         [--show-facts] [--match-threshold 0.5] [--partial-as-flags]
+    python scripts/score_run.py spec --pairs data/omissionbench/pairs/dataset_v2.json \
+        --out runs/m3s4/full_spec.json
     python scripts/score_run.py misses --run runs/m3s4/claude-high \
         --pairs data/omissionbench/pairs/dataset_v2.json --spec runs/gate1b/subset_spec.json \
         [--manifest runs/m3s4/cases/manifest.json] [--show-facts]
@@ -16,6 +18,9 @@ Usage:
 for each note key (the case id is the note key with "|" as "__"), plus `manifest.json`.
 Errored notes are `<pair_id>|err`; a clean note is `<consultation>|clean|<first 12 hex
 digits of the clean note's SHA-256>`.
+
+`spec` writes every errored note and every distinct clean note in the pairs file as a spec
+(all 65 development consultations: 265 errored and 65 clean notes).
 
 `score` reads the run's `batch.json` (or every report JSON in the folder) and prints, for
 Pass A omission flags only, as the spec's benchmark scoring says (other passes' warnings
@@ -29,6 +34,8 @@ are shown separately, for information):
   --show-facts);
 - per-note agreement with the released B3 r1 and power-gepa-high r1/r3 records, and with
   the Gate 1(b) runs, on the same notes;
+- each reference method's detection and false alarms on the same notes, under its own rule
+  (route one: a critical fact judged absent; route two: aggregate below 10);
 - route one's own detection, correct detection and false alarms on the same notes, from
   the critical facts judged absent in the Gate 1(b) B3 records (the released records hold
   no fact text), matched to the removed fact the same way as our flags;
@@ -159,6 +166,30 @@ def prepare(pairs_path: Path, transcripts: Path, spec_path: Path, out: Path) -> 
     )
     kinds = Counter(m["kind"] for m in manifest.values())
     print(f"prepared {len(manifest)} notes in {out}: " + _counts(kinds))
+    return 0
+
+
+def write_spec(pairs_path: Path, out: Path) -> int:
+    """Every errored note and every distinct clean note in the pairs file, as a spec for
+    `prepare` and `score` (the development pairs file holds development data only)."""
+    pairs = _pairs(pairs_path)
+    keys = {f"{p['pair_id']}|err" for p in pairs if p.get("pair_id")}
+    errored = len(keys)
+    for pair in pairs:
+        clean = pair.get("clean")
+        if isinstance(clean, str) and pair.get("key"):
+            digest = hashlib.sha256(clean.encode("utf-8")).hexdigest()[:12]
+            keys.add(f"{pair['key']}|clean|{digest}")
+    consultations = sorted({str(p["key"]) for p in pairs if p.get("key")})
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps({"note_keys": sorted(keys), "consultations": consultations}, indent=1) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"wrote {out}: {len(keys)} notes over {len(consultations)} consultations: "
+        f"{errored} errored, {len(keys) - errored} clean"
+    )
     return 0
 
 
@@ -545,13 +576,31 @@ def score(args: argparse.Namespace) -> int:
             say(f"      removed fact: {fact}")
             say(f"      flag fact:    {flag.fact}")
 
+    references = _references(args)
+    if references:
+        say("== Reference methods on the same notes: detection and false alarms (their own")
+        say("   rules; correct detection needs fact text, which only Gate 1(b) B3 records")
+        say("   hold; notes without a usable record are left out of these rates)")
+    for name, ref in references.items():
+        omit = [ref.get(n.key) for n in omissions]
+        clean = [ref.get(n.key) for n in cleans]
+        known_o, known_c = [v for v in omit if v is not None], [v for v in clean if v is not None]
+        say(
+            f"   {name}: detection {_rate(sum(known_o), len(known_o))}, "
+            f"false alarms {_rate(sum(known_c), len(known_c))}"
+        )
+        if len(known_o) < len(omit) or len(known_c) < len(clean):
+            say(
+                f"      ({len(omit) - len(known_o)} omission and {len(clean) - len(known_c)} "
+                "clean notes without a usable record)"
+            )
+
     say("== Per-note agreement on omission and clean notes (information, not a gate)")
     say("   ours: the decision rule on Pass A omission flags; against B3 also 'critical")
     say("   absent' (route one's rule). A note we have no usable report for counts as a")
     say("   disagreement; a reference row that is unknown is left out.")
     judged = [n for n in notes if n.kind in ("omission", "clean")]
     usable = {n.key: n for n in judged if n.report is not None and not n.failed}
-    references = _references(args)
     if not references:
         say("   no reference records given (--released, --gate1b)")
     for name, ref in references.items():
@@ -828,6 +877,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="count partial verdicts as flags, as before they became information",
     )
+    sp = commands.add_parser("spec", help="write a spec of every note in the pairs file")
+    sp.add_argument("--pairs", type=Path, required=True)
+    sp.add_argument("--out", type=Path, required=True)
     ms = commands.add_parser("misses", help="trace each removed fact through Pass A")
     ms.add_argument("--run", type=Path, required=True)
     ms.add_argument("--pairs", type=Path, required=True)
@@ -840,6 +892,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return prepare(args.pairs, args.transcripts, args.spec, args.out)
     if args.command == "misses":
         return misses(args)
+    if args.command == "spec":
+        return write_spec(args.pairs, args.out)
     return score(args)
 
 
