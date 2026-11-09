@@ -69,9 +69,10 @@ def _flag(
     confidence: str = "confirmed",
     fact: str = "metformin",
     severity: str = "critical",
+    verdict: str | None = None,
     **extra: Any,
 ) -> dict[str, Any]:
-    verdict = {"omission": "absent", "changed_fact": "changed"}.get(kind, "unsupported")
+    verdict = verdict or {"omission": "absent", "changed_fact": "changed"}.get(kind, "unsupported")
     return {
         "id": fid,
         "type": kind,
@@ -226,18 +227,67 @@ def test_detection_and_false_alarms_use_pass_a_omissions_only(
     assert "clean notes with any other warning: 1/1" in out
 
 
+def _sweep(out: str) -> dict[str, str]:
+    rows = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) > 3 and parts[0] in ("possible", "confirmed") and parts[2].isdigit():
+            rows[f"{parts[0]}/{parts[1]}/{parts[2]}"] = line
+    return rows
+
+
 def test_k_and_c_sweep(subset: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
-    out = _score(subset, _run(subset, _standard_reports()), capsys)
-    rows = {
-        line.split()[0] + line.split()[1]: line
-        for line in out.splitlines()
-        if line.strip().startswith(("possible ", "confirmed "))
-    }
-    assert "3/3 (100.0%)" in rows["possible1"]  # p1, p2, p3 each have one flag
-    assert "1/3 (33.3%)" in rows["possible2"]
-    assert "0/3 (0.0%)" in rows["possible3"]
-    assert "2/3 (66.7%)" in rows["confirmed1"]  # p1 and p3 have a confirmed flag
+    rows = _sweep(_score(subset, _run(subset, _standard_reports()), capsys))
+    assert len(rows) == 2 * 3 * 5
+    assert "3/3 (100.0%)" in rows["possible/all/1"]  # p1, p2, p3 each have one flag
+    assert "1/3 (33.3%)" in rows["possible/all/2"]
+    assert "0/3 (0.0%)" in rows["possible/all/3"]
+    assert "2/3 (66.7%)" in rows["confirmed/all/1"]  # p1 and p3 have a confirmed flag
     assert all("0/1 (0.0%)" in line for line in rows.values())
+
+
+def test_sweep_severity_floors(subset: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+    reports = _standard_reports()
+    reports["syn|C1|omit|p2|err"] = _report(
+        [_flag("F1", severity="supporting"), _flag("F2", severity="supporting")]
+    )
+    rows = _sweep(_score(subset, _run(subset, reports), capsys))
+    # p1 critical (x2), p2 supporting (x2), p3 peripheral (x1)
+    assert rows["possible/all/1"].split()[3] == "3/3"
+    assert rows["possible/supporting+/1"].split()[3] == "2/3"
+    assert rows["possible/critical/1"].split()[3] == "1/3"
+    assert rows["possible/all/2"].split()[3] == "2/3"
+    assert rows["possible/supporting+/2"].split()[3] == "2/3"
+    assert rows["possible/critical/2"].split()[3] == "1/3"
+
+
+def test_correct_detection_counts_only_notes_naming_the_removed_fact(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = _score(subset, _run(subset, _standard_reports()), capsys)
+    # p1 and p2 are detected under the decision rule; only p1's flag names metformin 500 mg
+    assert "correct detection (a counted flag names the removed fact): 1/3 (33.3%)" in out
+    assert _sweep(out)["possible/all/1"].split()[5] == "1/3"
+
+
+def test_route_one_point(subset: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+    reports = {
+        # counts: critical, absent, confirmed
+        "syn|C1|omit|p1|err": _report([_flag("F1", fact="metformin 500 mg twice a day")]),
+        # each misses one condition: partial; supporting; possible
+        "syn|C1|omit|p2|err": _report([_flag("F1", verdict="partial")]),
+        "syn|C1|omit|p3|err": _report(
+            [_flag("F1", severity="supporting"), _flag("F2", confidence="possible")]
+        ),
+        "syn|C1|change|p4|err": _report([]),
+        CLEAN_KEY: _report([_flag("F1", verdict="partial"), _flag("F2", severity="supporting")]),
+    }
+    out = _score(subset, _run(subset, reports), capsys)
+    section = out.split("== Route one's rule")[1].split("==")[0]
+    assert "detection on omission notes: 1/3 (33.3%)" in section
+    assert "correct detection: 1/3 (33.3%)" in section
+    assert "false alarms on clean notes: 0/1 (0.0%)" in section
+    assert "route one's rule: 1/1 (100.0%) of detected notes name the removed fact" in out
 
 
 def test_correct_fact_matching_and_show_facts(

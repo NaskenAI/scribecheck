@@ -43,6 +43,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,9 @@ from scribecheck.flags import Flag  # noqa: E402
 
 RANK = {"possible": 1, "confirmed": 2, "certain": 3}
 LEVELS = ("possible", "confirmed")
+SEVERITY_RANK = {"peripheral": 1, "supporting": 2, "critical": 3}
+FLOORS = (("all", "peripheral"), ("supporting+", "supporting"), ("critical", "critical"))
+"""Severity floors for the sweep: all severities, supporting or higher, critical only."""
 KS = (1, 2, 3, 4, 5)
 _WORD = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
 _STOP = frozenset(
@@ -174,8 +178,36 @@ class Note:
 
     @property
     def critical_absent(self) -> bool:
-        """A Pass A omission flag graded critical and judged absent (route one's B3 rule)."""
-        return any(f.severity == "critical" and f.verdict == "absent" for f in self.pass_a)
+        """Route one's rule: a critical Pass A omission judged absent, at confirmed or
+        higher confidence (our confirmed second look standing in for its refute stage)."""
+        return bool(route_one_flags(self))
+
+
+# Operating points: which Pass A omission flags count, and how many are needed.
+
+
+def decision_flags(note: Note) -> list[Flag]:
+    """The flags that make the decision rule warn on their own."""
+    return [
+        f for f in note.pass_a if f.severity in ("critical", "supporting") or f.verdict == "partial"
+    ]
+
+
+def sweep_flags(note: Note, level: str, floor: str) -> list[Flag]:
+    return [
+        f
+        for f in note.pass_a
+        if RANK[f.confidence] >= RANK[level]
+        and SEVERITY_RANK.get(f.severity, 0) >= SEVERITY_RANK[floor]
+    ]
+
+
+def route_one_flags(note: Note) -> list[Flag]:
+    return [
+        f
+        for f in note.pass_a
+        if f.severity == "critical" and f.verdict == "absent" and RANK[f.confidence] >= 2
+    ]
 
 
 def load_reports(
@@ -322,11 +354,38 @@ def score(args: argparse.Namespace) -> int:
     for problem in problems:
         say(f"   batch problem: {_label(problem)}")
 
+    threshold = args.match_threshold
+
+    def names_fact(note: Note, flags: Sequence[Flag]) -> bool:
+        value, flag, _ = best_match(note, flags)
+        return flag is not None and value >= threshold
+
+    def point(pick: Callable[[Note], list[Flag]], k: int = 1) -> tuple[int, int, int]:
+        """(detected, correctly detected, false alarms) at one operating point."""
+        detected = correct = 0
+        for n in omissions:
+            flags = pick(n)
+            if len(flags) >= k:
+                detected += 1
+                correct += names_fact(n, flags)
+        alarms = sum(1 for n in cleans if len(pick(n)) >= k)
+        return detected, correct, alarms
+
     say("== Decision rule (Pass A omission flags only)")
     det = [n for n in omissions if n.flagged]
     fa = [n for n in cleans if n.flagged]
+    _, correct_det, _ = point(decision_flags)
     say(f"   detection on omission notes: {_rate(len(det), len(omissions))}")
+    say(
+        f"   correct detection (a counted flag names the removed fact): "
+        f"{_rate(correct_det, len(omissions))}"
+    )
     say(f"   false alarms on clean notes: {_rate(len(fa), len(cleans))}")
+    say("== Route one's rule: a critical fact judged absent, at confirmed confidence")
+    r_det, r_correct, r_alarms = point(route_one_flags)
+    say(f"   detection on omission notes: {_rate(r_det, len(omissions))}")
+    say(f"   correct detection: {_rate(r_correct, len(omissions))}")
+    say(f"   false alarms on clean notes: {_rate(r_alarms, len(cleans))}")
     for label, attr in (("trace", "residual_level"), ("removed-fact severity", "severity")):
         groups: dict[str, list[Note]] = {}
         for n in omissions:
@@ -348,35 +407,28 @@ def score(args: argparse.Namespace) -> int:
     clean_others = sum(1 for n in cleans if n.others)
     say(f"   (information) clean notes with any other warning: {clean_others}/{len(cleans)}")
 
-    say("== k-and-c sweep: at least k Pass A omission flags at confidence c or higher")
-    say("   c          k  detection            false alarms")
+    say("== k-and-c sweep: at least k Pass A omission flags at confidence c or higher and")
+    say("   severity at or above the floor")
+    say("   c          severity     k  detection          correct            false alarms")
     for level in LEVELS:
-        for k in KS:
-            d = sum(1 for n in omissions if n.count_at(level) >= k)
-            f = sum(1 for n in cleans if n.count_at(level) >= k)
-            say(f"   {level:<10} {k}  {_rate(d, len(omissions)):<20} {_rate(f, len(cleans))}")
+        for floor_label, floor in FLOORS:
+            for k in KS:
+                d, c, f = point(partial(sweep_flags, level=level, floor=floor), k)
+                say(
+                    f"   {level:<10} {floor_label:<12} {k}  {_rate(d, len(omissions)):<18} "
+                    f"{_rate(c, len(omissions)):<18} {_rate(f, len(cleans))}"
+                )
 
     say(f"== Provisional correct-fact rate (match threshold {args.match_threshold})")
-    points: list[tuple[str, list[Note], Iterable[str] | None]] = [
-        ("decision rule", det, None),
-        ("k=1, c=possible", [n for n in omissions if n.count_at("possible") >= 1], LEVELS),
-        (
-            "k=1, c=confirmed",
-            [n for n in omissions if n.count_at("confirmed") >= 1],
-            ("confirmed",),
-        ),
+    points: list[tuple[str, Callable[[Note], list[Flag]]]] = [
+        ("decision rule", decision_flags),
+        ("k=1, c=possible", partial(sweep_flags, level="possible", floor="peripheral")),
+        ("k=1, c=confirmed", partial(sweep_flags, level="confirmed", floor="peripheral")),
+        ("route one's rule", route_one_flags),
     ]
-    for label, detected, levels in points:
-        matched = 0
-        for n in detected:
-            flags = (
-                n.pass_a
-                if levels is None
-                else [f for f in n.pass_a if f.confidence in {*levels, "certain"}]
-            )
-            value, flag, _ = best_match(n, flags)
-            matched += value >= args.match_threshold and flag is not None
-        say(f"   {label}: {_rate(matched, len(detected))} of detected notes name the removed fact")
+    for label, pick in points:
+        detected, correct, _ = point(pick)
+        say(f"   {label}: {_rate(correct, detected)} of detected notes name the removed fact")
     say("   per note at the decision rule (pair id, flag id, score, matched):")
     for n in det:
         value, flag, fact = best_match(n, n.pass_a)
