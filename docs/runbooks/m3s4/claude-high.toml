@@ -26,3 +26,6 @@ cost_cap_usd = 15.0
 
 [pass_a]
 pipeline = "scribecheck"
+
+[report]
+pass_a_trace = true    # each fact's path through Pass A, for the miss analysis

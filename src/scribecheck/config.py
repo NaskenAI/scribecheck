@@ -162,6 +162,11 @@ class Config(BaseModel):
     show_rejected_as_possible: bool = False
     """Report Pass B and C verdicts the second check rejected as possible flags, instead of
     as unchecked items ("second_check_rejected")."""
+    partial_as_flags: bool = False
+    """Report partial verdicts as flags that warn, instead of as information."""
+    pass_a_trace: bool = False
+    """Add each fact's path through Pass A (extraction, audit, check, second look) to a
+    full-mode report, for analysing misses on development data."""
 
     @field_validator("passes")
     @classmethod
@@ -302,6 +307,8 @@ class _Report(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     show_rejected_as_possible: StrictBool = False
+    partial_as_flags: StrictBool = False
+    pass_a_trace: StrictBool = False
 
 
 class _Budget(BaseModel):
@@ -391,6 +398,8 @@ def config_from_mapping(data: Mapping[str, object], *, source: str = "config") -
             passes=tuple(parsed.passes),
             exempt=tuple(parsed.pass_c.exempt),
             show_rejected_as_possible=parsed.report.show_rejected_as_possible,
+            partial_as_flags=parsed.report.partial_as_flags,
+            pass_a_trace=parsed.report.pass_a_trace,
             stages={
                 **{f"route_one.{k}": v for k, v in parsed.pass_a.route_one.items()},
                 **{f"scribecheck.{k}": v for k, v in parsed.pass_a.scribecheck.items()},
@@ -507,5 +516,10 @@ fail_confidence = ["certain", "confirmed"]
 # Show Pass B and C verdicts their second check rejected as possible flags, instead of as
 # unchecked items.
 # show_rejected_as_possible = false
+# Report partial verdicts (the note carries part of a fact) as flags that warn, instead of
+# as information that never changes the decision.
+# partial_as_flags = false
+# Add each fact's path through Pass A to full-mode reports (development analysis only).
+# pass_a_trace = false
 """
 """Written by `scribecheck init`."""

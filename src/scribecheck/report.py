@@ -1,8 +1,9 @@
 """The versioned JSON report and its Markdown rendering.
 
 The schema follows docs/spec.md ("Data model and report format"), plus an `unchecked`
-list: the items the rules could not decide, each with its reason codes. A report holds
-evidence quotes only, never the full transcript or note.
+list: the items the rules could not decide, each with its reason codes, and an `info` list:
+partial verdicts (the note carries part of a fact), which never change the decision or the
+counts. A report holds evidence quotes only, never the full transcript or note.
 """
 
 from __future__ import annotations
@@ -115,6 +116,32 @@ class NotVerifiable(NoteEvidence):
     kind: str
 
 
+class TraceFact(BaseModel):
+    """One fact's path through scribecheck's Pass A pipeline, for development analysis."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    fact: str
+    category: str
+    origin: str
+    evidence_verified: bool
+    """False when extraction's transcript quote could not be found: the fact was dropped."""
+    audit: str | None = None
+    """"kept", "dropped", "not_audited" or "failed"; None for a dropped extraction."""
+    core: bool | None = None
+    severity: str | None = None
+    checked: bool = False
+    """Whether the standard sent it to the presence check (core, and not peripheral under
+    the clinical standard)."""
+    verdict: str | None = None
+    """"present", "partial", "absent", or None when not checked or the check failed."""
+    note_quote: str | None = None
+    """The verified note quote for a present or partial verdict."""
+    second_look: str | None = None
+    """For an absent verdict: "confirmed", "rescued", "unverified" or "failed"."""
+
+
 class Report(BaseModel):
     """One consultation's report."""
 
@@ -129,6 +156,8 @@ class Report(BaseModel):
     counts: Counts
     flags: tuple[Flag, ...] = ()
     unchecked: tuple[UncheckedItem, ...] = ()
+    info: tuple[Flag, ...] = ()
+    """Partial verdicts, reported for information unless `partial_as_flags` is set."""
     usage: UsageInfo | None = None
     """Full mode only."""
     pass_a: PassAInfo | None = None
@@ -137,6 +166,8 @@ class Report(BaseModel):
     """Full mode only: what each pass ran as (a pipeline or "model", "rules", or "off")."""
     not_verifiable: tuple[NotVerifiable, ...] = ()
     """Full mode only: statements reported as not verifiable."""
+    pass_a_trace: tuple[TraceFact, ...] | None = None
+    """Full mode with `pass_a_trace` set: every extracted fact's path through Pass A."""
 
     def to_dict(self) -> dict[str, Any]:
         """The report as JSON-ready data, keys in the spec's order."""
@@ -151,6 +182,8 @@ class Report(BaseModel):
             "flags": [_flag_dict(f) for f in self.flags],
             "unchecked": [_unchecked_dict(u) for u in self.unchecked],
         }
+        if self.info:
+            data["info"] = [_flag_dict(f) for f in self.info]
         if self.usage is not None:
             data["usage"] = self.usage.model_dump()
         if self.pass_a is not None:
@@ -159,6 +192,8 @@ class Report(BaseModel):
             data["passes"] = dict(self.passes)
         if self.not_verifiable:
             data["not_verifiable"] = [n.model_dump() for n in self.not_verifiable]
+        if self.pass_a_trace is not None:
+            data["pass_a_trace"] = [t.model_dump(exclude_none=True) for t in self.pass_a_trace]
         return data
 
     def to_json(self) -> str:
@@ -283,6 +318,18 @@ def render_markdown(report: Report, *, level: int = 1, case: Case | None = None)
         lines += [_unchecked_row(u) for u in report.unchecked]
     else:
         lines.append("No unchecked items.")
+    if report.info:
+        lines += [
+            "",
+            f"{h}# Information",
+            "",
+            "Partial verdicts: the note carries part of each fact. They do not change the "
+            "decision.",
+            "",
+            "| ID | Category | Severity | Fact | Transcript evidence | Note evidence |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+        lines += [_info_row(f) for f in report.info]
     return "\n".join(lines) + "\n"
 
 
@@ -353,6 +400,18 @@ def _flag_row(flag: Flag) -> str:
         _t_quote(flag.transcript_evidence),
         _n_quote(flag.note_evidence),
         flag.expected_section or "-",
+    ]
+    return "| " + " | ".join(_cell(c) for c in cells) + " |"
+
+
+def _info_row(flag: Flag) -> str:
+    cells = [
+        flag.id,
+        flag.category,
+        flag.severity,
+        flag.fact or "-",
+        _t_quote(flag.transcript_evidence),
+        _n_quote(flag.note_evidence),
     ]
     return "| " + " | ".join(_cell(c) for c in cells) + " |"
 

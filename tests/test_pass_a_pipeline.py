@@ -412,3 +412,52 @@ def test_long_transcript_is_extracted_in_overlapping_chunks() -> None:
     last_of_first = seen[0].strip().splitlines()[-1].split("]")[0] + "]"  # e.g. "[T18]"
     assert last_of_first in seen[1]  # neighbouring chunks overlap
     assert [f.text for f in outcome.facts] == ["Persistent dry cough"]  # merged across chunks
+
+
+def test_trace_records_every_stage() -> None:
+    def extract(_: Any, __: dict[str, Any]) -> Any:
+        facts = [
+            {"fact": f, "category": c, "attributes": [], "evidence": e} for f, c, e in EXTRACTED
+        ]
+        facts.append(
+            {"fact": "Has a cat", "category": "family_social", "evidence": "I have a cat at home"}
+        )
+        return {"facts": facts}
+
+    def audit(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {
+                    "id": fid,
+                    "keep": not text.startswith("Working impression"),
+                    "core": text != "No fever",
+                    "severity": "critical" if "penicillin" in text else "supporting",
+                }
+                for fid, text in listed
+            ]
+        }
+
+    def second_look(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        return {
+            "facts": [
+                {"id": fid, "found": "penicillin" not in t, "note_quote": "Likely viral illness."}
+                for fid, t in listed
+            ]
+        }
+
+    mock = MockClaude(scripts(extract=extract, audit=audit, second_look=second_look))
+    outcome, _ = run(mock, candidates=False)
+    steps = {s["fact"]: s for s in outcome.trace.values()}
+    assert steps["Has a cat"]["evidence_verified"] is False and "audit" not in steps["Has a cat"]
+    assert steps["Working impression: viral cough"]["audit"] == "dropped"
+    no_fever = steps["No fever"]
+    assert (no_fever["audit"], no_fever["core"], no_fever["checked"]) == ("kept", False, False)
+    cough = steps["Cough for two weeks"]
+    assert (cough["verdict"], cough["note_quote"]) == ("present", "Cough for 2 weeks")
+    penicillin = steps["Allergic to penicillin"]
+    assert (penicillin["verdict"], penicillin["second_look"]) == ("absent", "confirmed")
+    assert penicillin["severity"] == "critical"
+    assert steps["Return if short of breath"]["verdict"] == "partial"
+    asked = steps["Doctor asked what brings the patient in"]
+    assert (asked["verdict"], asked["second_look"]) == ("absent", "rescued")
+    assert asked["note_quote"] == "Likely viral illness"

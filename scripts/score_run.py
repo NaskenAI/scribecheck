@@ -7,7 +7,10 @@ Usage:
     python scripts/score_run.py score --run runs/m3s4/claude-medium \
         --pairs data/omissionbench/pairs/dataset_v2.json --spec runs/gate1b/subset_spec.json \
         [--released data/omissionbench/judge_scores] [--gate1b runs/gate1b/harness-results] \
-        [--show-facts] [--match-threshold 0.5]
+        [--show-facts] [--match-threshold 0.5] [--partial-as-flags]
+    python scripts/score_run.py misses --run runs/m3s4/claude-high \
+        --pairs data/omissionbench/pairs/dataset_v2.json --spec runs/gate1b/subset_spec.json \
+        [--manifest runs/m3s4/cases/manifest.json] [--show-facts]
 
 `prepare` writes the subset as a batch folder: `<case>.transcript.txt` and `<case>.note.md`
 for each note key (the case id is the note key with "|" as "__"), plus `manifest.json`.
@@ -27,6 +30,17 @@ are shown separately, for information):
 - per-note agreement with the released B3 r1 and power-gepa-high r1/r3 records, and with
   the Gate 1(b) runs, on the same notes;
 - calls, tokens, cost and wall-clock time per note, and each unchecked reason's count.
+
+Partial verdicts are information, not flags, whether the run listed them in `info` or (a
+run from before the change) among its flags; `--partial-as-flags` counts them as before.
+
+`misses` follows each omission note's removed fact through Pass A, from the report's
+`pass_a_trace` (`[report] pass_a_trace = true`): the extracted fact that best matches it
+(with the score), the audit's core or contextual call and severity, the check's verdict
+(with the note quote for present) and the second look, and classes it as detected, not
+extracted, dropped by the audit, contextual and so never checked, judged present, judged
+partial, rescued by the second look, or unchecked; counts per class and per trace. A run
+without a trace can only be classed from its flags.
 
 Only counts, IDs, labels and scores are printed (and, with --show-facts, the benchmark's
 and the flags' fact strings), never transcript or note text. Development data only.
@@ -153,6 +167,9 @@ class Note:
     report: Mapping[str, Any] | None
     pass_a: list[Flag] = field(default_factory=list)
     others: list[Flag] = field(default_factory=list)
+    info: list[Flag] = field(default_factory=list)
+    """Partial verdicts, as information (the report's `info` list, and partial flags in
+    reports written before partial verdicts became information)."""
 
     @property
     def flagged(self) -> bool:
@@ -242,16 +259,29 @@ def load_reports(
 
 
 def build_notes(
-    keys: Sequence[str], pairs: Sequence[Mapping[str, Any]], reports: Mapping[str, Any]
+    keys: Sequence[str],
+    pairs: Sequence[Mapping[str, Any]],
+    reports: Mapping[str, Any],
+    *,
+    partial_as_flags: bool = False,
 ) -> list[Note]:
+    """Each note with its flags. Partial verdicts are information unless `partial_as_flags`,
+    whichever way the run reported them, so runs from before and after the change score
+    alike."""
     notes = []
     for key in keys:
         pair, _, kind = resolve(key, pairs)
         report = reports.get(key)
         note = Note(key, kind, pair, report)
-        for raw in (report or {}).get("flags", []):
+        raws = [*(report or {}).get("flags", []), *(report or {}).get("info", [])]
+        for raw in raws:
             flag = Flag.model_validate(raw)
-            (note.pass_a if flag.type == "omission" else note.others).append(flag)
+            if flag.type != "omission":
+                note.others.append(flag)
+            elif flag.verdict == "partial" and not partial_as_flags:
+                note.info.append(flag)
+            else:
+                note.pass_a.append(flag)
         notes.append(note)
     return notes
 
@@ -331,7 +361,7 @@ def score(args: argparse.Namespace) -> int:
     pairs = _pairs(args.pairs)
     keys = sorted(json.loads(args.spec.read_text(encoding="utf-8"))["note_keys"])
     reports, elapsed, problems = load_reports(args.run, args.manifest)
-    notes = build_notes(keys, pairs, reports)
+    notes = build_notes(keys, pairs, reports, partial_as_flags=args.partial_as_flags)
     missing = [n.key for n in notes if n.report is None]
     present = [n for n in notes if n.report is not None]
     failed = [n for n in present if n.failed]
@@ -343,6 +373,11 @@ def score(args: argparse.Namespace) -> int:
     say = out.append
 
     say(f"== Coverage: {len(present)}/{len(notes)} notes have a report")
+    say(
+        "   partial verdicts: "
+        + ("counted as flags (--partial-as-flags)" if args.partial_as_flags else "information")
+        + f"; {sum(len(n.info) for n in present)} listed as information"
+    )
     kinds = Counter(n.kind for n in notes)
     say(f"   notes in the spec by kind: {_counts(kinds)}")
     for key in missing:
@@ -514,6 +549,135 @@ def score(args: argparse.Namespace) -> int:
     return 0
 
 
+# misses
+
+MISS_CLASSES = (
+    "detected",
+    "not extracted",
+    "dropped by the audit",
+    "contextual, never checked",
+    "judged present",
+    "judged partial",
+    "rescued by the second look",
+    "unchecked",
+    "no matching flag",
+)
+"""Where an omission note's removed fact ended up. "detected": a confirmed absent flag names
+it. "no matching flag" is the only class a run without a Pass A trace can give besides
+"detected" and "judged partial"."""
+
+
+def trace_match(
+    pair: Mapping[str, Any], trace: Sequence[Mapping[str, Any]], threshold: float
+) -> tuple[float, Mapping[str, Any] | None]:
+    """The best-scoring trace fact comparable with a removed fact, if it reaches
+    `threshold`, and the best score among comparable facts either way."""
+    best: tuple[float, Mapping[str, Any] | None] = (0.0, None)
+    for fact in removed_facts(pair):
+        for step in trace:
+            text = str(step.get("fact") or "")
+            if comparable(fact, text) and (value := similarity(fact, text)) > best[0]:
+                best = (value, step)
+    return best if best[0] >= threshold else (best[0], None)
+
+
+def classify_miss(step: Mapping[str, Any] | None) -> str:
+    """A removed fact's class from its matched trace fact (None: nothing matched)."""
+    if step is None or not step.get("evidence_verified", True):
+        return "not extracted"
+    if step.get("audit") == "dropped":
+        return "dropped by the audit"
+    if step.get("audit") == "failed" or (step.get("checked") and step.get("verdict") is None):
+        return "unchecked"
+    if not step.get("checked"):
+        return "contextual, never checked"
+    verdict, look = step.get("verdict"), step.get("second_look")
+    if verdict == "present":
+        return "judged present"
+    if verdict == "partial":
+        return "judged partial"
+    if look == "rescued":
+        return "rescued by the second look"
+    if look == "confirmed":
+        return "detected"
+    return "unchecked"
+
+
+def misses(args: argparse.Namespace) -> int:
+    """Trace each omission note's removed fact through Pass A and classify where it went."""
+    pairs = _pairs(args.pairs)
+    keys = sorted(json.loads(args.spec.read_text(encoding="utf-8"))["note_keys"])
+    reports, _, _ = load_reports(args.run, args.manifest)
+    notes = [
+        n
+        for n in build_notes(keys, pairs, reports)
+        if n.kind == "omission" and n.report is not None and not n.failed
+    ]
+    threshold = args.match_threshold
+    traced = sum(1 for n in notes if n.report is not None and "pass_a_trace" in n.report)
+    out: list[str] = []
+    say = out.append
+    say(f"== Removed facts through Pass A ({len(notes)} omission notes, {traced} with a trace)")
+    if traced < len(notes):
+        say("   a note without a Pass A trace ([report] pass_a_trace) can only be classed")
+        say("   from its flags: detected, judged partial or no matching flag")
+    say("   pair id, trace, removed-fact severity, match score, class, then the stages:")
+    say("   extracted / audit (core or contextual, severity) / check verdict / second look")
+    classes: Counter[str] = Counter()
+    by_trace: dict[str, Counter[str]] = {}
+    for n in notes:
+        assert n.report is not None
+        flag_score, flag, _ = best_match(n, [*n.pass_a, *n.info])
+        named = flag if flag is not None and flag_score >= threshold else None
+        trace = n.report.get("pass_a_trace")
+        if trace is not None:
+            value, step = trace_match(n.pair, trace, threshold)
+            label = classify_miss(step)
+            if named is not None and named.verdict == "absent" and RANK[named.confidence] >= 2:
+                label = "detected"  # a confirmed rules candidate names it
+        else:
+            value, step = flag_score, None
+            if named is None:
+                label = "no matching flag"
+            elif named.verdict == "partial":
+                label = "judged partial"
+            else:
+                label = "detected" if RANK[named.confidence] >= 2 else "no matching flag"
+        classes[label] += 1
+        level = str(n.pair.get("residual_level"))
+        by_trace.setdefault(level, Counter())[label] += 1
+        say(f"   {n.pair.get('pair_id')}  {level}  {n.pair.get('severity')}  {value:.2f}  {label}")
+        if step is not None:
+            core = {True: "core", False: "contextual", None: "-"}[step.get("core")]
+            say(
+                f"      extracted {step.get('id')} ({step.get('origin')}) / audit "
+                f"{step.get('audit', '-')} ({core}, {step.get('severity') or '-'}) / check "
+                f"{step.get('verdict') or ('not checked' if not step.get('checked') else '-')}"
+                f" / second look {step.get('second_look') or '-'}"
+            )
+        elif named is not None:
+            say(f"      flag {named.id}: {named.verdict}, {named.confidence}, {named.severity}")
+        if args.show_facts:
+            for fact in removed_facts(n.pair):
+                say(f"      removed fact: {fact}")
+            if step is not None:
+                say(f"      our fact:     {step.get('fact')}")
+                if step.get("note_quote"):
+                    say(f'      note quote:   "{step.get("note_quote")}"')
+            elif named is not None:
+                say(f"      flag fact:    {named.fact}")
+    say("== Classes")
+    for label in MISS_CLASSES:
+        if classes[label]:
+            say(f"   {label}: {classes[label]}")
+    say("== Classes by trace")
+    for level, counter in sorted(by_trace.items()):
+        detail = ", ".join(f"{c} {counter[c]}" for c in MISS_CLASSES if counter[c])
+        say(f"   {level} ({sum(counter.values())}): {detail}")
+    print("\n".join(out))
+    return 0
+
+
 def _decision(note: Note) -> bool:
     return note.flagged
 
@@ -567,9 +731,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     sc.add_argument("--gate1b", type=Path)
     sc.add_argument("--show-facts", action="store_true")
     sc.add_argument("--match-threshold", type=float, default=0.5)
+    sc.add_argument(
+        "--partial-as-flags",
+        action="store_true",
+        help="count partial verdicts as flags, as before they became information",
+    )
+    ms = commands.add_parser("misses", help="trace each removed fact through Pass A")
+    ms.add_argument("--run", type=Path, required=True)
+    ms.add_argument("--pairs", type=Path, required=True)
+    ms.add_argument("--spec", type=Path, required=True)
+    ms.add_argument("--manifest", type=Path, help="prepare's manifest.json (exact case ids)")
+    ms.add_argument("--show-facts", action="store_true")
+    ms.add_argument("--match-threshold", type=float, default=0.5)
     args = parser.parse_args(argv)
     if args.command == "prepare":
         return prepare(args.pairs, args.transcripts, args.spec, args.out)
+    if args.command == "misses":
+        return misses(args)
     return score(args)
 
 

@@ -16,6 +16,7 @@ from scribecheck.cli import main
 from scribecheck.config import Config
 from scribecheck.model.anthropic import AnthropicClient
 from scribecheck.model.endpoint import Secret
+from scribecheck.report import render_markdown
 
 DEMO = resources.files("scribecheck") / "demo"
 TRANSCRIPT = (DEMO / "demo-003.transcript.json").read_text(encoding="utf-8")
@@ -232,3 +233,72 @@ def test_cli_passes_option(
     assert main(["check", "-t", "t.json", "-n", "n.md", "--passes", "a", "--format", "json"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["mode"] == "rules" and {f["type"] for f in data["flags"]} <= {"omission"}
+
+
+def _partial_plan(mock: MockClaude) -> None:
+    """The plan is judged partial and the rules candidate rejected: only a partial remains."""
+    check_ = mock.scripts["check"]
+
+    def partial_check(listed: list[tuple[str, str]], body: Any) -> Any:
+        rows = check_(listed, body)["verdicts"]
+        for row, (_, text) in zip(rows, listed, strict=True):
+            if text.startswith("Plan:"):
+                row["verdict"] = "partial"
+        return {"verdicts": rows}
+
+    mock.scripts["check"] = partial_check
+    mock.scripts["candidate"] = lambda listed, _: {
+        "findings": [{"id": i, "confirmed": False} for i, _ in listed]
+    }
+
+
+def test_partial_verdicts_are_information_by_default(mock: MockClaude) -> None:
+    _partial_plan(mock)
+    report = check(TRANSCRIPT, NOTE, FULL.model_copy(update={"passes": ("a",)}))
+    assert report.flags == () and report.counts.omission == 0
+    assert report.decision == "pass"
+    assert [(i.id, i.verdict, i.fact) for i in report.info] == [
+        ("I1", "partial", "Plan: X-ray and physiotherapy referral")
+    ]
+    assert report.info[0].note_evidence is not None
+    assert report.info[0].note_evidence.text == "Refer to physiotherapy"
+    data = json.loads(report.to_json())
+    assert data["info"][0]["id"] == "I1" and data["flags"] == []
+    markdown = render_markdown(report)
+    assert "## Information" in markdown and '"Refer to physiotherapy"' in markdown
+
+
+def test_partial_as_flags_restores_the_warning(mock: MockClaude) -> None:
+    _partial_plan(mock)
+    config = FULL.model_copy(update={"passes": ("a",), "partial_as_flags": True})
+    report = check(TRANSCRIPT, NOTE, config)
+    assert [(f.id, f.verdict) for f in report.flags] == [("F1", "partial")]
+    assert report.info == () and report.counts.omission == 1
+    assert report.decision == "warn"
+    assert "info" not in json.loads(report.to_json())
+    assert "## Information" not in render_markdown(report)
+
+
+def test_pass_a_trace_follows_each_fact(mock: MockClaude) -> None:
+    _partial_plan(mock)
+    assert check(TRANSCRIPT, NOTE, FULL.model_copy(update={"passes": ("a",)})).pass_a_trace is None
+    config = FULL.model_copy(update={"passes": ("a",), "pass_a_trace": True})
+    report = check(TRANSCRIPT, NOTE, config)
+    assert report.pass_a_trace is not None
+    steps = {t.fact: t for t in report.pass_a_trace}
+    plan = steps["Plan: X-ray and physiotherapy referral"]
+    assert (plan.audit, plan.core, plan.severity, plan.checked) == (
+        "kept",
+        True,
+        "supporting",
+        True,
+    )
+    assert (plan.verdict, plan.note_quote, plan.second_look) == (
+        "partial",
+        "Refer to physiotherapy",
+        None,
+    )
+    knee = steps["Left knee swollen and painful for two weeks"]
+    assert knee.verdict == "present" and knee.note_quote == "Knee swollen and painful for 2 weeks"
+    assert all(t.evidence_verified and t.origin == "model" for t in report.pass_a_trace)
+    assert json.loads(report.to_json())["pass_a_trace"][0]["id"] == "f1"

@@ -78,6 +78,9 @@ class Outcome:
     """Indexes into `Case.pass_b_items` Pass B's model decided."""
     not_verifiable: list[tuple[NoteEvidence, str]] = field(default_factory=list)
     """Pass C statements reported as not verifiable, with their kind."""
+    trace: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """Each extracted fact's path through the scribecheck pipeline, by fact id (the fields
+    of `report.TraceFact`)."""
     tally: Tally = field(default_factory=Tally)
 
 

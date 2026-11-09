@@ -5,8 +5,10 @@ Following docs/spec.md ("Severity, decision rule and calibration"):
 - In rules mode every finding is a warning, and nothing fails.
 - In full mode failing is opt-in: a note fails only when a flag has a severity in
   `fail_on` and a confidence in `fail_confidence`.
-- Otherwise critical and supporting flags, and partial verdicts, warn; peripheral flags
-  (kept only by the strict standard) are reported without warning.
+- Otherwise critical and supporting flags warn, and so do partial verdicts where they are
+  reported as flags (`[report] partial_as_flags`; by default they are information and never
+  reach this rule); peripheral flags (kept only by the strict standard) are reported
+  without warning.
 """
 
 from __future__ import annotations

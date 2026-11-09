@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import shutil
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -426,3 +427,119 @@ def test_manifest_mapping_and_round_trip_check(
                 str(subset["root"] / "cases2"),
             ]
         )
+
+
+def test_partial_verdicts_are_information(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    # p2: a partial among the flags (a run from before the change); p3: in the info list
+    reports["syn|C1|omit|p2|err"] = _report([_flag("F1", verdict="partial", confidence="possible")])
+    reports["syn|C1|omit|p3|err"] = _report([])
+    reports["syn|C1|omit|p3|err"]["info"] = [_flag("I1", verdict="partial", confidence="possible")]
+    reports[CLEAN_KEY] = _report([_flag("F1", verdict="partial", confidence="possible")])
+    run = _run(subset, reports)
+    out = _score(subset, run, capsys)
+    assert "partial verdicts: information; 3 listed as information" in out
+    assert "detection on omission notes: 1/3 (33.3%)" in out  # p1 only
+    assert "false alarms on clean notes: 0/1 (0.0%)" in out
+    out = _score(subset, run, capsys, "--partial-as-flags")
+    assert "counted as flags (--partial-as-flags); 0 listed as information" in out
+    assert "detection on omission notes: 3/3 (100.0%)" in out
+    assert "false alarms on clean notes: 1/1 (100.0%)" in out
+
+
+def _misses(
+    subset: dict[str, Path], run: Path, capsys: pytest.CaptureFixture[str], *extra: str
+) -> str:
+    args = ["misses", "--run", str(run), "--pairs", str(subset["pairs"])]
+    assert _load().main([*args, "--spec", str(subset["spec"]), *extra]) == 0
+    return capsys.readouterr().out
+
+
+def _step(fid: str, fact: str, **extra: Any) -> dict[str, Any]:
+    step = {"id": fid, "fact": fact, "category": "medicine", "origin": "model"}
+    step.update({"evidence_verified": True, "audit": "kept", "core": True})
+    step.update({"severity": "critical", "checked": True})
+    return {**step, **extra}
+
+
+def test_misses_classes_from_the_trace(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    traces = {
+        # p1: judged present, with the note quote the report holds
+        "syn|C1|omit|p1|err": [
+            _step("f1", "Takes metformin 500 mg twice a day", verdict="present", note_quote="Q1"),
+            _step("f2", "Cough", verdict="absent", second_look="confirmed"),
+        ],
+        # p2: only an unrelated fact: not extracted
+        "syn|C1|omit|p2|err": [_step("f1", "Has asthma", verdict="present")],
+        # p3: extracted but contextual, so never checked
+        "syn|C1|omit|p3|err": [
+            _step("f1", "Metformin 500 mg twice daily", core=False, checked=False)
+        ],
+    }
+    for key, trace in traces.items():
+        reports[key]["pass_a_trace"] = trace
+    reports["syn|C1|omit|p1|err"]["flags"] = []
+    out = _misses(subset, _run(subset, reports), capsys)
+    assert "3 omission notes, 3 with a trace" in out
+    lines = out.splitlines()
+    p1 = next(i for i, line in enumerate(lines) if "syn|C1|omit|p1" in line)
+    assert lines[p1].endswith("judged present")
+    assert "extracted f1 (model) / audit kept (core, critical) / check present" in lines[p1 + 1]
+    assert any("syn|C1|omit|p2" in line and line.endswith("not extracted") for line in lines)
+    assert any(
+        "syn|C1|omit|p3" in line and line.endswith("contextual, never checked") for line in lines
+    )
+    assert "   judged present: 1" in out and "   not extracted: 1" in out
+    assert "complete (2): contextual, never checked 1, judged present 1" in out
+    assert "partial-weak (1): not extracted 1" in out
+    assert "metformin" not in out.lower() and "Q1" not in out  # facts only with --show-facts
+    shown = _misses(subset, _run_again(subset, reports), capsys, "--show-facts")
+    assert "removed fact: Takes metformin 500 mg twice daily" in shown
+    assert 'note quote:   "Q1"' in shown
+
+
+def _run_again(subset: dict[str, Path], reports: dict[str, dict[str, Any]]) -> Path:
+    shutil.rmtree(subset["root"] / "run")
+    return _run(subset, reports)
+
+
+def test_misses_without_a_trace_use_the_flags(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    reports["syn|C1|omit|p2|err"] = _report(
+        [_flag("F1", verdict="partial", confidence="possible", fact="metformin 500 mg twice")]
+    )
+    out = _misses(subset, _run(subset, reports), capsys)
+    assert "3 omission notes, 0 with a trace" in out
+    assert "detected: 1" in out and "judged partial: 1" in out and "no matching flag: 1" in out
+    assert "flag F1: partial, possible, critical" in out
+
+
+@pytest.mark.parametrize(
+    ("step", "label"),
+    [
+        (None, "not extracted"),
+        ({"evidence_verified": False}, "not extracted"),
+        ({"audit": "dropped"}, "dropped by the audit"),
+        ({"audit": "kept", "checked": False}, "contextual, never checked"),
+        ({"audit": "kept", "checked": True, "verdict": "partial"}, "judged partial"),
+        (
+            {"audit": "kept", "checked": True, "verdict": "absent", "second_look": "rescued"},
+            "rescued by the second look",
+        ),
+        (
+            {"audit": "kept", "checked": True, "verdict": "absent", "second_look": "confirmed"},
+            "detected",
+        ),
+        ({"audit": "kept", "checked": True}, "unchecked"),  # the check failed
+        ({"audit": "failed"}, "unchecked"),
+    ],
+)
+def test_classify_miss(step: dict[str, Any] | None, label: str) -> None:
+    assert _load().classify_miss(step) == label

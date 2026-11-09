@@ -124,3 +124,13 @@ def test_starter_config_is_valid_toml_with_every_section() -> None:
     }
     assert all(data[k] == {} for k in ("speakers", "headings", "brands", "symptoms"))
     assert "# [model]" in STARTER_CONFIG
+
+
+def test_report_options() -> None:
+    assert (Config().partial_as_flags, Config().pass_a_trace) == (False, False)
+    config = config_from_mapping(
+        {"report": {"partial_as_flags": True, "pass_a_trace": True}}, source="test"
+    )
+    assert (config.partial_as_flags, config.pass_a_trace) == (True, True)
+    with pytest.raises(InputError):
+        config_from_mapping({"report": {"partial_as_flags": "yes"}}, source="test")

@@ -188,7 +188,8 @@ The checker acts on per-fact verdicts and severity, not on a single note score, 
 
 - *Certain:* reserved for a deterministic mismatch the rules layer can prove. It is not emitted in v1, because rules-mode certain flags are disabled ([docs/evidence/allowlist_ceiling.md](evidence/allowlist_ceiling.md)).
 - *Confirmed:* a model verdict in any pass upheld by its quote-verified second check.
-- *Possible:* everything else that is reported as a flag, including rules-based findings in rules mode, where no model can confirm them (a medicine may have been stopped, declined or a relative's), partial verdicts, and route one's flags whose transcript quote could not be verified.
+- *Possible:* everything else that is reported as a flag, including rules-based findings in rules mode, where no model can confirm them (a medicine may have been stopped, declined or a relative's), and route one's flags whose transcript quote could not be verified.
+- *Information:* a partial verdict (the note carries part of a fact) is not a flag. It is listed in the report's `info` list, numbered I1, I2, ..., with its fact and its transcript and note quotes, and never counts towards the flags or the decision. On the first development run, partial verdicts produced 17 of the 18 flags on clean notes and added no correct detection. Setting `[report] partial_as_flags = true` reports them as possible flags that warn, as before.
 - *Not upheld:* a Pass B or Pass C model verdict that its second check does not uphold produces no flag; it is listed as an unchecked item with reason `second_check_rejected`. Setting `[report] show_rejected_as_possible = true` reports them as possible flags instead. (In Pass A, an absence the second look rescues with a verified note quote is not reported, and a rules candidate the model rejects is dropped.)
 
 **Severity** is critical, supporting or peripheral, the same three grades as OmissionBench. In full mode the model grades it against a written rubric, reusing Fox et al.'s rubric if their MIT-licensed harness includes it. Rules mode has no grader, so it uses this default table, which users can change:
@@ -216,8 +217,8 @@ In full mode, once the model's quote-verified second check confirms a rules cand
 
 - **Rules mode:** every finding is a warning, and nothing fails a build.
 - **Full mode:** failing is opt-in. After running the stability command on their own test set, a user can set `--fail-on critical` to fail on critical flags at confirmed confidence.
-- **Warn** on critical and supporting flags and on partial verdicts, unless failing has been opted into.
-- **Report only** peripheral flags (strict standard only) and statements marked not verifiable.
+- **Warn** on critical and supporting flags, unless failing has been opted into (and on partial verdicts, when `partial_as_flags` is set).
+- **Report only** peripheral flags (strict standard only), partial verdicts (as information) and statements marked not verifiable.
 
 Users change all of these rules in the config file.
 
@@ -311,7 +312,7 @@ Inputs are a transcript and a note; output is a versioned JSON report, with Mark
 
 In this example, failing on confirmed critical flags has been opted into (`--fail-on critical`); by default the same report would warn. F2 is a rules candidate confirmed by the model's second check.
 
-Every report also has an `unchecked` list after `flags`: the items the rules could not decide, each with its category, item, reason codes (`reasons`, the first being the primary one) and evidence quotes. In rules mode `model` is null. Flags are numbered omissions first, then changed facts, each in transcript order.
+Every report also has an `unchecked` list after `flags`: the items the rules could not decide, each with its category, item, reason codes (`reasons`, the first being the primary one) and evidence quotes. In rules mode `model` is null. Flags are numbered omissions first, then changed facts, each in transcript order. A full-mode report with partial verdicts also has an `info` list after `unchecked`, in the flags' shape with verdict `partial` and IDs I1, I2, ...; it is left out when empty. With `[report] pass_a_trace = true` (development analysis only), a full-mode report from the scribecheck pipeline also carries `pass_a_trace`: each extracted fact with its audit outcome (kept, dropped, not audited), core flag and severity, whether it was checked, the check's verdict and verified note quote, and the second look's outcome (confirmed, rescued).
 
 ```json
 "unchecked": [

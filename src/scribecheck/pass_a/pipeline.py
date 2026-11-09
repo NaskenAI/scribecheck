@@ -161,6 +161,7 @@ def run(
     for key, members in groups.items():
         for case in members:
             outcomes[case.id].facts = list(audited.get(key, []))
+            _trace_extraction(outcomes[case.id], key, facts, audited, stages)
     to_check = {
         case.id: [
             f
@@ -170,8 +171,49 @@ def run(
         for key, members in groups.items()
         for case in members
     }
+    for case in cases:
+        for fact in to_check[case.id]:
+            outcomes[case.id].trace[fact.id]["checked"] = True
     absent = _check(cases, to_check, config, stages, runner, ledger, outcomes)
     _second_look_and_candidates(cases, absent, config, stages, runner, ledger, outcomes)
+
+
+def _trace_extraction(
+    outcome: Outcome,
+    key: str,
+    facts: dict[str, list[Fact]],
+    audited: dict[str, list[Fact]],
+    stages: _Stages,
+) -> None:
+    """Start each fact's trace: extraction and audit (the later stages fill in the rest)."""
+    for i, (text, category) in enumerate(stages.unsupported.get(key, []), start=1):
+        outcome.trace[f"u{i}"] = {
+            "id": f"u{i}",
+            "fact": text,
+            "category": category,
+            "origin": "model",
+            "evidence_verified": False,
+        }
+    kept = {f.id for f in audited.get(key, [])}
+    graded = stages.audited.get(key)
+    for fact in facts.get(key, []):
+        if graded is None:
+            audit = "failed"
+        elif fact.id not in graded:
+            audit = "not_audited"
+        else:
+            audit = "kept" if fact.id in kept else "dropped"
+        outcome.trace[fact.id] = {
+            "id": fact.id,
+            "fact": fact.text,
+            "category": fact.category,
+            "origin": fact.origin,
+            "evidence_verified": True,
+            "audit": audit,
+            "core": fact.core if audit != "failed" else None,
+            "severity": fact.severity if audit != "failed" else None,
+            "checked": False,
+        }
 
 
 # 1-2. Extraction, evidence and rules facts
@@ -263,7 +305,9 @@ def _extract(
         for fact in facts:
             evidence = fixer.evidence(members[0], fact.id)
             if not isinstance(evidence, TranscriptEvidence):
-                continue  # unsupported by the transcript: dropped, as the audit would
+                # unsupported by the transcript: dropped, as the audit would
+                stages.unsupported.setdefault(key, []).append((fact.text, fact.category))
+                continue
             fact.evidence = evidence
             if not any(_same(fact, other) for other in kept):
                 kept.append(fact)
@@ -362,6 +406,7 @@ def _audit(
                 )
             continue
         graded = {entry.id.strip().lower(): entry for entry in result.parsed.facts}
+        stages.audited[key] = set(graded)
         kept = []
         for fact in facts[key]:
             entry = graded.get(fact.id)
@@ -452,13 +497,16 @@ def _check(
                     _unchecked(fact, failure.reason if failure else "model_parse_failure")
                 )
                 continue
+            outcome.trace[fact.id]["verdict"] = entry.verdict
             if entry.verdict == "absent":
                 absent.setdefault(case.id, []).append(fact)
                 continue
             note_quote = fixer.evidence(by_case[case.id], fact.id)
             if not isinstance(note_quote, NoteEvidence):
                 outcome.unchecked.append(_unchecked(fact, "quote_unverified"))
-            elif entry.verdict == "partial":
+                continue
+            outcome.trace[fact.id]["note_quote"] = note_quote.text
+            if entry.verdict == "partial":
                 outcome.flags.append(_flag(fact, "partial", "possible", note_quote))
     return absent
 
@@ -533,16 +581,23 @@ def _second_look_and_candidates(
         for fact in absent.get(case.id, []):
             failure = failed.get(("look", case.id))
             entry = looked.get(case.id, {}).get(fact.id)
+            step = outcome.trace[fact.id]
             if failure is not None or entry is None:
                 outcome.unchecked.append(
                     _unchecked(fact, failure.reason if failure else "model_parse_failure")
                 )
+                step["second_look"] = "failed"
             elif entry.found:
-                if not isinstance(note_fixer.evidence(case, f"look:{fact.id}"), NoteEvidence):
+                rescued = note_fixer.evidence(case, f"look:{fact.id}")
+                if not isinstance(rescued, NoteEvidence):
                     outcome.unchecked.append(_unchecked(fact, "quote_unverified"))
-                # else rescued: the note carries it after all
+                    step["second_look"] = "unverified"
+                else:  # rescued: the note carries it after all
+                    step["second_look"] = "rescued"
+                    step["note_quote"] = rescued.text
             else:
                 outcome.flags.append(_flag(fact, "absent", "confirmed", None))
+                step["second_look"] = "confirmed"
         confirmed_names: list[str] = []
         from_candidates: set[int] = set()
         for i, flag in enumerate(case.candidates):
@@ -661,6 +716,10 @@ def _unchecked(fact: Fact, reason: Any) -> UncheckedItem:
 class _Stages:
     def __init__(self, config: Config, ledger: Ledger) -> None:
         self.config, self.ledger = config, ledger
+        self.unsupported: dict[str, list[tuple[str, str]]] = {}
+        """Per transcript: facts dropped because their evidence quote was not found."""
+        self.audited: dict[str, set[str]] = {}
+        """Per transcript: the fact ids the audit graded (absent when the audit failed)."""
 
     def request(
         self, stage: str, blocks: list[Block], task: str, output: type[BaseModel]

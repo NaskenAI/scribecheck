@@ -13,7 +13,9 @@ quote-verified second check, which confirms (with the model's severity) or rejec
 A single check runs live; a folder runs through Message Batches unless `live` is set. The
 Pass B model path and Pass C are not built yet.
 
-Flag IDs are numbered after merging, omissions first, each type in transcript order, so
+Partial verdicts (the note carries part of a fact) are reported as information, numbered
+I1, I2, ..., outside the flags, the counts and the decision, unless `partial_as_flags` is
+set. Flag IDs are numbered after merging, omissions first, each type in transcript order, so
 a report is the same on every run. Every quote is verified against its source before it
 enters a report.
 """
@@ -39,6 +41,7 @@ from scribecheck.report import (
     NotVerifiable,
     PassAInfo,
     Report,
+    TraceFact,
     UsageInfo,
     count,
 )
@@ -181,14 +184,19 @@ def _report(
     unchecked: Sequence[UncheckedItem],
     **extra: Any,
 ) -> Report:
-    flags = _numbered(apply_standard(found, config.standard))
+    kept = apply_standard(found, config.standard)
+    info: tuple[Flag, ...] = ()
+    if not config.partial_as_flags:
+        info = _numbered((f for f in kept if f.verdict == "partial"), prefix="I")
+        kept = tuple(f for f in kept if f.verdict != "partial")
+    flags = _numbered(kept)
     flagged = [f.note_evidence for f in flags if f.note_evidence is not None]
     unchecked = [  # an unchecked item about a span a flag already reports is the same finding
         u
         for u in unchecked
         if not any(q.start < n.end and n.start < q.end for q in u.note_evidence for n in flagged)
     ]
-    entries: list[Flag | UncheckedItem] = [*flags, *unchecked]
+    entries: list[Flag | UncheckedItem] = [*flags, *info, *unchecked]
     for entry in entries:
         verify_evidence(entry, transcript, note)
     not_verifiable = extra.get("not_verifiable", ())
@@ -205,6 +213,7 @@ def _report(
         counts=count(flags, unchecked, not_verifiable=len(not_verifiable)),
         flags=flags,
         unchecked=tuple(unchecked),
+        info=info,
         **extra,
     )
 
@@ -261,6 +270,11 @@ def _check_full(
                     for evidence, kind in outcome.not_verifiable
                 ),
                 passes=modes,
+                pass_a_trace=(
+                    tuple(TraceFact(**step) for step in outcome.trace.values())
+                    if config.pass_a_trace
+                    else None
+                ),
                 model=ModelInfo(
                     name=config.model or client.model,
                     version=", ".join(sorted(tally.model_ids)) or None,
@@ -314,14 +328,16 @@ def _possible_change(item: UncheckedItem) -> Flag:
     )
 
 
-def _numbered(flags: Iterable[Flag]) -> tuple[Flag, ...]:
+def _numbered(flags: Iterable[Flag], *, prefix: str = "F") -> tuple[Flag, ...]:
     def order(flag: Flag) -> tuple[int, int, int]:
         quote = flag.transcript_evidence
         where = (quote.turn, quote.start) if quote else (0, 0)
         return (_TYPE_ORDER[flag.type], *where)
 
     ordered = sorted(flags, key=order)
-    return tuple(f.model_copy(update={"id": f"F{i}"}) for i, f in enumerate(ordered, start=1))
+    return tuple(
+        f.model_copy(update={"id": f"{prefix}{i}"}) for i, f in enumerate(ordered, start=1)
+    )
 
 
 # Folders
