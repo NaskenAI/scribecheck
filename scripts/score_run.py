@@ -381,11 +381,6 @@ def score(args: argparse.Namespace) -> int:
         f"{_rate(correct_det, len(omissions))}"
     )
     say(f"   false alarms on clean notes: {_rate(len(fa), len(cleans))}")
-    say("== Route one's rule: a critical fact judged absent, at confirmed confidence")
-    r_det, r_correct, r_alarms = point(route_one_flags)
-    say(f"   detection on omission notes: {_rate(r_det, len(omissions))}")
-    say(f"   correct detection: {_rate(r_correct, len(omissions))}")
-    say(f"   false alarms on clean notes: {_rate(r_alarms, len(cleans))}")
     for label, attr in (("trace", "residual_level"), ("removed-fact severity", "severity")):
         groups: dict[str, list[Note]] = {}
         for n in omissions:
@@ -407,6 +402,11 @@ def score(args: argparse.Namespace) -> int:
     clean_others = sum(1 for n in cleans if n.others)
     say(f"   (information) clean notes with any other warning: {clean_others}/{len(cleans)}")
 
+    say("== Route one's rule: a critical fact judged absent, at confirmed confidence")
+    r_det, r_correct, r_alarms = point(route_one_flags)
+    say(f"   detection on omission notes: {_rate(r_det, len(omissions))}")
+    say(f"   correct detection: {_rate(r_correct, len(omissions))}")
+    say(f"   false alarms on clean notes: {_rate(r_alarms, len(cleans))}")
     say("== k-and-c sweep: at least k Pass A omission flags at confidence c or higher and")
     say("   severity at or above the floor")
     say("   c          severity     k  detection          correct            false alarms")
