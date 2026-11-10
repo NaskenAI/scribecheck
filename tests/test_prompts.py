@@ -51,6 +51,10 @@ def test_scribecheck_prompts_render_every_slot(name: str, slots: dict[str, str])
     assert "{" not in text.replace('{"', "").replace("{}", "")
 
 
+def test_the_default_set_is_the_frozen_v4_candidate() -> None:
+    assert prompts.DEFAULT == "scribecheck_v4"
+
+
 def test_render_is_literal_and_strict() -> None:
     template = prompts.load("route_one", "pipeline_check_tri")
     out = prompts.render(template, note="N", facts_block="f1: x")

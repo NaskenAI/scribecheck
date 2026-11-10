@@ -64,7 +64,7 @@ def test_usage_and_cost_per_note(tmp_path: Path, mock: MockClaude) -> None:
     assert report.model.endpoint_host == "api.anthropic.com"
     assert (report.pass_a.pipeline, report.pass_a.prompts, report.pass_a.batch) == (
         "scribecheck",
-        "scribecheck_v5",
+        "scribecheck_v4",
         False,
     )
     data = json.loads(report.to_json())

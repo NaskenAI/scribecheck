@@ -7,14 +7,16 @@ from typing import Any
 
 import pytest
 from _mock_model import MockClaude, text_of
+from pydantic import BaseModel
 
 from scribecheck.checker import _rules
 from scribecheck.config import Config
 from scribecheck.model.anthropic import AnthropicClient
 from scribecheck.model.budget import Budget
 from scribecheck.model.endpoint import Secret
+from scribecheck.model.structured import strict_schema
 from scribecheck.note import parse_note
-from scribecheck.pass_a import Case, run_pass_a
+from scribecheck.pass_a import Case, pipeline, run_pass_a
 from scribecheck.pass_a.blind import BlindnessError, assert_blind
 from scribecheck.pass_a.pipeline import is_core_kind, is_logistics
 from scribecheck.transcript import parse_transcript
@@ -50,6 +52,13 @@ VERDICTS: dict[str, tuple[str, str]] = {
     "Doctor asked what brings the patient in": ("absent", ""),
     "Takes metformin": ("present", "Metformin 500 mg BD."),
 }
+
+
+@pytest.fixture
+def v5(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run Pass A under the scribecheck_v5 set (kept for the record; the default is v4)."""
+    monkeypatch.setattr(pipeline, "PROMPTS", "scribecheck_v5")
+
 
 Scripts = dict[str, Callable[[list[tuple[str, str]], dict[str, Any]], Any]]
 
@@ -146,7 +155,75 @@ def run(
     return run_pass_a([case], settings, client, Budget(), live=True)["c0"], case
 
 
-def test_end_to_end() -> None:
+def test_the_default_is_the_frozen_v4_candidate() -> None:
+    assert pipeline.PROMPTS == "scribecheck_v4"
+    mock = MockClaude(scripts())
+    outcome, _ = run(mock)
+    # No partial look: the frozen candidate runs as the v4 full development run did.
+    assert mock.stages() == ["extract", "audit", "check", "second_look", "candidate"]
+    assert outcome.tally.calls == 5
+    assert all("partial_look" not in step for step in outcome.trace.values())
+
+
+def test_the_v4_audit_has_no_v5_backstops() -> None:
+    rows = (
+        ("If the cough gets worse, ring the practice", "follow_up", "If the cough gets worse"),
+        ("Does not need to attend in person", "plan", "You don't need to come in"),
+        ("No fever", "symptom", "If the cough gets worse"),
+    )
+
+    def audit(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
+        by_text = dict((text, fid) for fid, text in listed)
+        return {
+            "facts": [
+                # Dropped: v5 would keep it (never_drop).
+                {"id": by_text[rows[0][0]], "keep": False, "core": False, "severity": "critical"},
+                # Core logistics: v5 would make it contextual.
+                {"id": by_text[rows[1][0]], "keep": True, "core": True, "severity": "supporting"},
+                # A contextual denial: v5 would make it core (core_kind).
+                {"id": by_text[rows[2][0]], "keep": True, "core": False, "severity": "supporting"},
+            ]
+        }
+
+    mock = MockClaude(scripts(extract=_facts(*rows), audit=audit, check=_verdicts))
+    outcome, _ = run(mock, transcript=LOGISTICS_TRANSCRIPT, note=NKDA_NOTE, candidates=False)
+    steps = {s["fact"]: s for s in outcome.trace.values()}
+    assert steps[rows[0][0]]["audit"] == "dropped"
+    assert (steps[rows[1][0]]["core"], steps[rows[1][0]]["checked"]) == (True, True)
+    assert (steps[rows[2][0]]["core"], steps[rows[2][0]]["checked"]) == (False, False)
+    assert all("forced" not in step for step in steps.values())
+
+
+def test_the_v4_second_look_asks_and_keeps_no_absence() -> None:
+    """The frozen candidate's second-look request is the v4 run's: its output schema has no
+    `absence`, and an answer that sends one anyway never puts it on a flag."""
+
+    class _Looked(BaseModel):  # as at ee8e2ac, the v4 full run's commit
+        id: str
+        found: bool
+        note_quote: str = ""
+        transcript_quote: str = ""
+
+    class Looked(BaseModel):
+        facts: list[_Looked]
+
+    bodies: list[dict[str, Any]] = []
+
+    def second_look(listed: list[tuple[str, str]], body: dict[str, Any]) -> Any:
+        bodies.append(body)
+        return {"facts": [{"id": fid, "found": False, "absence": "clear"} for fid, _ in listed]}
+
+    outcome, _ = run(MockClaude(scripts(second_look=second_look)), candidates=False)
+    assert bodies and all(
+        b["output_config"]["format"]["schema"] == strict_schema(Looked) for b in bodies
+    )
+    absent = [f for f in outcome.flags if f.verdict == "absent"]
+    assert absent and all(f.absence is None for f in absent)
+    assert all("absence" not in step for step in outcome.trace.values())
+
+
+@pytest.mark.usefixtures("v5")
+def test_end_to_end_v5() -> None:
     mock = MockClaude(scripts())
     outcome, case = run(mock)
     assert mock.stages() == [
@@ -422,6 +499,7 @@ def test_long_transcript_is_extracted_in_overlapping_chunks() -> None:
     assert [f.text for f in outcome.facts] == ["Persistent dry cough"]  # merged across chunks
 
 
+@pytest.mark.usefixtures("v5")
 def test_trace_records_every_stage() -> None:
     def extract(_: Any, __: dict[str, Any]) -> Any:
         facts = [
@@ -602,6 +680,7 @@ LOGISTICS_TRANSCRIPT = (
 )
 
 
+@pytest.mark.usefixtures("v5")
 def test_attendance_logistics_are_never_core() -> None:
     rows = (
         ("Does not need to attend in person", "plan", "You don't need to come in"),
@@ -704,6 +783,7 @@ def _partial_look(missing: bool, quote: str) -> Callable[[Any, dict[str, Any]], 
     return look
 
 
+@pytest.mark.usefixtures("v5")
 def test_a_partial_whose_element_is_missing_becomes_an_omission_flag() -> None:
     look = _partial_look(True, "Come back if you get short of breath")
     outcome, _ = run(MockClaude(scripts(partial_look=look)), candidates=False)
@@ -723,6 +803,7 @@ def test_a_partial_whose_element_is_missing_becomes_an_omission_flag() -> None:
     assert (step["partial_look"], step["partial_element"]) == ("flagged", "short of breath")
 
 
+@pytest.mark.usefixtures("v5")
 @pytest.mark.parametrize(
     ("missing", "quote", "label"),
     [
@@ -743,12 +824,14 @@ def test_a_carried_or_unverified_element_leaves_the_partial(
     assert step["partial_look"] == label
 
 
+@pytest.mark.usefixtures("v5")
 def test_the_default_partial_look_finds_no_element() -> None:
     outcome, _ = run(MockClaude(scripts()), candidates=False)
     step = next(s for s in outcome.trace.values() if s["fact"] == "Return if short of breath")
     assert step["partial_look"] == "no_element" and "partial_element" not in step
 
 
+@pytest.mark.usefixtures("v5")
 def test_the_audit_never_drops_a_plan_fact_unless_logistics() -> None:
     rows = (
         ("If the cough gets worse, ring the practice", "follow_up", "If the cough gets worse"),
@@ -778,6 +861,7 @@ def test_the_audit_never_drops_a_plan_fact_unless_logistics() -> None:
         assert steps[dropped]["audit"] == "dropped" and "forced" not in steps[dropped]
 
 
+@pytest.mark.usefixtures("v5")
 def test_the_second_look_grades_each_absence() -> None:
     def second_look(listed: list[tuple[str, str]], _: dict[str, Any]) -> Any:
         return {"facts": [{"id": fid, "found": False, "absence": "probable"} for fid, _ in listed]}
@@ -808,6 +892,7 @@ def test_is_core_kind(category: str, text: str, expected: bool) -> None:
     assert is_core_kind(category, text) is expected
 
 
+@pytest.mark.usefixtures("v5")
 def test_a_partial_the_rules_candidate_already_flags_is_not_flagged_twice() -> None:
     # The confirmed metformin candidate removes the partial metformin flag (one
     # discrepancy, one flag), so the partial look must not bring it back.

@@ -1,8 +1,10 @@
 """Versioned prompt files, shipped as package data.
 
 `route_one/` holds Fox et al.'s route-one prompts, unmodified, from the MIT-licensed
-OmissionBench harness (see its README and LICENSE); `scribecheck_v5/` holds scribecheck's
-own (the earlier sets, which measured runs used, are kept unchanged).
+OmissionBench harness (see its README and LICENSE); `scribecheck_v*/` hold scribecheck's
+own, each kept unchanged once a measured run used it. `DEFAULT` is the set the pipeline
+runs: scribecheck_v4, frozen as the M4 candidate (git tag m4-candidate-v4). scribecheck_v5
+stays for the record, unused (docs/evidence/v5_negative_result.md).
 Prompts are filled by literal slot replacement, never `str.format`, because the route-one
 prompts end with literal JSON that `str.format` would misread.
 """
@@ -22,6 +24,8 @@ PromptSet = Literal[
     "scribecheck_v4",
     "scribecheck_v5",
 ]
+DEFAULT: PromptSet = "scribecheck_v4"
+"""The prompt set every pass uses: the frozen M4 candidate."""
 
 
 @cache

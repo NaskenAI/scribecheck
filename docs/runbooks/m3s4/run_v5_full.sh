@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# RETIRED: v5 was a negative result (docs/evidence/v5_negative_result.md) and since the tag
+# m4-candidate-v4 the default is the frozen scribecheck_v4, so this script refuses to run.
+# It is kept as the record of how the v5 run was made: to reproduce it, check out d55c5ac.
+#
 # M3 session 4: scribecheck_v5 at effort medium on all 65 development consultations (265
 # errored and 65 clean notes), with a $25 cost cap, scored beside the v4 full run against the
 # released B3 r1 and power-gepa-high r1/r3 records. v5's three changes are tagged, so the
@@ -18,6 +22,10 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../../.."
+
+echo "run_v5_full.sh is retired: the default prompt set is the frozen scribecheck_v4." >&2
+echo "To reproduce the v5 run, check out d55c5ac. See docs/evidence/v5_negative_result.md." >&2
+exit 1
 
 if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
     echo "ANTHROPIC_API_KEY is not set. Load it first:" >&2

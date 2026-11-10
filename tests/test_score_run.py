@@ -1007,7 +1007,7 @@ def test_v5_mechanisms_absent_before_v5(
 # baselines' flagged facts
 
 
-def test_baseline_flagged_facts_follow_each_rule() -> None:
+def test_baseline_flagged_facts_follow_route_ones_rule() -> None:
     module = _load()
     b3 = {
         "baseline_facts": [
@@ -1016,14 +1016,19 @@ def test_baseline_flagged_facts_follow_each_rule() -> None:
             "critical | present | No fever",
         ]
     }
-    assert module.baseline_flagged_facts("released B3 r1", b3) == ["Takes metformin | twice daily"]
-    two = {"baseline_facts": ["critical | Metformin dose", "- | Asthma"]}
-    assert module.baseline_flagged_facts("released power-gepa-high r1", two) == [
-        "Metformin dose",
-        "Asthma",
-    ]
-    assert module.baseline_flagged_facts("released B3 r1", {"n_absent_critical": 1}) is None
-    assert module.baseline_flagged_facts("released B3 r1", None) is None
+    assert module.baseline_flagged_facts(b3) == ["Takes metformin | twice daily"]
+    assert module.baseline_flagged_facts({"n_absent_critical": 1}) is None
+    assert module.baseline_flagged_facts(None) is None
+    # The word matcher's route-one facts read the same text when a row has no detail.
+    assert module.route_one_facts(b3) == ["Takes metformin | twice daily"]
+    assert module.route_one_facts({"n_absent_critical": 1}) is None
+
+
+def test_route_two_is_never_judged_for_correct_detection() -> None:
+    module = _load()
+    assert set(module.BASELINES) == {"released B3 r1"}
+    assert not set(module.SCORE_ONLY) & set(module.BASELINES)
+    assert "not applicable: score-only method" in module.NOT_APPLICABLE
 
 
 def test_baseline_correct_detection_from_the_judge(
@@ -1038,7 +1043,7 @@ def test_baseline_correct_detection_from_the_judge(
         p2: {"n_absent_critical": 1},  # flagged, but no fact text kept
         CLEAN_KEY: {"n_absent_critical": 0},
     }
-    power = {p1: {"aggregate": 3, "baseline_facts": ["critical | Asthma review"]}}
+    power = {p1: {"aggregate": 3}}
     monkeypatch.setattr(
         module, "released_rows", lambda _: {"b3 r1": b3, "power r1": power, "power r3": {}}
     )
@@ -1053,16 +1058,14 @@ def test_baseline_correct_detection_from_the_judge(
     items = module.baseline_items(subset["root"], notes)
     assert items["released B3 r1"][p2] is None
     assert [i for i, _ in items["released B3 r1"][p1].flags] == ["B1"]
-    assert items["released power-gepa-high r3"] == {}
-    # The judge says B3's fact names the removed fact and route two's does not.
+    assert set(items) == {"released B3 r1"}  # route two is score-only: never judged
     path = subset["root"] / "fact_judgements.json"
-    answer = {"Metformin": _yes([], ["B1"]), "Asthma": _yes([])}
-    client = FakeClient(lambda task: next(v for k, v in answer.items() if k in task))
+    client = FakeClient(lambda task: _yes([], ["B1"]))
     from scribecheck.model.budget import Budget
 
     found = [it for by in items.values() for it in by.values() if it is not None]
     module.fact_judge.judge(found, client, Budget(), {}, "m", path)
-    assert client.calls == 2
+    assert client.calls == 1
     run = subset["root"] / "run"
     args = ["score", "--run", str(run), "--pairs", str(subset["pairs"]), "--spec"]
     args += [str(subset["spec"]), "--released", str(subset["root"]), "--judgements", str(path)]
@@ -1071,9 +1074,54 @@ def test_baseline_correct_detection_from_the_judge(
     refs = out.split("== Reference methods")[1].split("\n==")[0]
     b3_line = refs.split("released B3 r1:")[1].split("released power")[0]
     assert "correct (model) 1/3 (33.3%) (1 flagged notes without fact text" in b3_line
-    assert "correct (model) 0/3 (0.0%)" in refs.split("power-gepa-high r1:")[1]
+    for name in ("power-gepa-high r1:", "power-gepa-high r3:"):
+        line = refs.split(name)[1].split("released")[0]
+        assert "correct detection: not applicable: score-only method" in line
     assert "released B3 r1 itself: correct (model) 1/3" in out
     assert "Metformin dose" not in out  # baseline fact text is never printed
+
+
+def _no_split(module: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Released rows as the split wrote them before it kept baseline_facts."""
+    b3 = {"syn|C1|omit|p1|err": {"n_absent_critical": 1}, CLEAN_KEY: {"n_absent_critical": 0}}
+    monkeypatch.setattr(
+        module, "released_rows", lambda _: {"b3 r1": b3, "power r1": {}, "power r3": {}}
+    )
+
+
+def test_judge_refuses_before_any_call_when_the_split_was_not_rerun(
+    subset: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load()
+    _no_split(module, monkeypatch)
+
+    def no_client(*_: Any) -> Any:
+        raise AssertionError("no client may be made")
+
+    monkeypatch.setattr(module, "create_client", no_client)
+    monkeypatch.setattr(module, "load_config", no_client)
+    run = _run(subset, _standard_reports())
+    args = ["judge", "--run", str(run), "--pairs", str(subset["pairs"]), "--spec"]
+    args += [str(subset["spec"]), "--config", "x.toml", "--released", str(subset["root"])]
+    assert module.main(args) == 2
+    assert "re-run the split" in capsys.readouterr().err
+
+
+def test_score_says_when_the_split_was_not_rerun(
+    subset: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load()
+    _no_split(module, monkeypatch)
+    run = _run(subset, _standard_reports())
+    args = ["score", "--run", str(run), "--pairs", str(subset["pairs"]), "--spec"]
+    assert module.main([*args, str(subset["spec"]), "--released", str(subset["root"])]) == 0
+    refs = capsys.readouterr().out.split("== Reference methods")[1].split("\n==")[0]
+    b3_line = refs.split("released B3 r1:")[1].split("released power")[0]
+    assert "no development row carries baseline_facts: re-run the split" in b3_line
 
 
 def test_a_partial_element_flag_takes_its_facts_forced_tags() -> None:
@@ -1091,3 +1139,128 @@ def test_a_partial_element_flag_takes_its_facts_forced_tags() -> None:
         )
     )
     assert module.mechanisms_of(note, flag) == {"partial_element", "core_kind"}
+
+
+# The stability runs: a stratified fixed-seed spec, and agreement between runs
+
+
+def _cells_pairs() -> list[dict[str, Any]]:
+    """40 synthetic pairs over two strata, three kinds and two severities, with a clean
+    note per consultation (ten consultations)."""
+    pairs = []
+    for i in range(40):
+        stratum = "aa" if i % 10 < 7 else "bb"  # a consultation's notes share its stratum
+        consultation = f"{stratum}|C{i % 10}"
+        pairs.append(
+            {
+                "key": consultation,
+                "id": f"C{i % 10}",
+                "stratum": stratum,
+                "pair_id": f"{consultation}|{('omit', 'add', 'change')[i % 3]}|p{i}",
+                "type": ("omit", "add", "change")[i % 3],
+                "severity": "critical" if i % 5 else "supporting",
+                "clean": f"Clean note {i % 10}",
+            }
+        )
+    return pairs
+
+
+def test_allocate_is_proportional_and_exact() -> None:
+    module = _load()
+    assert module.allocate({"a": 265, "b": 65}, 100) == {"a": 80, "b": 20}
+    shares = module.allocate({"x": 5, "y": 3, "z": 1}, 4)
+    assert sum(shares.values()) == 4 and shares["x"] >= shares["y"] >= shares["z"]
+    assert module.allocate({"x": 0}, 0) == {"x": 0}
+
+
+def test_the_sample_is_fixed_by_its_seed_and_stratified() -> None:
+    module = _load()
+    cells = module.spec_cells(_cells_pairs())
+    assert sum(len(k) for k in cells["errored"].values()) == 40
+    assert sum(len(k) for k in cells["clean"].values()) == 10
+    first = module.sample_keys(cells, 20, seed=7)
+    assert first == module.sample_keys(cells, 20, seed=7)
+    assert first != module.sample_keys(cells, 20, seed=8)
+    assert len(first) == len(set(first)) == 20
+    clean = [k for k in first if "|clean|" in k]
+    assert len(clean) == 4  # 10 of 50 notes are clean: 4 of 20
+    for cell, keys in cells["errored"].items():
+        picked = sum(1 for k in first if k in keys)
+        assert abs(picked - 16 * len(keys) / 40) < 1, cell  # within one of its share
+    with pytest.raises(ValueError):
+        module.sample_keys(cells, 51, seed=7)
+
+
+def test_spec_writes_a_sample_with_its_seed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = _load()
+    pairs = tmp_path / "pairs.json"
+    pairs.write_text(json.dumps({"pairs": _cells_pairs()}), encoding="utf-8")
+    out = tmp_path / "spec.json"
+    args = ["spec", "--pairs", str(pairs), "--out", str(out)]
+    assert module.main([*args, "--sample", "20", "--seed", "7"]) == 0
+    spec = json.loads(out.read_text(encoding="utf-8"))
+    assert (spec["sample"], spec["seed"], len(spec["note_keys"])) == (20, 7, 20)
+    touched = {k.split("|")[0] + "|" + k.split("|")[1] for k in spec["note_keys"]}
+    assert set(spec["consultations"]) == touched
+    assert "20 notes" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        module.main([*args, "--sample", "20"])  # a sample needs a seed
+    with pytest.raises(SystemExit):
+        module.main([*args, "--sample", "0", "--seed", "7"])
+    # Without --sample, every note, as before.
+    assert module.main(args) == 0
+    assert len(json.loads(out.read_text(encoding="utf-8"))["note_keys"]) == 50
+
+
+def test_fleiss_kappa() -> None:
+    module = _load()
+    assert module.fleiss_kappa([[True, True, True], [False, False, False]]) == 1.0
+    assert module.fleiss_kappa([[True, True, True], [True, True, True]]) is None
+    split = module.fleiss_kappa([[True, False, True], [False, True, False]])
+    assert split is not None and split < 0
+
+
+def _stability_run(subset: dict[str, Path], name: str, flagged_p2: bool, clean: bool) -> Path:
+    reports = _standard_reports()
+    if not flagged_p2:
+        reports["syn|C1|omit|p2|err"] = _report([])
+    if clean:
+        reports[CLEAN_KEY] = _report([_flag("F1", fact="asthma")])
+    run = subset["root"] / name
+    run.mkdir()
+    cases = [
+        {"id": key.replace("|", "__"), "transcript": "t", "note": "n", "report": r}
+        for key, r in reports.items()
+    ]
+    (run / "batch.json").write_text(json.dumps({"cases": cases, "problems": []}), "utf-8")
+    return run
+
+
+def test_stability_reports_spread_and_per_note_agreement(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = _load()
+    runs = [
+        _stability_run(subset, "r1", flagged_p2=True, clean=False),
+        _stability_run(subset, "r2", flagged_p2=False, clean=False),
+        _stability_run(subset, "r3", flagged_p2=True, clean=True),
+    ]
+    args = ["stability", "--runs", *map(str, runs), "--pairs", str(subset["pairs"])]
+    assert module.main([*args, "--spec", str(subset["spec"])]) == 0
+    out = capsys.readouterr().out
+    assert "r1: detection 2/3 (66.7%), correct 1/3 (33.3%), false alarms 0/1 (0.0%)" in out
+    assert "r2: detection 1/3 (33.3%)" in out
+    assert "detection: min 1/3 (33.3%), max 2/3 (66.7%), mean 1.7/3" in out
+    assert "false alarms: min 0/1 (0.0%), max 1/1 (100.0%), mean 0.3/1" in out
+    assert "omission notes: same in every run 2/3 (66.7%)" in out
+    assert "clean notes: same in every run 0/1 (0.0%)" in out
+    assert "omission notes by the number of runs whose flag names the removed fact: " in out
+    assert "3 runs 1, 2 runs 0, 1 runs 0, 0 runs 2" in out
+    assert "Notes whose result differs between runs: 2" in out
+    assert "syn|C1|omit|p2|err: flagged in 2/3" in out
+    assert f"{CLEAN_KEY}: flagged in 1/3" in out
+    assert SECRET_N not in out and "metformin" not in out  # counts and ids only
+    with pytest.raises(SystemExit):
+        module.main(["stability", "--runs", str(runs[0]), "--pairs", "p", "--spec", "s"])

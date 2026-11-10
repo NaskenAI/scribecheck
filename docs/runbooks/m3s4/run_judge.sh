@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # M3 session 4: model-assisted correct-fact matching on a full development run, for our
-# flags and the released baselines' flagged facts (B3 r1, power-gepa-high r1 and r3; their
-# fact text is in the development split's judge_scores, development rows only). One call per
-# item to Claude Sonnet 5.5 at effort low, fact texts only (never the transcript or note);
-# capped at $3. Paid API calls: run it yourself, never from an agent. Development data only.
-# See docs/evidence/fact_matching_v4.md.
+# flags and route one's (released B3 r1) flagged facts, whose text the development split
+# keeps in judge_scores for development rows only. Route two (power-gepa-high) gives a score
+# and no named omissions, so its correct detection is not applicable and nothing of it is
+# judged. judge stops before any call when no development row carries baseline_facts (the
+# split has not been re-run). One call per item to Claude Sonnet 5.5 at effort low, fact
+# texts only (never the transcript or note); capped at $3. Paid API calls: run it yourself,
+# never from an agent. Development data only. See docs/evidence/fact_matching_v4.md.
 #
 #   read -s ANTHROPIC_API_KEY
 #   export ANTHROPIC_API_KEY

@@ -44,12 +44,15 @@ At the released baselines' false-alarm rates (graded note score):
 | Matched to | Ours: detection | Ours: correct (words) | Ours: correct (model) | Baseline: detection | Baseline: correct (model) |
 |---|---|---|---|---|---|
 | B3 r1, 2/65 | 32/148 | 18/148 | 28/148 | 45/148 | _pending_ |
-| power-gepa-high r3, 5/65 | 62/148 | 42/148 | 56/148 | 63/148 | _pending_ |
-| power-gepa-high r1, 7/65 | 73/148 | 48/148 | 65/148 | 63/148 | _pending_ |
+| power-gepa-high r3, 5/65 | 62/148 | 42/148 | 56/148 | 63/148 | not applicable: score-only method |
+| power-gepa-high r1, 7/65 | 73/148 | 48/148 | 65/148 | 63/148 | not applicable: score-only method |
 
-The baselines' correct detection needs their flagged-fact text, which the development split
-keeps (`baseline_facts`, development rows only) once it is re-run; `run_judge.sh` then judges
-it with the same prompt.
+Route one's (B3) correct detection needs its flagged-fact text. The development split keeps it,
+as `baseline_facts` on development rows only, once the split is re-run. `run_judge.sh` then
+judges it with the same prompt. Route two (power-gepa-high) gives a score per note and names no
+omissions, so correct detection does not apply to it. The preprint compares correct detection
+with route one only, and reports our correct-fact rate alongside route two's note-level
+detection.
 
 ## Human spot-check (30 pairs)
 

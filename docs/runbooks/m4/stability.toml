@@ -1,0 +1,33 @@
+# M4 stability: the frozen scribecheck_v4 (tag m4-candidate-v4), Claude Sonnet 5.5 at effort
+# medium, Pass A only, strict standard, on the fixed 100-note development subset. One run of
+# three: each is capped at $5, so the three together cannot pass $15.
+# Key: ANTHROPIC_API_KEY in the environment (never in this file).
+mode = "full"
+standard = "strict"
+passes = ["a"]
+
+[model]
+provider = "anthropic"
+name = "claude-sonnet-5-5"
+effort = "medium"
+max_tokens = 16000
+cache_ttl = "5m"        # live calls on one consultation follow each other within minutes
+
+[model.prices]
+# USD per million tokens for Claude Sonnet 5.5 (input, output, 5-minute and 1-hour cache
+# writes, cache reads). Confirm on the Anthropic pricing page before the run.
+input = 2.0
+output = 10.0
+cache_write_5m = 2.5
+cache_write_1h = 4.0
+cache_read = 0.2
+batch_multiplier = 0.5
+
+[budget]
+cost_cap_usd = 5.0      # about $3.80 expected per run (v4 full: $12.40 for 330 notes)
+
+[pass_a]
+pipeline = "scribecheck"
+
+[report]
+pass_a_trace = true    # each fact's path through Pass A, for the miss analysis

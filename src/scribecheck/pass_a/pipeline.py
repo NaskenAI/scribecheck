@@ -55,7 +55,11 @@ from scribecheck.pass_a.quotes_stage import QuoteFixer
 from scribecheck.rules.omission import STATUS_RULE, is_allergy_status, structured_omissions
 from scribecheck.transcript import Transcript
 
-PROMPTS = "scribecheck_v5"
+PROMPTS: prompts.PromptSet = prompts.DEFAULT
+V5_MECHANISMS = "scribecheck_v5"
+"""The prompt set under which the v5 code runs: the audit backstops (`is_logistics`,
+`is_core_kind`, `NEVER_DROPPED`) and the partial look. Under any other set, as in the
+frozen M4 candidate, Pass A runs as it did for the v4 full development run."""
 Category = Literal[
     "presenting_complaint",
     "symptom",
@@ -84,8 +88,8 @@ SECTION: dict[str, str] = {
 }
 ALWAYS_CORE = frozenset({"medicine", "allergy"})
 """Categories the audit can never mark contextual (the prompt also makes plan decisions,
-safety-net instructions and numeric thresholds core, but not attendance and appointment
-logistics, which `is_logistics` keeps from ever being core)."""
+safety-net instructions and numeric thresholds core; under v5 only, not attendance and
+appointment logistics, which `is_logistics` keeps from ever being core)."""
 _LOGISTICS = re.compile(
     r"\b(?:in person|face[- ]to[- ]face|transport|taxi|parking)\b", re.IGNORECASE
 )
@@ -178,6 +182,9 @@ class _Looked(BaseModel):
     found: bool
     note_quote: str = ""
     transcript_quote: str = ""
+
+
+class _LookedV5(_Looked):
     absence: Absence | None = None
 
 
@@ -195,6 +202,13 @@ class PartialLooked(BaseModel):
 
 class Looked(BaseModel):
     facts: list[_Looked]
+
+
+class LookedV5(BaseModel):
+    """v5's second look, which also grades each absence. A separate model, so the v4
+    request's output schema stays as it was for the v4 runs."""
+
+    facts: list[_LookedV5]
 
 
 class _Judged(BaseModel):
@@ -243,7 +257,8 @@ def run(
             outcomes[case.id].trace[fact.id]["checked"] = True
     absent, partial = _check(cases, to_check, config, stages, runner, ledger, outcomes)
     _second_look_and_candidates(cases, absent, config, stages, runner, ledger, outcomes)
-    _partial_look(cases, partial, config, stages, runner, ledger, outcomes)
+    if PROMPTS == V5_MECHANISMS:
+        _partial_look(cases, partial, config, stages, runner, ledger, outcomes)
 
 
 def _trace_extraction(
@@ -486,9 +501,18 @@ def _audit(
         graded = {entry.id.strip().lower(): entry for entry in result.parsed.facts}
         stages.audited[key] = set(graded)
         kept = []
+        v5 = PROMPTS == V5_MECHANISMS
         for fact in facts[key]:
             entry = graded.get(fact.id)
             if entry is None:  # not audited: kept as a core supporting fact
+                kept.append(fact)
+                continue
+            if not v5:
+                if not entry.keep:
+                    continue
+                # A medicine or allergy is always core, whatever the audit says.
+                fact.core = entry.core or fact.category in ALWAYS_CORE
+                fact.severity = entry.severity
                 kept.append(fact)
                 continue
             logistics = is_logistics(fact.category, fact.text)
@@ -626,7 +650,8 @@ def _second_look_and_candidates(
                 prompts.load(PROMPTS, "second_look"),
                 facts_block=facts_block((f.id, f.text) for f in facts),
             )
-            request = stages.request("second_look", _both(case), task, Looked)
+            output = LookedV5 if PROMPTS == V5_MECHANISMS else Looked
+            request = stages.request("second_look", _both(case), task, output)
             requests.append(request)
             owners[request.custom_id] = ("look", case.id)
         if case.candidates:
@@ -692,10 +717,11 @@ def _second_look_and_candidates(
                     step["note_quote"] = rescued.text
             else:
                 flag = _flag(fact, "absent", "confirmed", None)
-                outcome.flags.append(flag.model_copy(update={"absence": entry.absence}))
+                absence = entry.absence if isinstance(entry, _LookedV5) else None
+                outcome.flags.append(flag.model_copy(update={"absence": absence}))
                 step["second_look"] = "confirmed"
-                if entry.absence is not None:
-                    step["absence"] = entry.absence
+                if absence is not None:
+                    step["absence"] = absence
         confirmed_names: list[str] = []
         status_confirmed = False
         from_candidates: set[int] = set()

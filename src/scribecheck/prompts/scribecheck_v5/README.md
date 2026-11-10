@@ -1,5 +1,10 @@
 # scribecheck_v5 prompts
 
+**Unused, kept for the record.** v5 was worse than v4 at every matched false-alarm rate on the
+full development run (docs/evidence/v5_negative_result.md). The pipeline runs
+`scribecheck_v4`, frozen as the M4 candidate (`prompts.DEFAULT`, tag `m4-candidate-v4`).
+Selecting v5 also switches on its code: the partial look and the audit backstops.
+
 The prompts for scribecheck's own Pass A pipeline (docs/spec.md, "Pass A: omissions").
 
 - `system.txt` is the same in every call, and the transcript (then the note, where a stage may

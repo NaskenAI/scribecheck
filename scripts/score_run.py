@@ -37,8 +37,10 @@ are shown separately, for information):
 - each reference method's detection and false alarms on the same notes, under its own rule
   (route one: a critical fact judged absent; route two: aggregate below 10);
 - route one's own detection, correct detection and false alarms on the same notes, from
-  the critical facts judged absent in the Gate 1(b) B3 records (the released records hold
-  no fact text), matched to the removed fact the same way as our flags;
+  the critical facts judged absent in the Gate 1(b) B3 records and in the released B3 r1
+  development rows (their `baseline_facts`, once the split has been re-run), matched to
+  the removed fact the same way as our flags. Route two (power-gepa-high) gives a score
+  and no named omissions, so its correct detection is not applicable;
 - calls, tokens, cost and wall-clock time per note, and each unchecked reason's count.
 
 Partial verdicts are information, not flags, whether the run listed them in `info` or (a
@@ -63,6 +65,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import itertools
 import json
 import random
 import re
@@ -178,21 +181,79 @@ def prepare(pairs_path: Path, transcripts: Path, spec_path: Path, out: Path) -> 
     return 0
 
 
-def write_spec(pairs_path: Path, out: Path) -> int:
-    """Every errored note and every distinct clean note in the pairs file, as a spec for
-    `prepare` and `score` (the development pairs file holds development data only)."""
-    pairs = _pairs(pairs_path)
-    keys = {f"{p['pair_id']}|err" for p in pairs if p.get("pair_id")}
-    errored = len(keys)
+def spec_cells(pairs: Sequence[Mapping[str, Any]]) -> dict[str, dict[tuple[str, ...], list[str]]]:
+    """Every errored and every distinct clean note's key, in the strata a sample keeps in
+    proportion: errored notes by kind (omission, add, change), source stratum and removed
+    fact severity; clean notes by source stratum."""
+    cells: dict[str, dict[tuple[str, ...], set[str]]] = {"errored": {}, "clean": {}}
     for pair in pairs:
+        stratum = str(pair.get("stratum"))
+        if pair.get("pair_id"):
+            cell = (str(pair.get("type")), stratum, str(pair.get("severity")))
+            cells["errored"].setdefault(cell, set()).add(f"{pair['pair_id']}|err")
         clean = pair.get("clean")
         if isinstance(clean, str) and pair.get("key"):
             digest = hashlib.sha256(clean.encode("utf-8")).hexdigest()[:12]
-            keys.add(f"{pair['key']}|clean|{digest}")
-    consultations = sorted({str(p["key"]) for p in pairs if p.get("key")})
+            cells["clean"].setdefault((stratum,), set()).add(f"{pair['key']}|clean|{digest}")
+    return {group: {c: sorted(k) for c, k in by.items()} for group, by in cells.items()}
+
+
+def allocate(sizes: Mapping[Any, int], n: int) -> dict[Any, int]:
+    """`n` places shared over the cells in proportion to their sizes, by largest remainder
+    (ties to the larger cell, then the cell's sort order), so the counts sum to `n`."""
+    total = sum(sizes.values())
+    if not total:
+        return dict.fromkeys(sizes, 0)
+    exact = {cell: n * size / total for cell, size in sizes.items()}
+    out = {cell: int(value) for cell, value in exact.items()}
+    order = sorted(sizes, key=lambda c: (-(exact[c] - out[c]), -sizes[c], str(c)))
+    for cell in order[: n - sum(out.values())]:
+        out[cell] += 1
+    return out
+
+
+def sample_keys(
+    cells: Mapping[str, Mapping[tuple[str, ...], Sequence[str]]], n: int, seed: int
+) -> list[str]:
+    """A fixed-seed sample of `n` note keys: errored and clean notes in proportion to their
+    numbers, each spread over its cells in proportion, drawn at random within each cell."""
+    groups = {g: sum(len(k) for k in by.values()) for g, by in cells.items()}
+    if n > sum(groups.values()):
+        raise ValueError(f"a sample of {n} is larger than the {sum(groups.values())} notes")
+    rng = random.Random(seed)
+    keys: list[str] = []
+    for group, places in sorted(allocate(groups, n).items()):
+        by = cells[group]
+        counts = allocate({cell: len(k) for cell, k in by.items()}, places)
+        for cell in sorted(by):
+            keys += rng.sample(list(by[cell]), counts[cell])
+    return sorted(keys)
+
+
+def write_spec(
+    pairs_path: Path, out: Path, sample: int | None = None, seed: int | None = None
+) -> int:
+    """Every errored note and every distinct clean note in the pairs file, or a stratified
+    fixed-seed sample of them (`sample` notes, with `seed`), as a spec for `prepare` and
+    `score` (the development pairs file holds development data only)."""
+    pairs = _pairs(pairs_path)
+    cells = spec_cells(pairs)
+    if sample is None:
+        keys = {k for by in cells.values() for ks in by.values() for k in ks}
+    else:
+        if seed is None:
+            raise ValueError("a sample needs a seed")
+        keys = set(sample_keys(cells, sample, seed))
+    errored = sum(1 for k in keys if k.endswith("|err"))
+    consultations = sorted({str(p["key"]) for p in pairs if p.get("key") and _touches(p, keys)})
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
-        json.dumps({"note_keys": sorted(keys), "consultations": consultations}, indent=1) + "\n",
+        json.dumps(
+            {"note_keys": sorted(keys), "consultations": consultations}
+            | ({} if sample is None else {"sample": sample, "seed": seed}),
+            indent=1,
+        )
+        + "\n",
         encoding="utf-8",
     )
     print(
@@ -200,6 +261,11 @@ def write_spec(pairs_path: Path, out: Path) -> int:
         f"{errored} errored, {len(keys) - errored} clean"
     )
     return 0
+
+
+def _touches(pair: Mapping[str, Any], keys: set[str]) -> bool:
+    """Whether a pair's consultation has a note among `keys`."""
+    return any(k == f"{pair.get('pair_id')}|err" or k.startswith(f"{pair['key']}|") for k in keys)
 
 
 # score
@@ -421,14 +487,16 @@ def best_match(note: Note, flags: Iterable[Flag]) -> tuple[float, Flag | None, s
 
 
 def route_one_facts(row: Mapping[str, Any] | None) -> list[str] | None:
-    """The facts a route-one (B3) record graded critical and judged absent, or None when the
-    record holds no fact text (the released records) or is missing or failed."""
+    """The facts a route-one (B3) record graded critical and judged absent: from its
+    detail.missing_facts (a harness record), else from the `baseline_facts` the split keeps
+    for a released development row. None when the record holds neither (a released row from
+    before the split kept them) or is missing or failed."""
     if row is None or row.get("parse_failure") is True:
         return None
     detail = row.get("detail")
     facts = detail.get("missing_facts") if isinstance(detail, Mapping) else None
     if not isinstance(facts, list):
-        return None
+        return baseline_flagged_facts(row)
     return [
         str(f.get("fact") or "")
         for f in facts
@@ -611,7 +679,7 @@ def score(args: argparse.Namespace) -> int:
         say("   absent, from the fact text in its records")
         usable_rows = {n.key: route_one_facts(rows.get(n.key)) for n in [*omissions, *cleans]}
         if not any(v is not None for v in usable_rows.values()):
-            say("   its records carry no fact text: correct detection cannot be computed")
+            say(f"   its records carry no fact text: {NO_SPLIT}")
             continue
         lost = [key for key, v in usable_rows.items() if v is None]
         if lost:
@@ -739,10 +807,15 @@ def score(args: argparse.Namespace) -> int:
     references = _references(args)
     if references:
         say("== Reference methods on the same notes: detection and false alarms (their own")
-        say("   rules; correct detection needs fact text, which only Gate 1(b) B3 records")
-        say("   hold; notes without a usable record are left out of these rates)")
-    baseline_correct: dict[str, str] = {}
-    if judgements is not None and args.judgements is not None:
+        say("   rules; correct detection applies to route one only, from the fact text the")
+        say("   split keeps for development rows; route two is score-only; notes without a")
+        say("   usable record are left out of these rates)")
+    baseline_correct: dict[str, str] = dict.fromkeys(
+        (name for name in SCORE_ONLY if name in references), NOT_APPLICABLE
+    )
+    if args.released is not None and not split_carries_facts(args.released):
+        baseline_correct.update(dict.fromkeys(BASELINES, f"correct detection: {NO_SPLIT}"))
+    elif judgements is not None and args.judgements is not None:
         cache = fact_judge.load_cache(args.judgements)
         for name, by_note in baseline_items(args.released, omissions).items():
             named = sum(
@@ -1087,27 +1160,40 @@ def _omission_notes(args: argparse.Namespace) -> list[Note]:
     ]
 
 
-BASELINES = {
-    "released B3 r1": "b3 r1",
-    "released power-gepa-high r1": "power r1",
-    "released power-gepa-high r3": "power r3",
-}
-"""The released reference sets whose development rows can carry `baseline_facts` (the
-split keeps them for development rows only), by their label in `score`."""
+BASELINES = {"released B3 r1": "b3 r1"}
+"""The released reference sets whose correct detection can be judged, by their label in
+`score`: route one (B3), whose development rows carry `baseline_facts` once the split has
+been re-run (it keeps them for development rows only)."""
+SCORE_ONLY = ("released power-gepa-high r1", "released power-gepa-high r3")
+"""Route two's reference sets: a score per note and no named omissions (the harness's
+w2_power.py keeps neither the omissions nor the response text), so correct detection does
+not apply to them."""
+NOT_APPLICABLE = "correct detection: not applicable: score-only method"
+NO_SPLIT = (
+    "no development row carries baseline_facts: re-run the split "
+    "(scripts/split_omissionbench.py, docs/runbooks/m3s4.md)"
+)
 
 
-def baseline_flagged_facts(name: str, row: Mapping[str, Any] | None) -> list[str] | None:
-    """The facts a baseline's own rule counts on a note, from the row's `baseline_facts`:
-    route one's facts graded critical and judged absent; every omission route two reported.
-    None when the row holds no fact text."""
+def baseline_flagged_facts(row: Mapping[str, Any] | None) -> list[str] | None:
+    """The facts route one's own rule counts on a note, from the row's `baseline_facts`:
+    those graded critical and judged absent. None when the row holds no fact text."""
     facts = None if row is None else row.get("baseline_facts")
     if not isinstance(facts, list):
         return None
-    texts = [str(f) for f in facts]
-    if "B3" in name:
-        parts = [t.split(" | ", 2) for t in texts]
-        return [p[2] for p in parts if len(p) == 3 and p[0] == "critical" and p[1] == "absent"]
-    return [t.split(" | ", 1)[1] if " | " in t else t for t in texts]
+    parts = [str(f).split(" | ", 2) for f in facts]
+    return [p[2] for p in parts if len(p) == 3 and p[0] == "critical" and p[1] == "absent"]
+
+
+def split_carries_facts(released: Path) -> bool:
+    """Whether any of the baselines' development rows carries `baseline_facts` (False until
+    the split has been re-run since it learned to keep them)."""
+    rows = released_rows(released)
+    return any(
+        isinstance(row, Mapping) and "baseline_facts" in row
+        for store in BASELINES.values()
+        for row in rows[store].values()
+    )
 
 
 def baseline_items(
@@ -1118,16 +1204,14 @@ def baseline_items(
     if released is None:
         return {}
     rows = released_rows(released)
-    flagged = {"B3": route_one_flag, "power": route_two_flag}
     out: dict[str, dict[str, fact_judge.Item | None]] = {}
     for name, store in BASELINES.items():
-        rule = flagged["B3" if "B3" in name else "power"]
         out[name] = {}
         for n in notes:
             row = rows[store].get(n.key)
-            if n.kind != "omission" or rule(row) is not True:
+            if n.kind != "omission" or route_one_flag(row) is not True:
                 continue
-            facts = baseline_flagged_facts(name, row)
+            facts = baseline_flagged_facts(row)
             out[name][n.key] = (
                 None
                 if not facts
@@ -1144,6 +1228,10 @@ def baseline_items(
 def run_judge(args: argparse.Namespace) -> int:
     """Judge every scored omission note the cache lacks (paid calls: the user runs this)."""
     cache_path = args.cache or args.run / "fact_judgements.json"
+    if args.released is not None and not split_carries_facts(args.released):
+        # Before any client is made: judging would send none of the baselines' facts.
+        print(f"judge: {NO_SPLIT}; or leave out --released", file=sys.stderr)
+        return 2
     try:
         config = load_config(args.config)
         client = create_client(config)
@@ -1330,6 +1418,125 @@ def severity(args: argparse.Namespace) -> int:
     return 0
 
 
+# stability: the same subset run more than once
+
+
+def fleiss_kappa(ratings: Sequence[Sequence[bool]]) -> float | None:
+    """Fleiss' kappa for yes/no ratings, one row per note and one entry per run; None when
+    every rating is the same (agreement by chance is then total)."""
+    if not ratings or len(ratings[0]) < 2:
+        return None
+    n = len(ratings[0])
+    yes = [sum(row) for row in ratings]
+    agree = sum((y * y + (n - y) * (n - y) - n) / (n * (n - 1)) for y in yes) / len(ratings)
+    p_yes = sum(yes) / (n * len(ratings))
+    chance = p_yes**2 + (1 - p_yes) ** 2
+    return None if chance == 1 else (agree - chance) / (1 - chance)
+
+
+def _spread(values: Sequence[int], total: int) -> str:
+    mean = sum(values) / len(values)
+    return (
+        f"min {_rate(min(values), total)}, max {_rate(max(values), total)}, mean {mean:.1f}/{total}"
+    )
+
+
+def stability(args: argparse.Namespace) -> int:
+    """Per-note agreement between runs of the same subset, and the spread of their rates.
+    Notes a run has no report for, or failed on, are left out of every run's rates."""
+    pairs = _pairs(args.pairs)
+    keys = sorted(json.loads(args.spec.read_text(encoding="utf-8"))["note_keys"])
+    runs = [build_notes(keys, pairs, load_reports(r, args.manifest)[0]) for r in args.runs]
+    # build_notes keeps the spec's order, so a note is at the same index in every run.
+    usable = {
+        key
+        for i, key in enumerate(keys)
+        if all(run[i].report is not None and not run[i].failed for run in runs)
+    }
+    threshold = args.match_threshold
+    out: list[str] = []
+    say = out.append
+    say(f"== Stability: {len(runs)} runs of the same {len(keys)} notes")
+    for path in args.runs:
+        say(f"   run: {path}")
+    left_out = [k for k in keys if k not in usable]
+    say(f"   notes without a report or with Pass A failed in some run (left out): {len(left_out)}")
+    for key in left_out:
+        say(f"      {key}")
+    by_kind: dict[str, list[list[Note]]] = {}
+    for run in runs:
+        for kind in ("omission", "clean", "add", "change"):
+            by_kind.setdefault(kind, []).append(
+                [n for n in run if n.kind == kind and n.key in usable]
+            )
+    omissions, cleans = by_kind["omission"], by_kind["clean"]
+    total_o, total_c = len(omissions[0]), len(cleans[0])
+
+    def correct(n: Note) -> bool:
+        """As `score` counts it: a decision-rule flag names the removed fact."""
+        flags = decision_flags(n)
+        value, flag, _ = best_match(n, flags)
+        return bool(flags) and flag is not None and value >= threshold
+
+    detected = [sum(n.flagged for n in run) for run in omissions]
+    named = [sum(correct(n) for n in run) for run in omissions]
+    alarms = [sum(n.flagged for n in run) for run in cleans]
+    say("== Each run at the decision rule (correct detection by the word matcher)")
+    for i, path in enumerate(args.runs):
+        say(
+            f"   {path.name}: detection {_rate(detected[i], total_o)}, correct "
+            f"{_rate(named[i], total_o)}, false alarms {_rate(alarms[i], total_c)}"
+        )
+    say("== Spread over the runs")
+    say(f"   detection: {_spread(detected, total_o)}")
+    say(f"   correct detection: {_spread(named, total_o)}")
+    say(f"   false alarms: {_spread(alarms, total_c)}")
+
+    say("== Per-note agreement between runs (flagged or not at the decision rule)")
+    ratings_all: list[list[bool]] = []
+    unstable: list[tuple[str, int]] = []
+    for kind in ("omission", "clean", "add", "change"):
+        notes_by_run = by_kind[kind]
+        if not notes_by_run[0]:
+            continue
+        ratings = [[run[i].flagged for run in notes_by_run] for i in range(len(notes_by_run[0]))]
+        same = sum(1 for row in ratings if len(set(row)) == 1)
+        pairs_agree = [
+            sum(row[a] == row[b] for row in ratings)
+            for a, b in itertools.combinations(range(len(runs)), 2)
+        ]
+        mean_pair = sum(pairs_agree) / len(pairs_agree) / len(ratings)
+        kappa_k = fleiss_kappa(ratings)
+        say(
+            f"   {kind} notes: same in every run {_rate(same, len(ratings))}; mean pairwise "
+            f"agreement {100 * mean_pair:.1f}%; Fleiss' kappa "
+            + ("-" if kappa_k is None else f"{kappa_k:.2f}")
+        )
+        if kind in ("omission", "clean"):
+            ratings_all += ratings
+        unstable += [
+            (n.key, sum(row))
+            for n, row in zip(notes_by_run[0], ratings, strict=True)
+            if len(set(row)) > 1
+        ]
+    kappa_all = fleiss_kappa(ratings_all)
+    say(
+        "   omission and clean notes together: Fleiss' kappa "
+        + ("-" if kappa_all is None else f"{kappa_all:.2f}")
+    )
+    if omissions[0]:
+        times = Counter(sum(correct(run[i]) for run in omissions) for i in range(len(omissions[0])))
+        say(
+            "   omission notes by the number of runs whose flag names the removed fact: "
+            + ", ".join(f"{k} runs {times[k]}" for k in range(len(runs), -1, -1))
+        )
+    say(f"== Notes whose result differs between runs: {len(unstable)}")
+    for key, flagged_in in sorted(unstable):
+        say(f"   {key}: flagged in {flagged_in}/{len(runs)}")
+    print("\n".join(out))
+    return 0
+
+
 def _decision(note: Note) -> bool:
     return note.flagged
 
@@ -1345,7 +1552,8 @@ def _label(problem: str) -> str:
 
 def _route_one_stores(args: argparse.Namespace) -> dict[str, Rows]:
     """Route one's (B3) records with their fact lists: Gate 1(b)'s run, and the released r1
-    (whose records hold no fact text, which the section says)."""
+    (whose development rows hold fact text once the split has been re-run; the section says
+    when they do not)."""
     stores: dict[str, Rows] = {}
     if args.gate1b is not None:
         b3 = next(args.gate1b.glob("gate1b-pipeline/_state/*B3*.jsonl"), None)
@@ -1405,6 +1613,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     sp = commands.add_parser("spec", help="write a spec of every note in the pairs file")
     sp.add_argument("--pairs", type=Path, required=True)
     sp.add_argument("--out", type=Path, required=True)
+    sp.add_argument("--sample", type=int, help="a stratified sample of this many notes")
+    sp.add_argument("--seed", type=int, help="the sample's seed (required with --sample)")
+    st = commands.add_parser("stability", help="agreement between runs of the same subset")
+    st.add_argument("--runs", type=Path, nargs="+", required=True)
+    st.add_argument("--pairs", type=Path, required=True)
+    st.add_argument("--spec", type=Path, required=True)
+    st.add_argument("--manifest", type=Path, help="prepare's manifest.json (exact case ids)")
+    st.add_argument("--match-threshold", type=float, default=0.5)
     ms = commands.add_parser("misses", help="trace each removed fact through Pass A")
     ms.add_argument("--run", type=Path, required=True)
     ms.add_argument("--pairs", type=Path, required=True)
@@ -1446,7 +1662,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "severity":
         return severity(args)
     if args.command == "spec":
-        return write_spec(args.pairs, args.out)
+        if args.sample is not None and args.seed is None:
+            parser.error("--sample needs --seed")
+        if args.sample is not None and args.sample < 1:
+            parser.error("--sample must be at least 1")
+        return write_spec(args.pairs, args.out, args.sample, args.seed)
+    if args.command == "stability":
+        if len(args.runs) < 2:
+            parser.error("stability needs at least two runs")
+        return stability(args)
     return score(args)
 
 

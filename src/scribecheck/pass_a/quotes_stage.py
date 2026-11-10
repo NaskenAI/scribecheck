@@ -21,7 +21,7 @@ from scribecheck.model.base import Block, Completion, Message, ModelRequest
 from scribecheck.pass_a.base import Case, Ledger, Runner, facts_block, render_transcript
 from scribecheck.quotes import find_in_note, find_in_transcript
 
-PROMPTS = "scribecheck_v5"
+PROMPTS: prompts.PromptSet = prompts.DEFAULT
 Source = Literal["transcript", "note"]
 
 
