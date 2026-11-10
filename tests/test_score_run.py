@@ -1022,6 +1022,62 @@ def test_baseline_flagged_facts_follow_route_ones_rule() -> None:
     # The word matcher's route-one facts read the same text when a row has no detail.
     assert module.route_one_facts(b3) == ["Takes metformin | twice daily"]
     assert module.route_one_facts({"n_absent_critical": 1}) is None
+    # A fact the split found too long is never judged or matched.
+    long = {"baseline_facts": ["critical | absent | [too_long]", "critical | absent | Fever"]}
+    assert module.baseline_flagged_facts(long) == ["Fever"]
+    split = importlib.util.spec_from_file_location(
+        "split_check", SCRIPT.with_name("split_omissionbench.py")
+    )
+    assert split is not None and split.loader is not None
+    split_module = importlib.util.module_from_spec(split)
+    sys.modules["split_check"] = split_module  # dataclasses need their module registered
+    try:
+        split.loader.exec_module(split_module)
+    finally:
+        del sys.modules["split_check"]
+    assert module.TOO_LONG == split_module.TOO_LONG  # the split's marker, the same string
+
+
+def test_a_too_long_baseline_fact_is_never_judged_and_is_counted(
+    subset: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load()
+    p1, p2 = "syn|C1|omit|p1|err", "syn|C1|omit|p2|err"
+    b3 = {
+        p1: {"n_absent_critical": 1, "baseline_facts": ["critical | absent | Metformin dose"]},
+        p2: {"n_absent_critical": 1, "baseline_facts": ["critical | absent | [too_long]"]},
+        CLEAN_KEY: {"n_absent_critical": 0},
+    }
+    monkeypatch.setattr(
+        module, "released_rows", lambda _: {"b3 r1": b3, "power r1": {}, "power r3": {}}
+    )
+    namespace = module.argparse.Namespace(
+        run=_run(subset, _standard_reports()),
+        pairs=subset["pairs"],
+        spec=subset["spec"],
+        manifest=None,
+    )
+    notes = module._omission_notes(namespace)
+    items = module.baseline_items(subset["root"], notes)
+    assert items["released B3 r1"][p2] is None  # nothing sent for it
+    assert module.too_long_notes(subset["root"], notes) == {"released B3 r1": 1}
+    path = subset["root"] / "fact_judgements.json"
+    from scribecheck.model.budget import Budget
+
+    found = [it for by in items.values() for it in by.values() if it is not None]
+    client = FakeClient(lambda task: _yes([], ["B1"]))
+    module.fact_judge.judge(found, client, Budget(), {}, "m", path)
+    assert client.calls == 1
+    run = subset["root"] / "run"
+    args = ["score", "--run", str(run), "--pairs", str(subset["pairs"]), "--spec"]
+    args += [str(subset["spec"]), "--released", str(subset["root"]), "--judgements", str(path)]
+    assert module.main(args) == 0
+    out = capsys.readouterr().out
+    b3_line = out.split("released B3 r1:")[1].split("released power")[0]
+    assert "1 flagged notes with a too-long fact, never judged" in b3_line
+    assert "[too_long]" not in out
 
 
 def test_route_two_is_never_judged_for_correct_detection() -> None:

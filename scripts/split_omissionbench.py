@@ -32,12 +32,14 @@ Rules:
    pipeline tier's per-fact rule can be recomputed without any detail text. A list with no
    graded entry (the two-stage tier grades none) gets no counts, since 0 would read as
    "nothing absent". A kept value that could hold text aborts the run, with one exception:
-   for a development row only, `baseline_facts` keeps the baseline's own flagged-fact text
-   as a list of one-line strings, so its correct detection can be judged on development
-   data: route two's omissions_reported entries as "<severity> | <missing>" (their "why" is
-   never kept), or else route one's graded detail.missing_facts entries as "<severity> |
-   <verdict> | <fact>". Line breaks inside a fact become spaces, and a string longer than
-   MAX_FACT_STRING characters stops the run. A held-out row is never reduced at all.
+   for a development B3 row of the w2-pipeline family (route one, BASELINE_SOURCE) only,
+   `baseline_facts` keeps its graded detail.missing_facts entries as one-line strings,
+   "<severity> | <verdict> | <fact>", so route one's correct detection can be judged on
+   development data. Line breaks inside a fact become spaces. A fact longer than
+   MAX_FACT_STRING characters is kept as "<severity> | <verdict> | [too_long]" (TOO_LONG),
+   counted and listed by pair id; the run carries on. No other family or arm gets fact text,
+   and route two's omissions_reported is never read. A held-out row is never reduced at
+   all.
 6. Before anything is written, the counts must match EXPECTED_COUNTS, and both output
    folders must be empty or absent and outside --raw; otherwise the run stops and writes
    nothing.
@@ -92,8 +94,11 @@ SEVERITIES = ("critical", "supporting", "peripheral")
 DERIVED_FIELDS = tuple(f"n_absent_{severity}" for severity in SEVERITIES)
 LOG_FOLDERS = ("judgements", "validation", "notes")
 MAX_SCORE_STRING = 200
-MAX_FACT_STRING = 400
+MAX_FACT_STRING = 1500
 BASELINE_FACTS = "baseline_facts"
+# The only rows whose fact text is kept: route one, (family, arm), as compare_gate1b names it.
+BASELINE_SOURCE = ("w2-pipeline", "B3")
+TOO_LONG = "[too_long]"
 PAIRS_FILE = Path("pairs") / "dataset_v2.json"
 SITES_FILE = Path("pairs") / "fact_sites.json"
 SEVERITY_FILE = Path("pairs") / "factorial_severity.json"
@@ -430,7 +435,9 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
             continue
         if not all(isinstance(r, dict) and "note_key" in r for r in records):
             continue
+        captures = _family(name) == BASELINE_SOURCE[0]
         kept, dropped, with_facts, skipped = [], 0, 0, 0
+        too_long: list[str] = []
         for row in records:
             reduced = {f: row[f] for f in SCORE_FIELDS if f in row}
             reduced.update(_absent_counts(row))
@@ -446,55 +453,72 @@ def _plan_scores(raw: Path, records_file: Path, known: _KnownKeys, plan: Plan) -
             if key not in known.dev:
                 dropped += 1
                 continue
-            # Development rows only: the baseline's own flagged-fact text.
-            facts, unknown = _baseline_facts(row)
+            # Development B3 rows of route one only: the baseline's own flagged-fact text.
+            if not captures or _arm(row) != BASELINE_SOURCE[1]:
+                kept.append(reduced)
+                continue
+            facts, unknown, over = _baseline_facts(row)
             skipped += unknown
             if facts is not None:
-                if any(len(fact) > MAX_FACT_STRING for fact in facts):
-                    raise SplitError(f"{name}: a baseline fact is longer than {MAX_FACT_STRING}")
                 reduced[BASELINE_FACTS] = facts
                 with_facts += 1
+                too_long += [_short(row.get("pair_id") or row.get("note_key"))] * over
             kept.append(reduced)
         plan.dev_json[Path("judge_scores") / name] = {"records": kept}
-        plan.notes.append(
-            f"judge_scores/{name}: kept {len(kept)} rows, dropped {dropped}; "
-            f"{with_facts} with baseline_facts, {skipped} fact entries of unknown shape skipped"
-        )
+        note = f"judge_scores/{name}: kept {len(kept)} rows, dropped {dropped}"
+        if captures:
+            note += (
+                f"; {with_facts} with baseline_facts, {skipped} fact entries of unknown shape "
+                f"skipped, {len(too_long)} facts too_long"
+            )
+        plan.notes.append(note)
+        if too_long:
+            plan.notes.append(f"  too_long (over {MAX_FACT_STRING} characters), by pair id:")
+            plan.notes += [f"    {pair_id}" for pair_id in sorted(too_long)]
 
 
-def _baseline_facts(row: dict[str, Any]) -> tuple[list[str] | None, int]:
-    """A development row's flagged-fact text as one-line strings, and how many entries had
-    an unknown shape: route two's omissions_reported as "<severity> | <missing>" when the
-    row has it (so a route-two row is never written in route one's format), else route
-    one's graded detail.missing_facts as "<severity> | <verdict> | <fact>". None when the
-    row has neither (a list with no graded entry, as the two-stage tier writes, counts as
-    neither)."""
-    reported = row.get("omissions_reported")
-    if isinstance(reported, list):
-        out, unknown = [], 0
-        for o in reported:
-            if isinstance(o, dict) and isinstance(o.get("missing"), str):
-                severity = o.get("severity") if isinstance(o.get("severity"), str) else "-"
-                out.append(f"{_one_line(str(severity))} | {_one_line(o['missing'])}")
-            else:
-                unknown += 1
-        return out, unknown
+def _family(name: str) -> str | None:
+    """The harness family of a flattened score-file name, "...judges__<family>__...": the
+    part after the last "judges" that has a folder or file after it, else None."""
+    parts = name.split("__")
+    judges = [i for i, part in enumerate(parts) if part == "judges" and i + 2 < len(parts)]
+    return parts[judges[-1] + 1] if judges else None
+
+
+def _arm(row: dict[str, Any]) -> object:
+    """A row's arm, as compare_gate1b reads it."""
+    return row.get("tier") or row.get("cell") or row.get("arm")
+
+
+def _baseline_facts(row: dict[str, Any]) -> tuple[list[str] | None, int, int]:
+    """A route-one row's graded detail.missing_facts as one-line "<severity> | <verdict> |
+    <fact>" strings, with how many entries had an unknown shape and how many facts were
+    longer than MAX_FACT_STRING (kept as TOO_LONG). None when the list has no graded entry
+    (the two-stage tier grades none) or the row has no list."""
     detail = row.get("detail")
     graded = detail.get("missing_facts") if isinstance(detail, dict) else None
-    if isinstance(graded, list) and any(
+    if not isinstance(graded, list) or not any(
         isinstance(f, dict) and isinstance(f.get("severity"), str) for f in graded
     ):
-        out, unknown = [], 0
-        for f in graded:
-            if isinstance(f, dict) and all(
-                isinstance(f.get(k), str) for k in ("severity", "verdict", "fact")
-            ):
-                parts = (f["severity"], f["verdict"], f["fact"])
-                out.append(" | ".join(_one_line(p) for p in parts))
-            else:
-                unknown += 1
-        return out, unknown
-    return None, 0
+        return None, 0, 0
+    out, unknown, over = [], 0, 0
+    for f in graded:
+        # severity and verdict are labels: a longer value has an unknown shape.
+        if (
+            isinstance(f, dict)
+            and isinstance(f.get("fact"), str)
+            and all(
+                isinstance(f.get(k), str) and len(f[k]) <= MAX_LABEL
+                for k in ("severity", "verdict")
+            )
+        ):
+            fact = _one_line(f["fact"])
+            if len(fact) > MAX_FACT_STRING:
+                fact, over = TOO_LONG, over + 1
+            out.append(f"{_one_line(f['severity'])} | {_one_line(f['verdict'])} | {fact}")
+        else:
+            unknown += 1
+    return out, unknown, over
 
 
 def _one_line(text: str) -> str:

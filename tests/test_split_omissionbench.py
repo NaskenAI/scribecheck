@@ -144,6 +144,38 @@ def varied_rows(dev: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+# Score files under judges/<family>/<folder>/, as the harness writes them. Only B3 rows of
+# the w2-pipeline family (route one) keep fact text.
+PIPELINE_FILE = "judgements__judges__w2-pipeline__20260813-233514-726a3b0-r1__w2_pipeline.json"
+ARMS_FILE = "judgements__judges__w2-strong__20260813-231933-2bd109b-r1__w2_arms.json"
+LONG_FACT = "Synthetic over-long fact " + "x" * SPLIT.MAX_FACT_STRING
+
+
+def pipeline_rows(dev: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Route one's file: a B3 row with facts, one with an over-long fact, and non-B3 rows."""
+    rows = [
+        {**_score_row(p["stratum"], p["id"], p["pair_id"]), "tier": "B3", "cell": None}
+        for p in dev[:4]
+    ]
+    rows[0]["detail"] = {"missing_facts": MISSING_FACTS}
+    long_entry = {"fact": LONG_FACT, "severity": "critical", "verdict": "absent"}
+    rows[1]["detail"] = {"missing_facts": [MISSING_FACTS[0], long_entry]}
+    rows[2].update(tier="B2", detail={"missing_facts": MISSING_FACTS})  # another arm
+    rows[3]["detail"] = {"missing_facts": [{**MISSING_FACTS[0], "verdict": "x" * 41}]}
+    return rows
+
+
+def arms_rows(dev: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A w2_arms file (w2-strong): over-long facts in both formats, never kept."""
+    long_omission = {"missing": LONG_FACT, "severity": "critical", "why": "w"}
+    long_entry = {"fact": LONG_FACT, "severity": "critical", "verdict": "absent"}
+    row = _score_row(dev[0]["stratum"], dev[0]["id"], dev[0]["pair_id"])
+    return [
+        {**row, "arm": "power-gepa-high", "omissions_reported": [long_omission]},
+        {**row, "tier": "B3", "detail": {"missing_facts": [long_entry]}},
+    ]
+
+
 # Per-fact verdicts as the pipeline tier writes them. A development row keeps each graded
 # entry's fact text in baseline_facts (DEV_FACT); anything else in detail is never kept.
 DEV_FACT = "Synthetic baseline fact"
@@ -234,6 +266,8 @@ def build_fixture(
     rows += [_score_row(s, c, None) for s, c in DEV_KEYS[:5] + HELDOUT_KEYS[:5] + OTHER_KEYS[:1]]
     _write(raw / "judgements" / "w1" / "scored_records.json", {"model": "x", "records": rows})
     _write(raw / "judgements" / "w3" / "varied_records.json", {"records": varied_rows(dev)})
+    for name, rows_of in ((PIPELINE_FILE, pipeline_rows), (ARMS_FILE, arms_rows)):
+        _write(raw.joinpath(*name.split("__")), {"records": rows_of(dev)})
     # The published held-out subset: 151 of the 230 held-out pairs, covering all 47
     # consultations (the first pair of each, then the next ones in order).
     firsts = {p["key"]: p for p in reversed(heldout)}
@@ -325,17 +359,19 @@ def test_judge_scores_are_reduced_and_development_only(split: tuple[Path, Path, 
     dev_out, _, log = split
     files = sorted((dev_out / "judge_scores").iterdir())
     assert [f.name for f in files] == [
+        PIPELINE_FILE,
+        ARMS_FILE,
         "judgements__w1__scored_records.json",
         "judgements__w2__pipeline_scored_records.json",
         "judgements__w3__varied_records.json",
     ]
-    w1 = json.loads(files[0].read_text())["records"]
+    w1 = json.loads(files[2].read_text())["records"]
     assert len(w1) == 20 + 5
     for row in w1:
         assert set(row) == set(SPLIT.SCORE_FIELDS)
         key = "|".join((row["pair_id"] or row["clean_key"]).split("|")[:2])
         assert key in {f"{s}|{c}" for s, c in DEV_KEYS}
-    assert json.loads(files[1].read_text())["records"] == []
+    assert json.loads(files[3].read_text())["records"] == []
     assert "dropped" in log
 
 
@@ -460,7 +496,7 @@ def test_judge_scores_keep_run_fields_and_never_text_fields(
         for row in json.loads(path.read_text())["records"]:
             assert set(row) <= {*SPLIT.SCORE_FIELDS, *SPLIT.DERIVED_FIELDS, SPLIT.BASELINE_FACTS}
             assert not set(row) & SPLIT.NEVER_KEPT
-            if "varied" not in path.name:  # every field present in w1 and w2
+            if "varied" not in path.name and "judges" not in path.name:  # all fields
                 assert set(row) == set(SPLIT.SCORE_FIELDS)
                 assert row["arm"] == "B2" and row["replicate"] == 1
         assert SENTINEL not in path.read_text()
@@ -519,12 +555,13 @@ def test_long_verdict_aborts(tmp_path: Path) -> None:
     _assert_aborted(_run(raw, records, dev_out, heldout_out), dev_out, heldout_out)
 
 
-def test_baseline_facts_kept_for_development_rows_only(split: tuple[Path, Path, str]) -> None:
+def test_baseline_facts_kept_for_development_b3_rows_of_route_one_only(
+    split: tuple[Path, Path, str],
+) -> None:
     dev_out, heldout_out, log = split
-    path = dev_out / "judge_scores" / "judgements__w3__varied_records.json"
+    path = dev_out / "judge_scores" / PIPELINE_FILE
     kept = json.loads(path.read_text())["records"]
-    facts = [row["baseline_facts"] for row in kept if "baseline_facts" in row]
-    assert facts == [
+    assert [row.get("baseline_facts") for row in kept] == [
         [
             f"critical | absent | {DEV_FACT} 1",
             f"critical | absent | {DEV_FACT} 2",  # a line break becomes a space
@@ -532,31 +569,54 @@ def test_baseline_facts_kept_for_development_rows_only(split: tuple[Path, Path, 
             f"supporting | absent | {DEV_FACT} 4",
             f"peripheral | partial | {DEV_FACT} 5",
         ],
-        [f"critical | {DEV_FACT} 6", f"- | {DEV_FACT} 7"],
+        [f"critical | absent | {DEV_FACT} 1", f"critical | absent | {SPLIT.TOO_LONG}"],
+        None,  # B2, in the same file
+        [],  # a verdict longer than a label has an unknown shape
     ]
-    # No list for an empty or ungraded (B2) missing_facts list, nor for rows without one.
-    assert sum("baseline_facts" in row for row in kept) == 2
-    assert all("omissions_reported" not in row and "detail" not in row for row in kept)
-    assert "2 with baseline_facts, 2 fact entries of unknown shape skipped" in log
-    # Held-out rows' facts go nowhere, and "why" and stray entries are never kept.
+    assert all("detail" not in row for row in kept)
+    assert (
+        f"judge_scores/{PIPELINE_FILE}: kept 4 rows, dropped 0; 3 with baseline_facts, "
+        "2 fact entries of unknown shape skipped, 1 facts too_long"
+    ) in log
+    # No other file gets fact text: the varied file's B3 and route-two rows included.
+    for other in (dev_out / "judge_scores").iterdir():
+        if other.name != PIPELINE_FILE:
+            assert "baseline_facts" not in other.read_text()
+            assert DEV_FACT not in other.read_text()
+    # Held-out rows' facts go nowhere, and stray entries are never kept.
     for folder in (dev_out, heldout_out):
         assert HELDOUT_FACT not in _all_text(folder)
     assert SENTINEL not in path.read_text() and HELDOUT_FACT not in log
 
 
-def test_long_baseline_fact_aborts(tmp_path: Path) -> None:
-    raw, records = build_fixture(tmp_path)
-    path = raw / "judgements" / "w3" / "varied_records.json"
-    data = json.loads(path.read_text())
-    data["records"][-1]["omissions_reported"] = [{"missing": "x" * 401, "severity": "critical"}]
-    _write(path, data)
-    dev_out, heldout_out = tmp_path / "dev", tmp_path / "heldout"
-    _assert_aborted(_run(raw, records, dev_out, heldout_out), dev_out, heldout_out)
+def test_an_over_long_b3_fact_is_counted_listed_and_the_split_continues(
+    split: tuple[Path, Path, str],
+) -> None:
+    dev_out, _, log = split
+    pair_id = _pairs(dev_out)["pairs"][1]["pair_id"]
+    lines = log.splitlines()
+    at = lines.index(f"  too_long (over {SPLIT.MAX_FACT_STRING} characters), by pair id:")
+    assert lines[at + 1] == f"    {pair_id}"
+    assert "x" * 100 not in _all_text(dev_out) and "x" * 100 not in log
 
 
-def test_a_route_two_row_is_written_in_its_own_format() -> None:
-    row = {
-        "detail": {"missing_facts": [{"fact": "a", "severity": "critical", "verdict": "present"}]},
-        "omissions_reported": [{"missing": "b\nc", "severity": "critical"}],
-    }
-    assert SPLIT._baseline_facts(row) == (["critical | b c"], 0)
+def test_an_over_long_fact_in_a_w2_arms_file_is_ignored(split: tuple[Path, Path, str]) -> None:
+    dev_out, _, log = split
+    path = dev_out / "judge_scores" / ARMS_FILE
+    kept = json.loads(path.read_text())["records"]
+    assert len(kept) == 2
+    assert all(set(row) <= set(SPLIT.SCORE_FIELDS) | set(SPLIT.DERIVED_FIELDS) for row in kept)
+    assert "Synthetic over-long fact" not in path.read_text()
+    assert f"judge_scores/{ARMS_FILE}: kept 2 rows, dropped 0" in log.splitlines()
+
+
+def test_family_is_read_from_the_flattened_name() -> None:
+    assert SPLIT._family(PIPELINE_FILE) == "w2-pipeline"
+    assert SPLIT._family(ARMS_FILE) == "w2-strong"
+    assert SPLIT._family("judgements__w3__varied_records.json") is None
+    assert SPLIT._family("heldout_records__pipeline_scored_records.json") is None
+
+
+def test_route_two_omissions_are_never_read() -> None:
+    row = {"omissions_reported": [{"missing": "b", "severity": "critical"}]}
+    assert SPLIT._baseline_facts(row) == (None, 0, 0)

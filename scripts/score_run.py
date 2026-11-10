@@ -832,6 +832,11 @@ def score(args: argparse.Namespace) -> int:
             baseline_correct[name] = f"correct (model) {_rate(named, len(omissions))}" + (
                 gap if unjudged_b else ""
             )
+        for name, count in too_long_notes(args.released, omissions).items():
+            if count and name in baseline_correct:
+                baseline_correct[name] += (
+                    f"; {count} flagged notes with a too-long fact, never judged"
+                )
     for name, ref in references.items():
         omit = [ref.get(n.key) for n in omissions]
         clean = [ref.get(n.key) for n in cleans]
@@ -1163,7 +1168,10 @@ def _omission_notes(args: argparse.Namespace) -> list[Note]:
 BASELINES = {"released B3 r1": "b3 r1"}
 """The released reference sets whose correct detection can be judged, by their label in
 `score`: route one (B3), whose development rows carry `baseline_facts` once the split has
-been re-run (it keeps them for development rows only)."""
+been re-run (it keeps them for development B3 rows of the w2-pipeline family only)."""
+TOO_LONG = "[too_long]"
+"""The split's stand-in for a fact longer than its limit (split_omissionbench.TOO_LONG):
+never judged nor matched; `score` counts the flagged notes that have one."""
 SCORE_ONLY = ("released power-gepa-high r1", "released power-gepa-high r3")
 """Route two's reference sets: a score per note and no named omissions (the harness's
 w2_power.py keeps neither the omissions nor the response text), so correct detection does
@@ -1181,8 +1189,34 @@ def baseline_flagged_facts(row: Mapping[str, Any] | None) -> list[str] | None:
     facts = None if row is None else row.get("baseline_facts")
     if not isinstance(facts, list):
         return None
+    return [f for f in _critical_absent(facts) if f != TOO_LONG]
+
+
+def _critical_absent(facts: list[Any]) -> list[str]:
     parts = [str(f).split(" | ", 2) for f in facts]
     return [p[2] for p in parts if len(p) == 3 and p[0] == "critical" and p[1] == "absent"]
+
+
+def too_long_notes(released: Path | None, notes: Iterable[Note]) -> dict[str, int]:
+    """For each baseline, how many omission notes its own rule flags have a flagged fact the
+    split kept as TOO_LONG (that fact is never judged, so the note may count as not named)."""
+    if released is None:
+        return {}
+    rows = released_rows(released)
+    out: dict[str, int] = {}
+    for name, store in BASELINES.items():
+        out[name] = 0
+        for n in notes:
+            row = rows[store].get(n.key)
+            facts = None if row is None else row.get("baseline_facts")
+            if (
+                n.kind == "omission"
+                and route_one_flag(row) is True
+                and isinstance(facts, list)
+                and TOO_LONG in _critical_absent(facts)
+            ):
+                out[name] += 1
+    return out
 
 
 def split_carries_facts(released: Path) -> bool:
