@@ -79,6 +79,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import action_classify  # noqa: E402
 import fact_judge  # noqa: E402
 from compare_gate1b import (  # noqa: E402
     Rows,
@@ -771,6 +772,41 @@ def score(args: argparse.Namespace) -> int:
                     for x in flags:
                         say(f"      flag {x.id}:      {x.fact}")
         say(f"   detected notes where they differ: {differ}/{len(det)}")
+
+    if args.actions is not None:
+        actions = action_classify.labels(args.actions, pairs)
+        say("== Plan-action subset: omission notes whose removed fact action_classify.py labels")
+        say("   a referral, test, follow-up or medication change, beside all omission notes;")
+        say(
+            "   the decision rule, correct detection by words (and by the model, with --judgements)"
+        )
+        say(f"   classifier prompt sha256 {action_classify.prompt_hash()}")
+
+        def label_of(n: Note) -> str | None:
+            return actions.get(str(n.pair.get("pair_id")))
+
+        def subset_line(name: str, members: Sequence[Note]) -> str:
+            det_s = [n for n in members if n.flagged]
+            words_s = sum(names_fact(n, decision_flags(n)) for n in det_s)
+            line = (
+                f"   {name}: detection {_rate(len(det_s), len(members))}, "
+                f"correct (words) {_rate(words_s, len(members))}"
+            )
+            if judgements is not None:
+                model_s = sum(model_names(judgements.get(n.key), decision_flags(n)) for n in det_s)
+                line += f", correct (model) {_rate(model_s, len(members))}"
+            return line
+
+        unlabelled = [n for n in omissions if label_of(n) is None]
+        say(f"   omission notes without a valid label: {len(unlabelled)}")
+        say(subset_line("all omission notes", omissions))
+        actions_only = [
+            n for n in omissions if label_of(n) not in (None, action_classify.NOT_ACTION)
+        ]
+        say(subset_line("plan-action subset", actions_only))
+        say("   by category:")
+        for label in action_classify.LABELS:
+            say(subset_line(f"   {label}", [n for n in omissions if label_of(n) == label]))
 
     say("== v5 mechanisms: decision-rule flags by the change behind them. 'with': notes with")
     say("   one of its flags; 'only': notes flagged by its flags alone (what it adds, and what")
@@ -1644,6 +1680,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="count partial verdicts as flags, as before they became information",
     )
     sc.add_argument("--judgements", type=Path, help="fact_judgements.json from `judge`")
+    sc.add_argument("--actions", type=Path, help="action_classify.py's cache (plan-action subset)")
     sp = commands.add_parser("spec", help="write a spec of every note in the pairs file")
     sp.add_argument("--pairs", type=Path, required=True)
     sp.add_argument("--out", type=Path, required=True)

@@ -1320,3 +1320,63 @@ def test_stability_reports_spread_and_per_note_agreement(
     assert SECRET_N not in out and "metformin" not in out  # counts and ids only
     with pytest.raises(SystemExit):
         module.main(["stability", "--runs", str(runs[0]), "--pairs", "p", "--spec", "s"])
+
+
+def _actions(subset: dict[str, Path], labels: dict[str, str]) -> Path:
+    """An action_classify.py cache for model "m": `labels` by pair id."""
+    classify = _load().action_classify
+    pairs = {p["pair_id"]: p for p in json.loads(subset["pairs"].read_text())["pairs"]}
+    entries = {
+        pid: {"key": classify.key(classify.removed_text(pairs[pid]), "m"), "label": label}
+        for pid, label in labels.items()
+    }
+    path = subset["root"] / "action_classes.json"
+    path.write_text(json.dumps({"model": "m", "entries": entries}), encoding="utf-8")
+    return path
+
+
+def test_plan_action_subset_beside_all_omission_notes(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    # p1 detected and naming the fact (medication change); p2 detected, naming another fact
+    # (referral); p3 not detected (not an action).
+    actions = _actions(
+        subset,
+        {
+            "syn|C1|omit|p1": "medication_change",
+            "syn|C1|omit|p2": "referral",
+            "syn|C1|omit|p3": "not_action",
+        },
+    )
+    out = _score(subset, _run(subset, _standard_reports()), capsys, "--actions", str(actions))
+    section = out.split("== Plan-action subset")[1].split("== v5 mechanisms")[0]
+    assert "omission notes without a valid label: 0" in section
+    assert "all omission notes: detection 2/3 (66.7%), correct (words) 1/3 (33.3%)" in section
+    assert "plan-action subset: detection 2/2 (100.0%), correct (words) 1/2 (50.0%)" in section
+    assert "medication_change: detection 1/1 (100.0%), correct (words) 1/1" in section
+    assert "referral: detection 1/1 (100.0%), correct (words) 0/1 (0.0%)" in section
+    assert "not_action: detection 0/1 (0.0%)" in section
+    assert "follow_up: detection 0/0" in section
+    assert "correct (model)" not in section  # no --judgements
+    assert "Takes metformin" not in section  # counts only, never fact text
+
+
+def test_plan_action_subset_with_judgements_and_a_stale_label(
+    subset: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    reports = _standard_reports()
+    cache = _cache(
+        subset, reports, {"syn|C1|omit|p1": _yes([], ["F1"]), "syn|C1|omit|p2": _yes([])}
+    )
+    actions = _actions(subset, {"syn|C1|omit|p1": "test", "syn|C1|omit|p2": "test"})
+    data = json.loads(actions.read_text())
+    data["entries"]["syn|C1|omit|p2"]["key"] = "stale"  # a changed fact: no valid label
+    actions.write_text(json.dumps(data), encoding="utf-8")
+    run = _run(subset, reports)
+    out = _score(subset, run, capsys, "--judgements", str(cache), "--actions", str(actions))
+    section = out.split("== Plan-action subset")[1].split("== v5 mechanisms")[0]
+    assert "omission notes without a valid label: 2" in section  # p2 (stale) and p3
+    assert (
+        "plan-action subset: detection 1/1 (100.0%), correct (words) 1/1 (100.0%), "
+        "correct (model) 1/1" in section
+    )

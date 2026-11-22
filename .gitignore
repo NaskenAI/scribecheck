@@ -23,6 +23,7 @@ CLAUDE.local.md
 # Benchmark data is downloaded, never committed (CC BY 4.0, attribution in README).
 # The held-out subset lives outside the repository entirely.
 data/omissionbench/
+data/omissionbench.prev/
 
 # Run outputs
 reports/
@@ -30,3 +31,6 @@ runs/
 
 # Spot-check sample of correct-fact matches: holds benchmark fact text
 docs/review/correct_fact_sample*.csv
+
+# Spot-check sheet of plan-action labels: holds benchmark fact text
+docs/review/action_*.csv
